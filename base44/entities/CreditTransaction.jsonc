@@ -1,0 +1,34 @@
+{
+  "name": "CreditTransaction",
+  "type": "object",
+  "properties": {
+    "user_email": {
+      "type": "string"
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "purchase",
+        "query_charge",
+        "refund"
+      ],
+      "description": "Tipo di transazione"
+    },
+    "amount": {
+      "type": "number",
+      "description": "Importo della transazione"
+    },
+    "description": {
+      "type": "string"
+    },
+    "query_id": {
+      "type": "string",
+      "description": "ID della query associata (se applicabile)"
+    }
+  },
+  "required": [
+    "user_email",
+    "type",
+    "amount"
+  ]
+}

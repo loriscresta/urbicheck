@@ -1,0 +1,54 @@
+{
+  "name": "CadastralQuery",
+  "type": "object",
+  "properties": {
+    "regione": {
+      "type": "string",
+      "description": "Regione italiana"
+    },
+    "provincia": {
+      "type": "string",
+      "description": "Provincia"
+    },
+    "comune": {
+      "type": "string",
+      "description": "Comune"
+    },
+    "foglio": {
+      "type": "string",
+      "description": "Numero foglio catastale"
+    },
+    "particella": {
+      "type": "string",
+      "description": "Numero particella"
+    },
+    "subalterno": {
+      "type": "string",
+      "description": "Subalterno (opzionale)"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "completed",
+        "failed"
+      ],
+      "default": "pending"
+    },
+    "report_data": {
+      "type": "object",
+      "description": "JSON con tutti i dati del report generato"
+    },
+    "cost": {
+      "type": "number",
+      "default": 9.9,
+      "description": "Costo della query in euro"
+    }
+  },
+  "required": [
+    "regione",
+    "comune",
+    "foglio",
+    "particella"
+  ]
+}

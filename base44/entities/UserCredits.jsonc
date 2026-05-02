@@ -1,0 +1,28 @@
+{
+  "name": "UserCredits",
+  "type": "object",
+  "properties": {
+    "user_email": {
+      "type": "string",
+      "description": "Email dell'utente"
+    },
+    "balance": {
+      "type": "number",
+      "default": 0,
+      "description": "Saldo crediti in euro"
+    },
+    "total_spent": {
+      "type": "number",
+      "default": 0,
+      "description": "Totale speso"
+    },
+    "total_queries": {
+      "type": "number",
+      "default": 0,
+      "description": "Totale query effettuate"
+    }
+  },
+  "required": [
+    "user_email"
+  ]
+}
