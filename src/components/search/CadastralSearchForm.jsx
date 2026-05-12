@@ -9,6 +9,15 @@ import {
 import { Search, MapPin, Loader2 } from "lucide-react";
 import { motion } from "framer-motion";
 
+const FINALITA = [
+  { value: "acquisto_privato", label: "Acquisto privato" },
+  { value: "investimento", label: "Investimento" },
+  { value: "sviluppo_immobiliare", label: "Sviluppo immobiliare" },
+  { value: "asta_giudiziaria", label: "Asta giudiziaria" },
+  { value: "due_diligence", label: "Due diligence" },
+  { value: "valutazione_professionale", label: "Valutazione professionale" },
+];
+
 export default function CadastralSearchForm({ onSubmit, isLoading, disabled }) {
   const [formData, setFormData] = useState({
     regione: "",
@@ -17,6 +26,7 @@ export default function CadastralSearchForm({ onSubmit, isLoading, disabled }) {
     foglio: "",
     particella: "",
     subalterno: "",
+    finalita: "",
   });
 
   const provinces = formData.regione ? (PROVINCE_BY_REGIONE[formData.regione] || []) : [];
@@ -38,7 +48,11 @@ export default function CadastralSearchForm({ onSubmit, isLoading, disabled }) {
     onSubmit(formData);
   };
 
-  const isValid = formData.regione && formData.comune && formData.foglio && formData.particella;
+  const isValid = formData.regione && formData.comune && formData.foglio && formData.particella && formData.finalita;
+
+  const gisRegioni = ["Liguria", "Piemonte", "Lombardia", "Veneto", "Emilia-Romagna", "Toscana"];
+  const isGisRegione = gisRegioni.includes(formData.regione);
+  const isGisImplementing = ["Lombardia", "Veneto", "Emilia-Romagna", "Toscana"].includes(formData.regione);
 
   return (
     <motion.form
@@ -129,6 +143,40 @@ export default function CadastralSearchForm({ onSubmit, isLoading, disabled }) {
         </div>
       </div>
 
+      {/* Finalità */}
+      <div className="space-y-2">
+        <Label>Finalità *</Label>
+        <Select value={formData.finalita} onValueChange={(v) => handleChange("finalita", v)}>
+          <SelectTrigger>
+            <SelectValue placeholder="Seleziona la finalità dell'analisi" />
+          </SelectTrigger>
+          <SelectContent>
+            {FINALITA.map(f => (
+              <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      {/* GIS badge / disclaimer */}
+      {formData.regione && (
+        <div className={`flex items-start gap-3 p-3 rounded-lg text-sm ${
+          isGisRegione ? "bg-emerald-50 border border-emerald-200" : "bg-amber-50 border border-amber-200"
+        }`}>
+          {isGisRegione ? (
+            <>
+              <span className="text-emerald-600 font-semibold shrink-0">✓ Dati GIS Ufficiali</span>
+              {isGisImplementing && <span className="text-emerald-700 text-xs">(in implementazione)</span>}
+            </>
+          ) : (
+            <>
+              <span className="text-amber-700 font-semibold shrink-0">⚠ Analisi AI</span>
+              <span className="text-amber-700 text-xs">Stima basata su AI — verifica raccomandata presso UTC</span>
+            </>
+          )}
+        </div>
+      )}
+
       <div className="flex items-center justify-between pt-2">
         <p className="text-sm text-muted-foreground">
           Costo: <span className="font-semibold text-foreground">€9,90</span> per query
@@ -137,14 +185,15 @@ export default function CadastralSearchForm({ onSubmit, isLoading, disabled }) {
           type="submit"
           size="lg"
           disabled={!isValid || isLoading || disabled}
-          className="gap-2 px-8"
+          className="gap-2 px-8 font-bold"
+          style={{ background: '#1e3a5f' }}
         >
           {isLoading ? (
             <Loader2 className="w-4 h-4 animate-spin" />
           ) : (
             <Search className="w-4 h-4" />
           )}
-          Avvia Analisi
+          Analizza — €9,90
         </Button>
       </div>
     </motion.form>

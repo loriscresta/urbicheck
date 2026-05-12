@@ -66,9 +66,9 @@ export default function CreditsPage() {
   return (
     <div className="p-6 lg:p-10 max-w-5xl mx-auto">
       <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}>
-        <h1 className="text-3xl font-serif font-bold tracking-tight mb-2">Crediti</h1>
+        <h1 className="text-3xl font-bold tracking-tight mb-2" style={{ color: '#1e3a5f' }}>Ricarica Crediti</h1>
         <p className="text-muted-foreground mb-2">
-          Ogni ricerca catastale costa €9,90. Acquista pacchetti per risparmiare.
+          Ogni analisi catastale costa €9,90. Acquista pacchetti per risparmiare.
         </p>
       </motion.div>
 
@@ -94,7 +94,7 @@ export default function CreditsPage() {
 
       {/* Packages */}
       <h2 className="font-semibold text-lg mb-4">Pacchetti Disponibili</h2>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-10">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-10">
         {CREDIT_PACKAGES.map((pkg, i) => (
           <CreditPackageCard key={pkg.id} pkg={pkg} onPurchase={handlePurchase} delay={i * 0.05} />
         ))}
@@ -135,6 +135,10 @@ export default function CreditsPage() {
             </div>
           ))
         )}
+      </div>
+
+      <div className="mt-10 pt-6 border-t border-border text-center text-xs text-muted-foreground">
+        urbicheck.it | Dati aggiornati da fonti GIS ufficiali regionali
       </div>
     </div>
   );

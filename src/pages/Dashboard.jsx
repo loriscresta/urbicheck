@@ -2,11 +2,22 @@ import React from "react";
 import { Link } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import { useQuery } from "@tanstack/react-query";
-import { Search, CreditCard, FileCheck, TrendingUp } from "lucide-react";
+import { Search, CreditCard, FileCheck, TrendingUp, FolderOpen } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import StatsCard from "@/components/dashboard/StatsCard";
 import RecentQueries from "@/components/dashboard/RecentQueries";
 import { motion } from "framer-motion";
+import { format } from "date-fns";
+import { it } from "date-fns/locale";
+
+const attiStatusMap = {
+  bozza: { label: "Bozza", className: "bg-gray-50 text-gray-600 border-gray-200" },
+  pronta: { label: "Pronta", className: "bg-blue-50 text-blue-700 border-blue-200" },
+  inviata: { label: "Inviata", className: "bg-amber-50 text-amber-700 border-amber-200" },
+  ricevuta: { label: "Ricevuta", className: "bg-purple-50 text-purple-700 border-purple-200" },
+  completata: { label: "Completata", className: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+};
 
 export default function Dashboard() {
   const { data: user } = useQuery({
@@ -28,6 +39,14 @@ export default function Dashboard() {
     queryFn: async () => {
       const u = await base44.auth.me();
       return base44.entities.CadastralQuery.filter({ created_by: u.email }, "-created_date", 5);
+    },
+  });
+
+  const { data: attiRequests = [] } = useQuery({
+    queryKey: ["attiRequests"],
+    queryFn: async () => {
+      const u = await base44.auth.me();
+      return base44.entities.AttiRequest.filter({ user_email: u.email }, "-created_date", 5);
     },
   });
 
@@ -124,6 +143,42 @@ export default function Dashboard() {
           </div>
           <RecentQueries queries={recentQueries} />
         </motion.div>
+      </div>
+
+      {/* Accesso agli Atti */}
+      {attiRequests.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3 }}
+          className="mt-6 bg-card rounded-xl border border-border p-6"
+        >
+          <div className="flex items-center gap-2 mb-4">
+            <FolderOpen className="w-5 h-5 text-primary" />
+            <h2 className="font-semibold">Accesso agli Atti Richiesti</h2>
+          </div>
+          <div className="space-y-3">
+            {attiRequests.map((atti) => {
+              const st = attiStatusMap[atti.stato] || attiStatusMap.bozza;
+              return (
+                <div key={atti.id} className="flex items-center gap-4 p-3 rounded-lg bg-muted/30 border border-border/50">
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-sm truncate">{atti.comune} — F.{atti.foglio} P.{atti.particella}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {atti.documento_tipo} · {format(new Date(atti.created_date), "d MMM yyyy", { locale: it })}
+                    </p>
+                  </div>
+                  <Badge variant="outline" className={`${st.className} text-[11px] shrink-0`}>{st.label}</Badge>
+                </div>
+              );
+            })}
+          </div>
+        </motion.div>
+      )}
+
+      {/* Footer */}
+      <div className="mt-10 pt-6 border-t border-border text-center text-xs text-muted-foreground">
+        urbicheck.it | Dati aggiornati da fonti GIS ufficiali regionali
       </div>
     </div>
   );

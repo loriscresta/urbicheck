@@ -26,6 +26,18 @@
       "type": "string",
       "description": "Subalterno (opzionale)"
     },
+    "finalita": {
+      "type": "string",
+      "enum": [
+        "acquisto_privato",
+        "investimento",
+        "sviluppo_immobiliare",
+        "asta_giudiziaria",
+        "due_diligence",
+        "valutazione_professionale"
+      ],
+      "description": "Finalit\u00e0 dell'analisi"
+    },
     "status": {
       "type": "string",
       "enum": [

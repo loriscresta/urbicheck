@@ -9,9 +9,9 @@ import {
 import { Button } from "@/components/ui/button";
 
 const navItems = [
-  { path: "/", icon: LayoutDashboard, label: "Dashboard" },
+  { path: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
   { path: "/search", icon: Search, label: "Nuova Ricerca" },
-  { path: "/history", icon: History, label: "Storico" },
+  { path: "/history", icon: History, label: "Le mie analisi" },
   { path: "/credits", icon: CreditCard, label: "Crediti" },
 ];
 
@@ -37,13 +37,13 @@ export default function AppLayout() {
       {/* Desktop Sidebar */}
       <aside className="hidden lg:flex flex-col w-64 bg-sidebar text-sidebar-foreground border-r border-sidebar-border">
         <div className="p-6 border-b border-sidebar-border">
-          <Link to="/" className="flex items-center gap-3">
+          <Link to="/dashboard" className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-lg bg-sidebar-primary flex items-center justify-center">
               <Building2 className="w-5 h-5 text-sidebar-primary-foreground" />
             </div>
             <div>
-              <h1 className="text-lg font-bold tracking-tight text-sidebar-foreground">Urbicheck</h1>
-              <p className="text-[11px] text-sidebar-foreground/50 uppercase tracking-widest">Analisi Urbanistica</p>
+              <h1 className="text-lg font-bold tracking-tight text-sidebar-foreground tracking-widest">URBI CHECK</h1>
+              <p className="text-[11px] text-sidebar-foreground/50 uppercase tracking-widest">analisi urbanistica</p>
             </div>
           </Link>
         </div>
@@ -88,11 +88,11 @@ export default function AppLayout() {
       {/* Mobile Header */}
       <div className="lg:hidden fixed top-0 left-0 right-0 z-50 bg-sidebar text-sidebar-foreground border-b border-sidebar-border">
         <div className="flex items-center justify-between px-4 h-16">
-          <Link to="/" className="flex items-center gap-2">
+          <Link to="/dashboard" className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-lg bg-sidebar-primary flex items-center justify-center">
               <Building2 className="w-4 h-4 text-sidebar-primary-foreground" />
             </div>
-            <span className="font-bold text-sidebar-foreground">Urbicheck</span>
+            <span className="font-bold text-sidebar-foreground tracking-widest">URBI CHECK</span>
           </Link>
           <div className="flex items-center gap-3">
             <span className="text-sm font-semibold text-sidebar-primary">€{(credits?.balance || 0).toFixed(2)}</span>

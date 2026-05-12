@@ -37,9 +37,9 @@ export default function HistoryPage() {
   return (
     <div className="p-6 lg:p-10 max-w-5xl mx-auto">
       <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}>
-        <h1 className="text-3xl font-serif font-bold tracking-tight mb-2">Storico Ricerche</h1>
+        <h1 className="text-3xl font-bold tracking-tight mb-2" style={{ color: '#1e3a5f' }}>Le mie analisi</h1>
         <p className="text-muted-foreground mb-6">
-          {queries.length} {queries.length === 1 ? "ricerca" : "ricerche"} effettuate
+          {queries.length} {queries.length === 1 ? "analisi effettuata" : "analisi effettuate"}
         </p>
       </motion.div>
 
@@ -109,6 +109,10 @@ export default function HistoryPage() {
           })}
         </div>
       )}
+
+      <div className="mt-10 pt-6 border-t border-border text-center text-xs text-muted-foreground">
+        urbicheck.it | Dati aggiornati da fonti GIS ufficiali regionali
+      </div>
     </div>
   );
 }
