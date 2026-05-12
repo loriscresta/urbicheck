@@ -17,6 +17,7 @@ import VincoloCard from "@/components/report/VincoloCard";
 import DataRow from "@/components/report/DataRow";
 import { motion } from "framer-motion";
 import { useToast } from "@/components/ui/use-toast";
+import { generatePDF } from "@/lib/generateUrbiCheckPDF";
 
 const FINALITA_LABELS = {
   acquisto_privato: "Acquisto privato",
@@ -81,6 +82,7 @@ export default function ReportPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [isUnlocking, setIsUnlocking] = useState(false);
+  const [isDownloadingPDF, setIsDownloadingPDF] = useState(false);
 
   const { data: query, isLoading, refetch } = useQuery({
     queryKey: ["query", id],
@@ -138,6 +140,41 @@ export default function ReportPage() {
     setIsUnlocking(false);
 
     toast({ title: "Scheda sbloccata ✓", description: "Accesso completo attivato." });
+  };
+
+  const handleDownloadPDF = async () => {
+    if (!credits || credits.balance < 2.90) {
+      toast({
+        title: "Crediti insufficienti",
+        description: `Saldo: €${(credits?.balance || 0).toFixed(2)}. Servono €2,90 per il PDF.`,
+        variant: "destructive",
+      });
+      navigate("/credits");
+      return;
+    }
+
+    setIsDownloadingPDF(true);
+    const user = await base44.auth.me();
+
+    const { doc, reportNum } = await generatePDF(query);
+
+    // Charge €2,90
+    await base44.entities.UserCredits.update(credits.id, {
+      balance: credits.balance - 2.90,
+      total_spent: (credits.total_spent || 0) + 2.90,
+    });
+    await base44.entities.CreditTransaction.create({
+      user_email: user.email,
+      type: "query_charge",
+      amount: -2.90,
+      description: `Download PDF scheda ${reportNum}`,
+      query_id: id,
+    });
+
+    queryClient.invalidateQueries({ queryKey: ["userCredits"] });
+    doc.save(`URBICHECK_${query.comune}_${reportNum}.pdf`);
+    setIsDownloadingPDF(false);
+    toast({ title: "PDF scaricato ✓", description: `Scheda ${reportNum} salvata.` });
   };
 
   if (isLoading) {
@@ -581,8 +618,8 @@ export default function ReportPage() {
           <h3 className="font-semibold mb-1">Servizi Aggiuntivi (opzionali)</h3>
           <p className="text-sm text-muted-foreground mb-4">Servizi extra a pagamento separato, non inclusi nella scheda.</p>
           <div className="flex flex-col sm:flex-row gap-3">
-            <Button variant="outline" className="gap-2" onClick={() => alert("PDF disponibile a breve — €2,90")}>
-              <Download className="w-4 h-4" />
+            <Button variant="outline" className="gap-2" onClick={handleDownloadPDF} disabled={isDownloadingPDF}>
+              {isDownloadingPDF ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
               Scarica PDF — €2,90
             </Button>
             <Button className="gap-2" style={{ background: '#1e3a5f' }} onClick={() => alert("Accesso Atti — €4,90 (disponibile a breve)")}>
