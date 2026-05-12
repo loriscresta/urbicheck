@@ -15,10 +15,14 @@ export default function SearchPage() {
     // Fase 1 — anteprima gratuita: genera report e salva come "pending" (nessun addebito)
     const reportData = await generateReport(formData);
 
+    // Separa i dati finanziari (non catastali) dal payload principale
+    const { prezzo_acquisto, superficie, stato_conservativo, destinazione_obiettivo, spese_accessorie, ...cadastralData } = formData;
+    const fin_data = { prezzo_acquisto, superficie, stato_conservativo, destinazione_obiettivo, spese_accessorie };
+
     const query = await base44.entities.CadastralQuery.create({
-      ...formData,
+      ...cadastralData,
       status: "pending",
-      report_data: reportData,
+      report_data: { ...reportData, fin_data },
       cost: 9.90,
     });
 

@@ -6,8 +6,25 @@ import { Label } from "@/components/ui/label";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue
 } from "@/components/ui/select";
-import { Search, MapPin, Loader2 } from "lucide-react";
+import { Search, MapPin, Loader2, TrendingUp, Info } from "lucide-react";
 import { motion } from "framer-motion";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+
+const FINALITA_FINANZIARIE = ["investimento", "sviluppo_immobiliare", "asta_giudiziaria"];
+
+const STATO_CONSERVATIVO = [
+  { value: "ottimo", label: "Ottimo (abitabile subito)" },
+  { value: "buono", label: "Buono (piccoli interventi)" },
+  { value: "da_ristrutturare", label: "Da ristrutturare (intervento completo)" },
+  { value: "fatiscente", label: "Fatiscente (ristrutturazione pesante/strutturale)" },
+];
+
+const DESTINAZIONE_OBIETTIVO = [
+  { value: "flipping", label: "Vendita dopo ristrutturazione (flipping)" },
+  { value: "affitto_lungo", label: "Affitto lungo termine" },
+  { value: "affitto_breve", label: "Affitto breve (B&B/Airbnb)" },
+  { value: "uso_proprio", label: "Uso proprio" },
+];
 
 const FINALITA = [
   { value: "acquisto_privato", label: "Acquisto privato" },
@@ -27,7 +44,14 @@ export default function CadastralSearchForm({ onSubmit, isLoading, disabled, sub
     particella: "",
     subalterno: "",
     finalita: "",
+    prezzo_acquisto: "",
+    superficie: "",
+    stato_conservativo: "",
+    destinazione_obiettivo: "",
+    spese_accessorie: "10",
   });
+
+  const showFinancialFields = FINALITA_FINANZIARIE.includes(formData.finalita);
 
   const provinces = formData.regione ? (PROVINCE_BY_REGIONE[formData.regione] || []) : [];
 
@@ -157,6 +181,72 @@ export default function CadastralSearchForm({ onSubmit, isLoading, disabled, sub
           </SelectContent>
         </Select>
       </div>
+
+      {/* Campi finanziaria */}
+      {showFinancialFields && (
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+          className="p-4 rounded-xl border border-amber-200 bg-amber-50 space-y-4">
+          <div className="flex items-center gap-2 mb-1">
+            <TrendingUp className="w-4 h-4 text-amber-700" />
+            <h3 className="font-semibold text-sm uppercase tracking-wider text-amber-800">Analisi Finanziaria (opzionale)</h3>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>Prezzo acquisto / base d'asta (€)</Label>
+              <Input
+                type="number"
+                placeholder="es. 150000"
+                value={formData.prezzo_acquisto}
+                onChange={(e) => handleChange("prezzo_acquisto", e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Superficie lorda (mq)</Label>
+              <Input
+                type="number"
+                placeholder="es. 80"
+                value={formData.superficie}
+                onChange={(e) => handleChange("superficie", e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Stato conservativo attuale</Label>
+              <Select value={formData.stato_conservativo} onValueChange={(v) => handleChange("stato_conservativo", v)}>
+                <SelectTrigger><SelectValue placeholder="Seleziona stato" /></SelectTrigger>
+                <SelectContent>
+                  {STATO_CONSERVATIVO.map(s => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Destinazione d'uso obiettivo</Label>
+              <Select value={formData.destinazione_obiettivo} onValueChange={(v) => handleChange("destinazione_obiettivo", v)}>
+                <SelectTrigger><SelectValue placeholder="Seleziona obiettivo" /></SelectTrigger>
+                <SelectContent>
+                  {DESTINAZIONE_OBIETTIVO.map(d => <SelectItem key={d.value} value={d.value}>{d.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <div className="flex items-center gap-1">
+                <Label>Piano spese accessorie (%)</Label>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger><Info className="w-3 h-3 text-muted-foreground" /></TooltipTrigger>
+                    <TooltipContent><p className="max-w-xs">Notaio, agenzia, imposte, spese varie — tipicamente 8–12% del prezzo</p></TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </div>
+              <Input
+                type="number"
+                placeholder="10"
+                value={formData.spese_accessorie}
+                onChange={(e) => handleChange("spese_accessorie", e.target.value)}
+              />
+            </div>
+          </div>
+        </motion.div>
+      )}
 
       {/* GIS badge / disclaimer */}
       {formData.regione && (

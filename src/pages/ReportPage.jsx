@@ -18,6 +18,7 @@ import DataRow from "@/components/report/DataRow";
 import { motion } from "framer-motion";
 import { useToast } from "@/components/ui/use-toast";
 import { generatePDF } from "@/lib/generateUrbiCheckPDF";
+import FinancialDueDiligence from "@/components/report/FinancialDueDiligence";
 
 const FINALITA_LABELS = {
   acquisto_privato: "Acquisto privato",
@@ -196,6 +197,9 @@ export default function ReportPage() {
 
   const r = query.report_data || {};
   const isAsta = query.finalita === "asta_giudiziaria";
+  const FIN_FINALITA = ["investimento", "sviluppo_immobiliare", "asta_giudiziaria"];
+  const showFinancial = isUnlocked && (FIN_FINALITA.includes(query.finalita) || r.fin_data?.prezzo_acquisto);
+  const finData = r.fin_data || {};
   const isUnlocked = query.status === "completed";
   const reportNum = `UB-${query.id?.slice(-8).toUpperCase()}`;
 
@@ -548,6 +552,19 @@ export default function ReportPage() {
               </div>
             )}
           </ReportSection>
+        )}
+
+        {/* Analisi Finanziaria & Due Diligence */}
+        {showFinancial && (
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.18 }}>
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: '#1e3a5f' }}>
+                <span className="text-white text-xs font-bold">€</span>
+              </div>
+              <h2 className="text-lg font-bold tracking-tight" style={{ color: '#1e3a5f' }}>Analisi Finanziaria & Due Diligence</h2>
+            </div>
+            <FinancialDueDiligence query={query} finData={finData} />
+          </motion.div>
         )}
 
         {/* Valutazione Sintetica */}
