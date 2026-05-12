@@ -18,7 +18,7 @@ const FINALITA = [
   { value: "valutazione_professionale", label: "Valutazione professionale" },
 ];
 
-export default function CadastralSearchForm({ onSubmit, isLoading, disabled }) {
+export default function CadastralSearchForm({ onSubmit, isLoading, disabled, submitLabel }) {
   const [formData, setFormData] = useState({
     regione: "",
     provincia: "",
@@ -193,7 +193,7 @@ export default function CadastralSearchForm({ onSubmit, isLoading, disabled }) {
           ) : (
             <Search className="w-4 h-4" />
           )}
-          Analizza — €9,90
+          {submitLabel || "Analizza — €9,90"}
         </Button>
       </div>
     </motion.form>
