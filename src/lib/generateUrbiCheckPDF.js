@@ -1,17 +1,7 @@
 /**
- * URBICHECK — Professional PDF Generator
- * Uses jsPDF loaded dynamically from CDN
+ * URBICHECK — PDF Generator
+ * Carica jsPDF via CDN dinamicamente, poi genera il documento A4.
  */
-
-const NAVY = [30, 58, 95];
-const WHITE = [255, 255, 255];
-const LIGHT_GRAY = [245, 246, 248];
-const MID_GRAY = [180, 185, 195];
-const DARK_GRAY = [60, 70, 85];
-const GREEN = [39, 174, 96];
-const YELLOW = [243, 156, 18];
-const RED = [231, 76, 60];
-const AMBER = [217, 119, 6];
 
 const FINALITA_LABELS = {
   acquisto_privato: "Acquisto privato",
@@ -22,537 +12,492 @@ const FINALITA_LABELS = {
   valutazione_professionale: "Valutazione professionale",
 };
 
-function generateReportNum() {
-  const now = new Date();
-  const y = now.getFullYear();
-  const m = String(now.getMonth() + 1).padStart(2, "0");
-  const d = String(now.getDate()).padStart(2, "0");
-  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-  const rand = Array.from({ length: 6 }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
-  return `URB-${y}${m}${d}-${rand}`;
-}
-
-function formatDate(date) {
-  return new Date(date).toLocaleDateString("it-IT", {
-    day: "2-digit", month: "long", year: "numeric",
-  });
-}
-
-async function loadJsPDF() {
-  if (window.jspdf) return window.jspdf.jsPDF;
+function loadJsPDF() {
+  if (window.jspdf) return Promise.resolve();
   return new Promise((resolve, reject) => {
     const script = document.createElement("script");
     script.src = "https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js";
-    script.onload = () => resolve(window.jspdf.jsPDF);
+    script.onload = resolve;
     script.onerror = reject;
     document.head.appendChild(script);
   });
 }
 
-// ─── Helpers ────────────────────────────────────────────────────────────────
+export async function generatePDF(query) {
+  await loadJsPDF();
 
-function addWatermark(doc, pageWidth, pageHeight) {
-  doc.saveGraphicsState();
-  doc.setGState(new doc.GState({ opacity: 0.06 }));
-  doc.setTextColor(100, 100, 100);
-  doc.setFontSize(60);
-  doc.setFont("helvetica", "bold");
-  const cx = pageWidth / 2;
-  const cy = pageHeight / 2;
-  doc.text("URBICHECK", cx, cy, { angle: 45, align: "center" });
-  doc.restoreGraphicsState();
-}
-
-function addFooter(doc, pageNum, totalPages, reportNum, pageWidth, pageHeight) {
-  const footerY = pageHeight - 12;
-  doc.setDrawColor(...MID_GRAY);
-  doc.setLineWidth(0.3);
-  doc.line(20, footerY - 4, pageWidth - 20, footerY - 4);
-
-  doc.setFontSize(7);
-  doc.setTextColor(...MID_GRAY);
-  doc.setFont("helvetica", "normal");
-  doc.text(`Generato da URBICHECK — urbicheck.it | Scheda N. ${reportNum}`, 20, footerY);
-  doc.text(`Pagina ${pageNum} di ${totalPages}`, pageWidth / 2, footerY, { align: "center" });
-  doc.text(`Documento generato il ${new Date().toLocaleDateString("it-IT")} — Dati da fonti GIS ufficiali`, pageWidth - 20, footerY, { align: "right" });
-
-  // Disclaimer
-  const disclaimerY = footerY + 4;
-  doc.setFontSize(5.5);
-  doc.text(
-    "Questo documento ha valore informativo. Per atti notarili, pratiche edilizie e procedimenti legali è necessaria verifica tecnica professionale. URBICHECK non sostituisce il parere di geometra, architetto o tecnico abilitato.",
-    pageWidth / 2, disclaimerY, { align: "center", maxWidth: pageWidth - 40 }
-  );
-}
-
-function addHeader(doc, reportNum, createdDate, pageWidth) {
-  const headerH = 28;
-  doc.setFillColor(...NAVY);
-  doc.rect(0, 0, pageWidth, headerH, "F");
-
-  // Left: URBICHECK
-  doc.setTextColor(...WHITE);
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(18);
-  doc.text("URBICHECK", 20, 11);
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(7);
-  doc.text("Sistema di Analisi Urbanistica e Catastale", 20, 17);
-
-  // Right: numero + data + sito
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(8);
-  doc.text(`SCHEDA N. ${reportNum}`, pageWidth - 20, 9, { align: "right" });
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(7);
-  doc.text(`Generata il ${formatDate(createdDate)}`, pageWidth - 20, 14, { align: "right" });
-  doc.text("urbicheck.it", pageWidth - 20, 19, { align: "right" });
-
-  return headerH + 6; // next Y
-}
-
-function sectionTitle(doc, title, y, pageWidth) {
-  doc.setFillColor(...NAVY);
-  doc.rect(20, y, pageWidth - 40, 7, "F");
-  doc.setTextColor(...WHITE);
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(8);
-  doc.text(title.toUpperCase(), 24, y + 4.8);
-  return y + 10;
-}
-
-function twoColTable(doc, rows, y, pageWidth) {
-  const colW = (pageWidth - 40) / 2;
-  const rowH = 6.5;
-  doc.setFontSize(8);
-  let even = false;
-  for (const [label, value] of rows) {
-    if (even) {
-      doc.setFillColor(...LIGHT_GRAY);
-      doc.rect(20, y, pageWidth - 40, rowH, "F");
-    }
-    doc.setTextColor(...DARK_GRAY);
-    doc.setFont("helvetica", "bold");
-    doc.text(label, 22, y + 4.4);
-    doc.setFont("helvetica", "normal");
-    doc.text(String(value || "—"), 22 + colW, y + 4.4);
-    even = !even;
-    y += rowH;
-  }
-  return y + 2;
-}
-
-function threeColTable(doc, headers, rows, y, pageWidth, colWidths) {
-  const totalW = pageWidth - 40;
-  const cw = colWidths || [totalW * 0.35, totalW * 0.45, totalW * 0.2];
-  const rowH = 7;
-
-  // Header row
-  doc.setFillColor(...NAVY);
-  doc.rect(20, y, totalW, rowH, "F");
-  doc.setTextColor(...WHITE);
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(7.5);
-  let x = 22;
-  for (let i = 0; i < headers.length; i++) {
-    doc.text(headers[i], x, y + 4.8);
-    x += cw[i];
-  }
-  y += rowH;
-
-  doc.setFontSize(7.5);
-  let even = false;
-  for (const row of rows) {
-    if (even) {
-      doc.setFillColor(...LIGHT_GRAY);
-      doc.rect(20, y, totalW, rowH, "F");
-    }
-    doc.setTextColor(...DARK_GRAY);
-    x = 22;
-    for (let i = 0; i < row.length; i++) {
-      doc.setFont("helvetica", i === 0 ? "bold" : "normal");
-      const cell = String(row[i] || "—");
-      doc.text(cell, x, y + 4.8, { maxWidth: cw[i] - 2 });
-      x += cw[i];
-    }
-    even = !even;
-    y += rowH;
-  }
-  return y + 3;
-}
-
-function zonizzazioneBox(doc, colore, zona_codice, destinazione, descrizione, y, pageWidth) {
-  const colors = {
-    verde: GREEN, giallo: YELLOW, rosso: RED,
-  };
-  const c = colors[colore?.toLowerCase()] || YELLOW;
-  const boxH = 22;
-  doc.setFillColor(...c);
-  doc.setGlobalAlpha(0.12);
-  doc.rect(20, y, pageWidth - 40, boxH, "F");
-  doc.setGlobalAlpha(1);
-  doc.setDrawColor(...c);
-  doc.setLineWidth(1.5);
-  doc.rect(20, y, pageWidth - 40, boxH, "S");
-  doc.setLineWidth(0.3);
-
-  // Colored dot
-  doc.setFillColor(...c);
-  doc.circle(26, y + 7, 3, "F");
-
-  doc.setTextColor(...c);
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(9);
-  doc.text(`ZONA: ${zona_codice || "—"}`, 32, y + 8);
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(7.5);
-  doc.setTextColor(...DARK_GRAY);
-  if (destinazione) doc.text(destinazione, 32, y + 13);
-  if (descrizione) {
-    doc.setFontSize(7);
-    doc.text(descrizione, 22, y + 18.5, { maxWidth: pageWidth - 44 });
-  }
-  return y + boxH + 4;
-}
-
-function getFontisTable(query, r) {
-  const regione = query.regione || "";
-  const comune = query.comune || "—";
-  let zonazFonte = `Comune di ${comune} — PRG vigente + elaborazione AI`;
-  let idraFonte = "Autorità di Bacino distrettuale — PAI vigente";
-
-  if (regione === "Liguria") {
-    zonazFonte = "Regione Liguria — GeoServer WFS Layer M2427 (PUC vigente)";
-    idraFonte = "Regione Liguria — WFS Layer M2423";
-  } else if (regione === "Piemonte") {
-    zonazFonte = "CSI Piemonte — WFS Catasto geoservices.csi.it";
-  }
-
-  return [
-    ["Dati catastali (foglio/particella/superficie)", "Agenzia delle Entrate — Cartografia catastale nazionale", "Aggiornamento continuo"],
-    ["Zonizzazione PRG/PUC", zonazFonte, "Vigente"],
-    ["Zona sismica", "Protezione Civile Nazionale — Mappa pericolosità sismica INGV", "OPCM 3274/2003"],
-    ["Rischio idraulico/frana", idraFonte, "PAI vigente"],
-    ["Vincolo paesaggistico", "MIBACT — Sistema Informativo Territoriale SITAP", "D.Lgs. 42/2004"],
-    ["Normativa edilizia", `NTA del PRG/PUC Comune di ${comune}`, "Aggiornamento vigente"],
-  ];
-}
-
-// ─── MAIN EXPORT ────────────────────────────────────────────────────────────
-
-export async function generatePDF(query, credits) {
-  const jsPDF = await loadJsPDF();
+  const { jsPDF } = window.jspdf;
   const r = query.report_data || {};
   const isAsta = query.finalita === "asta_giudiziaria";
 
-  const reportNum = generateReportNum();
-  const pageWidth = 210;
-  const pageHeight = 297;
-  const bottomMargin = 24;
+  const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+  const pageW = 210;
+  const margin = 20;
 
-  const doc = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
+  const schNum =
+    "URB-" +
+    new Date().toISOString().slice(0, 10).replace(/-/g, "") +
+    "-" +
+    Math.random().toString(36).substring(2, 8).toUpperCase();
 
-  let page = 1;
-  // We'll track pages to add footer/watermark at the end
-  const pageStarts = [];
+  // ── HEADER NAVY ──────────────────────────────────────────────────────────
+  doc.setFillColor(30, 58, 95);
+  doc.rect(0, 0, 210, 28, "F");
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(20);
+  doc.setFont("helvetica", "bold");
+  doc.text("URBICHECK", margin, 12);
+  doc.setFontSize(8);
+  doc.setFont("helvetica", "normal");
+  doc.text("Sistema di Analisi Urbanistica e Catastale", margin, 18);
+  doc.setFontSize(9);
+  doc.text("Scheda N. " + schNum, 140, 12);
+  doc.text(new Date().toLocaleDateString("it-IT"), 140, 18);
+  doc.text("urbicheck.it", 140, 24);
 
-  // ── PAGE 1 ──────────────────────────────────────────────────────────────
-  pageStarts.push(1);
-  let y = addHeader(doc, reportNum, query.created_date, pageWidth);
+  // ── WATERMARK ─────────────────────────────────────────────────────────────
+  doc.saveGraphicsState();
+  doc.setGState(new doc.GState({ opacity: 0.06 }));
+  doc.setTextColor(200, 200, 200);
+  doc.setFontSize(60);
+  doc.setFont("helvetica", "bold");
+  doc.text("URBICHECK", 30, 180, { angle: 45 });
+  doc.restoreGraphicsState();
 
-  addWatermark(doc, pageWidth, pageHeight);
+  // ── SEZIONE 1 — DATI IDENTIFICATIVI ──────────────────────────────────────
+  doc.setTextColor(30, 58, 95);
+  doc.setFontSize(11);
+  doc.setFont("helvetica", "bold");
+  doc.text("1. DATI IDENTIFICATIVI IMMOBILE", margin, 38);
+  doc.setDrawColor(30, 58, 95);
+  doc.line(margin, 40, 190, 40);
 
-  // SEZIONE 1 — DATI IDENTIFICATIVI
-  y = sectionTitle(doc, "1 — Dati Identificativi Immobile", y, pageWidth);
-  const identRows = [
+  const rows1 = [
     ["Regione", query.regione],
     ["Provincia", query.provincia || "—"],
     ["Comune", query.comune],
     ["Foglio catastale", query.foglio],
     ["Particella", query.particella],
     ["Subalterno", query.subalterno || "—"],
-    ["Categoria catastale", r.dati_catastali?.categoria],
-    ["Consistenza / Superficie stimata", r.dati_catastali?.consistenza],
-    ["Finalità analisi", FINALITA_LABELS[query.finalita] || query.finalita],
+    ["Categoria catastale", r.dati_catastali?.categoria || "—"],
+    ["Consistenza / Superficie", r.dati_catastali?.consistenza || "—"],
+    ["Finalità analisi", FINALITA_LABELS[query.finalita] || query.finalita || "—"],
   ];
-  y = twoColTable(doc, identRows, y, pageWidth);
 
-  // SEZIONE 2 — ZONIZZAZIONE
+  let y = 45;
+  doc.setFontSize(9);
+  doc.setTextColor(50, 50, 50);
+  rows1.forEach(([k, v], i) => {
+    if (i % 2 === 0) {
+      doc.setFillColor(245, 247, 250);
+      doc.rect(margin, y - 4, 170, 7, "F");
+    }
+    doc.setFont("helvetica", "bold");
+    doc.text(k, margin + 2, y);
+    doc.setFont("helvetica", "normal");
+    doc.text(String(v || "—"), 90, y);
+    y += 8;
+  });
+
+  // ── SEZIONE 2 — ZONIZZAZIONE ──────────────────────────────────────────────
   y += 4;
-  y = sectionTitle(doc, "2 — Zonizzazione Urbanistica", y, pageWidth);
-  if (r.zonizzazione) {
-    y = zonizzazioneBox(
-      doc,
-      r.zonizzazione.colore,
-      r.zonizzazione.zona_codice,
-      r.zonizzazione.destinazione_prevalente,
-      r.zonizzazione.descrizione,
-      y, pageWidth
-    );
-  }
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(11);
+  doc.setTextColor(30, 58, 95);
+  doc.text("2. ZONIZZAZIONE URBANISTICA", margin, y);
+  y += 4;
+  doc.setDrawColor(30, 58, 95);
+  doc.line(margin, y, 190, y);
+  y += 6;
 
-  // Indici edilizi
-  if (r.indici_edilizi) {
-    const ie = r.indici_edilizi;
-    const indiciRows = [
-      ["Indice di Fabbricabilità (IF)", ie.if_mc_mq || "—", "m³/m²"],
-      ["Rapporto di Copertura (RC)", ie.rc_percentuale || "—", "—"],
-      ["Altezza massima (H max)", ie.h_max || "—", "m"],
-      ["Distanza dai confini", ie.distanza_confini || "—", "m"],
-      ["Distanza dalla strada", ie.distanza_strada || "—", "m"],
-      ["Distanza tra fabbricati", ie.distanza_fabbricati || "—", "m"],
-    ];
-    y = threeColTable(doc, ["Parametro", "Valore", "Unità"], indiciRows, y, pageWidth);
-  }
+  const zonaColore = r.zonizzazione?.colore?.toLowerCase();
+  const zonaColor =
+    zonaColore === "verde"
+      ? [39, 174, 96]
+      : zonaColore === "rosso"
+      ? [231, 76, 60]
+      : [243, 156, 18];
 
-  // SEZIONE 3 — VINCOLI
-  y += 2;
-  // Check if we need a new page
-  if (y > pageHeight - bottomMargin - 60) {
-    addFooter(doc, page, 3 + (isAsta ? 1 : 0), reportNum, pageWidth, pageHeight);
+  doc.setFillColor(...zonaColor);
+  doc.roundedRect(margin, y, 170, 14, 2, 2, "F");
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(12);
+  doc.setFont("helvetica", "bold");
+  const zonaNome =
+    r.zonizzazione?.zona_codice ||
+    r.zonizzazione?.destinazione_prevalente ||
+    "Zona urbanistica";
+  doc.text(zonaNome, margin + 6, y + 9);
+  y += 20;
+
+  doc.setTextColor(50, 50, 50);
+  doc.setFontSize(9);
+  doc.setFont("helvetica", "normal");
+
+  const ie = r.indici_edilizi || {};
+  const indici = [
+    ["Indice di Fabbricabilità (IF)", ie.if_mc_mq, "m³/m²"],
+    ["Rapporto di Copertura (RC)", ie.rc_percentuale, "%"],
+    ["Altezza massima (H max)", ie.h_max, "m"],
+    ["Distanza dai confini", ie.distanza_confini, "m"],
+    ["Distanza dalla strada", ie.distanza_strada, "m"],
+    ["Distanza tra fabbricati", ie.distanza_fabbricati, "m"],
+  ];
+  indici.forEach(([k, v, u], i) => {
+    if (i % 2 === 0) {
+      doc.setFillColor(245, 247, 250);
+      doc.rect(margin, y - 4, 170, 7, "F");
+    }
+    doc.setFont("helvetica", "bold");
+    doc.text(k, margin + 2, y);
+    doc.setFont("helvetica", "normal");
+    doc.text(String(v || "—"), 130, y);
+    doc.text(u, 165, y);
+    y += 8;
+  });
+
+  // ── SEZIONE 3 — VINCOLI ───────────────────────────────────────────────────
+  y += 4;
+  if (y > 240) {
     doc.addPage();
-    page++;
-    pageStarts.push(page);
-    addWatermark(doc, pageWidth, pageHeight);
-    y = 15;
+    y = 20;
   }
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(11);
+  doc.setTextColor(30, 58, 95);
+  doc.text("3. VINCOLI ATTIVI", margin, y);
+  y += 4;
+  doc.setDrawColor(30, 58, 95);
+  doc.line(margin, y, 190, y);
+  y += 6;
 
-  y = sectionTitle(doc, "3 — Vincoli Attivi", y, pageWidth);
-  const v = r.vincoli || {};
-  const vincoliRows = [
+  const vv = r.vincoli || {};
+  const vincoli = [
     [
       "Vincolo sismico",
-      v.vincolo_sismico?.presente ? `✓ Presente — ${v.vincolo_sismico?.zona || ""}` : "— Assente",
-      "OPCM 3274/2003 + DGR regionale",
+      vv.vincolo_sismico?.presente
+        ? `Presente — ${vv.vincolo_sismico?.zona || vv.vincolo_sismico?.dettagli || ""}`
+        : "Assente",
+      "OPCM 3274/2003",
+      vv.vincolo_sismico?.presente,
     ],
     [
       "Rischio idraulico",
-      v.vincolo_idraulico?.presente ? `✓ Presente — ${v.vincolo_idraulico?.classe_rischio || ""}` : "— Assente",
-      "PAI - Piano Assetto Idrogeologico",
-    ],
-    [
-      "Rischio frana",
-      "— Vedere PAI locale",
+      vv.vincolo_idraulico?.presente
+        ? `Presente — ${vv.vincolo_idraulico?.classe_rischio || vv.vincolo_idraulico?.dettagli || ""}`
+        : "Assente",
       "PAI - Autorità di Bacino",
+      vv.vincolo_idraulico?.presente,
     ],
     [
       "Vincolo paesaggistico",
-      v.vincolo_paesaggistico?.presente ? `✓ Presente — ${v.vincolo_paesaggistico?.tipo || ""}` : "— Assente",
-      "D.Lgs. 42/2004 art. 142",
-    ],
-    [
-      "Vincolo idrogeologico",
-      "— Vedere R.D. 3267/1923",
-      "R.D. 3267/1923",
+      vv.vincolo_paesaggistico?.presente
+        ? `Presente — ${vv.vincolo_paesaggistico?.tipo || vv.vincolo_paesaggistico?.dettagli || ""}`
+        : "Assente",
+      "D.Lgs. 42/2004",
+      vv.vincolo_paesaggistico?.presente,
     ],
     [
       "Vincolo archeologico",
-      v.vincolo_archeologico?.presente ? "✓ Presente" : "— Assente",
+      vv.vincolo_archeologico?.presente ? "Presente" : "Assente",
       "D.Lgs. 42/2004",
+      vv.vincolo_archeologico?.presente,
     ],
-    [
-      "Area protetta / Rete Natura 2000",
-      "— Verificare locale",
-      "L. 394/1991",
-    ],
-    [
-      "Fascia rispetto stradale",
-      "— Verificare planimetria",
-      "D.Lgs. 285/1992",
-    ],
-    [
-      "Fascia rispetto cimiteriale",
-      "— Verificare locale",
-      "T.U. 1265/1934 art. 338",
-    ],
+    ["Rischio frana", "Vedere PAI locale", "PAI vigente", false],
+    ["Vincolo idrogeologico", "Vedere R.D. 3267/1923", "R.D. 3267/1923", false],
   ];
 
-  // Add altri vincoli if present
-  if (v.altri_vincoli?.length) {
-    for (const av of v.altri_vincoli) {
-      vincoliRows.push([av.nome || "Altro vincolo", av.presente ? "✓ Presente" : "— Assente", av.dettagli || "—"]);
+  doc.setFontSize(8.5);
+  vincoli.forEach(([k, v, norma, presente], i) => {
+    if (i % 2 === 0) {
+      doc.setFillColor(245, 247, 250);
+      doc.rect(margin, y - 4, 170, 7, "F");
     }
-  }
+    doc.setTextColor(50, 50, 50);
+    doc.setFont("helvetica", "bold");
+    doc.text(k, margin + 2, y);
+    doc.setFont("helvetica", "normal");
+    if (presente) {
+      doc.setTextColor(200, 50, 50);
+    } else {
+      doc.setTextColor(100, 150, 100);
+    }
+    doc.text(String(v || "—"), 90, y, { maxWidth: 42 });
+    doc.setTextColor(120, 120, 120);
+    doc.text(norma, 135, y);
+    doc.setTextColor(50, 50, 50);
+    y += 8;
+  });
 
-  y = threeColTable(doc, ["Tipo vincolo", "Presenza / Classe", "Norma di riferimento"], vincoliRows, y, pageWidth);
-
-  addFooter(doc, page, 2 + (isAsta ? 1 : 0), reportNum, pageWidth, pageHeight);
-
-  // ── PAGE 2 ──────────────────────────────────────────────────────────────
-  doc.addPage();
-  page++;
-  addWatermark(doc, pageWidth, pageHeight);
-  y = 15;
-
-  // SEZIONE 4 — FATTIBILITÀ INTERVENTI
-  y = sectionTitle(doc, "4 — Fattibilità Interventi", y, pageWidth);
-
-  const fattibilita = r.fattibilita_interventi || [];
-  const defaultFattibilita = [
-    ["Manutenzione ordinaria", "Libera (attività libera)", "CILA non necessaria"],
-    ["Manutenzione straordinaria", "Autorizzata", "CILA"],
-    ["Restauro e risanamento", "Autorizzata", "SCIA"],
-    ["Ristrutturazione leggera", "Autorizzata", "SCIA"],
-    ["Ristrutturazione pesante", "Autorizzata", "Permesso di costruire"],
-    ["Cambio destinazione d'uso", "Verificare NTA", "Permesso di costruire"],
-    ["Ampliamento volumetrico", "Condizionata", "Se IF residuo disponibile"],
-    ["Demolizione e ricostruzione", "Vincolata", "Verifica PRG/NTA"],
-    ["Nuova costruzione", "Verificare", "Permesso di costruire"],
-  ];
-
-  const fattRows = fattibilita.length > 0
-    ? fattibilita.map(fi => [
-        fi.tipo_intervento,
-        fi.fattibilita === "fattibile" ? "✓ Fattibile" : fi.fattibilita === "non_fattibile" ? "✗ Non fattibile" : "⚠ Con autorizzazione",
-        fi.note || "—",
-      ])
-    : defaultFattibilita;
-
-  y = threeColTable(doc, ["Tipo di intervento", "Fattibilità", "Nota / Pratica"], fattRows, y, pageWidth);
-
-  // SEZIONE 5 — FONTI DATI
+  // ── SEZIONE 4 — FATTIBILITÀ ───────────────────────────────────────────────
   y += 4;
-  if (y > pageHeight - bottomMargin - 55) {
-    addFooter(doc, page, 2 + (isAsta ? 1 : 0), reportNum, pageWidth, pageHeight);
+  if (y > 240) {
     doc.addPage();
-    page++;
-    addWatermark(doc, pageWidth, pageHeight);
-    y = 15;
+    y = 20;
   }
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(11);
+  doc.setTextColor(30, 58, 95);
+  doc.text("4. FATTIBILITÀ INTERVENTI", margin, y);
+  y += 4;
+  doc.setDrawColor(30, 58, 95);
+  doc.line(margin, y, 190, y);
+  y += 6;
 
-  y = sectionTitle(doc, "5 — Fonti Dati Ufficiali e Riferimenti Normativi", y, pageWidth);
-  const fontiRows = getFontisTable(query, r);
-  y = threeColTable(doc, ["Dato / Informazione", "Fonte ufficiale", "Aggiornamento"], fontiRows, y, pageWidth, [
-    (pageWidth - 40) * 0.28,
-    (pageWidth - 40) * 0.52,
-    (pageWidth - 40) * 0.20,
-  ]);
+  // Header row
+  doc.setFillColor(30, 58, 95);
+  doc.rect(margin, y - 4, 170, 7, "F");
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(8);
+  doc.setFont("helvetica", "bold");
+  doc.text("Tipo di intervento", margin + 2, y);
+  doc.text("Fattibilità", 100, y);
+  doc.text("Nota / Pratica", 135, y);
+  y += 8;
 
-  // Pratiche necessarie (if present)
-  if (r.pratiche_necessarie?.length > 0) {
-    y += 4;
-    if (y > pageHeight - bottomMargin - 40) {
-      addFooter(doc, page, 2 + (isAsta ? 1 : 0), reportNum, pageWidth, pageHeight);
-      doc.addPage();
-      page++;
-      addWatermark(doc, pageWidth, pageHeight);
-      y = 15;
+  const fattRows =
+    r.fattibilita_interventi?.length > 0
+      ? r.fattibilita_interventi.map((fi) => [
+          fi.tipo_intervento,
+          fi.fattibilita === "fattibile"
+            ? "✓ Fattibile"
+            : fi.fattibilita === "non_fattibile"
+            ? "✗ Non fattibile"
+            : "⚠ Con autorizzazione",
+          fi.note || "—",
+        ])
+      : [
+          ["Manutenzione ordinaria", "✓ Fattibile", "Attività libera"],
+          ["Manutenzione straordinaria", "✓ Fattibile", "CILA"],
+          ["Ristrutturazione leggera", "⚠ Con autorizzazione", "SCIA"],
+          ["Ristrutturazione pesante", "⚠ Con autorizzazione", "Permesso di costruire"],
+          ["Cambio destinazione d'uso", "⚠ Con autorizzazione", "Verifica NTA"],
+          ["Nuova costruzione", "⚠ Con autorizzazione", "Permesso di costruire"],
+        ];
+
+  doc.setFontSize(8);
+  doc.setTextColor(50, 50, 50);
+  fattRows.forEach(([k, v, n], i) => {
+    if (i % 2 === 0) {
+      doc.setFillColor(245, 247, 250);
+      doc.rect(margin, y - 4, 170, 7, "F");
     }
-    y = sectionTitle(doc, "Pratiche Necessarie", y, pageWidth);
-    const praticheRows = r.pratiche_necessarie.map(p => [
-      p.tipo_intervento || "—",
-      `${p.pratica_richiesta || "—"} — ${p.ente_competente || "—"}`,
-      `${p.tempistica_stimata || "—"} / ${p.costi_stimati || "—"}`,
-    ]);
-    y = threeColTable(doc, ["Tipo intervento", "Pratica richiesta / Ente", "Tempi / Costi stimati"], praticheRows, y, pageWidth);
+    doc.setFont("helvetica", "bold");
+    doc.text(String(k), margin + 2, y, { maxWidth: 54 });
+    doc.setFont("helvetica", "normal");
+    doc.text(String(v), 100, y);
+    doc.setTextColor(100, 100, 100);
+    doc.text(String(n), 135, y, { maxWidth: 52 });
+    doc.setTextColor(50, 50, 50);
+    y += 8;
+  });
+
+  // ── SEZIONE 5 — FONTI ─────────────────────────────────────────────────────
+  y += 6;
+  if (y > 240) {
+    doc.addPage();
+    y = 20;
   }
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(11);
+  doc.setTextColor(30, 58, 95);
+  doc.text("5. FONTI DATI UFFICIALI", margin, y);
+  y += 4;
+  doc.setDrawColor(30, 58, 95);
+  doc.line(margin, y, 190, y);
+  y += 6;
 
-  // Valutazione sintetica (if present)
-  if (r.valutazione_sintetica) {
-    y += 4;
-    if (y > pageHeight - bottomMargin - 30) {
-      addFooter(doc, page, 2 + (isAsta ? 1 : 0), reportNum, pageWidth, pageHeight);
-      doc.addPage();
-      page++;
-      addWatermark(doc, pageWidth, pageHeight);
-      y = 15;
-    }
-    y = sectionTitle(doc, "Valutazione Sintetica", y, pageWidth);
-    const vs = r.valutazione_sintetica;
-    if (vs.livello_complessita) {
-      doc.setFontSize(8);
-      doc.setTextColor(...DARK_GRAY);
-      doc.setFont("helvetica", "bold");
-      doc.text(`Livello di complessità: ${vs.livello_complessita}`, 22, y + 4);
-      y += 8;
-    }
-    const vsRows = [];
-    (vs.criticita_principali || []).forEach(c => vsRows.push(["⚠ Criticità", c, ""]));
-    (vs.opportunita || []).forEach(o => vsRows.push(["✦ Opportunità", o, ""]));
-    (vs.raccomandazioni || []).forEach(ra => vsRows.push(["→ Raccomandazione", ra, ""]));
-    if (vsRows.length) {
-      y = threeColTable(doc, ["Tipo", "Descrizione", ""], vsRows, y, pageWidth, [
-        (pageWidth - 40) * 0.22,
-        (pageWidth - 40) * 0.78,
-        0,
-      ]);
-    }
-  }
+  // Header
+  doc.setFillColor(235, 244, 255);
+  doc.rect(margin, y - 4, 170, 7, "F");
+  doc.setFontSize(8);
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(50, 50, 50);
+  doc.text("Tipo di dato", margin + 2, y);
+  doc.text("Fonte ufficiale", 75, y);
+  doc.text("Rif. normativo", 152, y);
+  y += 8;
 
-  addFooter(doc, page, page + (isAsta ? 1 : 0), reportNum, pageWidth, pageHeight);
+  const fonti = [
+    [
+      "Dati catastali",
+      "Agenzia delle Entrate — Cartografia catastale",
+      "D.Lgs. 347/1990",
+    ],
+    [
+      "Zonizzazione PRG/PUC",
+      query.regione === "Liguria"
+        ? "Regione Liguria — WFS M2427"
+        : "PRG Comunale + elaborazione AI",
+      "DPR 380/2001",
+    ],
+    ["Zona sismica", "INGV — Protezione Civile Nazionale", "OPCM 3274/2003"],
+    [
+      "Rischio idraulico",
+      query.regione === "Liguria"
+        ? "Regione Liguria — WFS M2423"
+        : "PAI Autorità di Bacino",
+      "D.Lgs. 152/2006",
+    ],
+    ["Vincolo paesaggistico", "MiC — SITAP", "D.Lgs. 42/2004 art.142"],
+    [
+      "Normativa edilizia",
+      `NTA del PRG/PUC Comune di ${query.comune}`,
+      "DPR 380/2001",
+    ],
+  ];
 
-  // ── PAGE 3 (ASTA) ────────────────────────────────────────────────────────
+  doc.setFont("helvetica", "normal");
+  fonti.forEach(([k, v, n], i) => {
+    if (i % 2 === 0) {
+      doc.setFillColor(250, 250, 250);
+      doc.rect(margin, y - 4, 170, 7, "F");
+    }
+    doc.setTextColor(50, 50, 50);
+    doc.setFont("helvetica", "bold");
+    doc.text(k, margin + 2, y, { maxWidth: 50 });
+    doc.setFont("helvetica", "normal");
+    doc.text(v, 75, y, { maxWidth: 72 });
+    doc.text(n, 152, y, { maxWidth: 36 });
+    y += 8;
+  });
+
+  // ── SEZIONE ASTA (pagina extra se asta giudiziaria) ───────────────────────
   if (isAsta) {
     doc.addPage();
-    page++;
-    addWatermark(doc, pageWidth, pageHeight);
-    y = 15;
+    let ay = 20;
 
-    // Red banner
     doc.setFillColor(180, 30, 30);
-    doc.rect(20, y, pageWidth - 40, 12, "F");
-    doc.setTextColor(...WHITE);
+    doc.rect(0, 0, 210, 18, "F");
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(11);
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(9);
-    doc.text("SEZIONE SPECIALE — ACQUISTO ALL'ASTA GIUDIZIARIA", pageWidth / 2, y + 8, { align: "center" });
-    y += 16;
-
-    // Info box
-    doc.setFillColor(255, 245, 230);
-    doc.setDrawColor(...AMBER);
-    doc.setLineWidth(0.8);
-    doc.rect(20, y, pageWidth - 40, 12, "FD");
-    doc.setTextColor(120, 60, 0);
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(7.5);
     doc.text(
-      "Questa scheda include analisi specifica per immobili in procedura esecutiva. Verificare sempre la conformità urbanistica prima dell'offerta.",
-      pageWidth / 2, y + 5, { align: "center", maxWidth: pageWidth - 44 }
+      "SEZIONE SPECIALE — ACQUISTO ALL'ASTA GIUDIZIARIA",
+      pageW / 2,
+      12,
+      { align: "center" }
     );
-    y += 18;
+    ay = 28;
 
-    // Checklist
-    y = sectionTitle(doc, "Checklist Pre-Offerta", y, pageWidth);
-    const checklist = [
-      ["Conformità urbanistica", "Verificare che la destinazione d'uso sia conforme al titolo edilizio originario"],
-      ["Difformità edilizie", "Richiedere il certificato di agibilità e verificare eventuali difformità nella planimetria catastale"],
-      ["CDU allegato", "Il Certificato di Destinazione Urbanistica (art. 30 DPR 380/2001) deve essere allegato alla perizia"],
-      ["Oneri urbanizzazione", "Verificare se vi sono oneri di urbanizzazione non pagati o convenzioni urbanistiche pendenti"],
-      ["Sanatoria possibile", "Valutare se eventuali abusi sono sanabili ai sensi del DPR 380/2001 art. 36"],
-      ["Accesso atti UTC", "Richiedere ex art. 22 L. 241/90 all'UTC almeno 30 gg prima dell'asta"],
-    ];
-    y = twoColTable(doc, checklist, y, pageWidth);
-
-    // Testo precompilato CDU
-    y += 6;
-    y = sectionTitle(doc, "Testo Precompilato — Richiesta CDU (art. 30 DPR 380/2001)", y, pageWidth);
-    doc.setFontSize(7);
-    doc.setTextColor(...DARK_GRAY);
+    doc.setFillColor(255, 245, 230);
+    doc.setDrawColor(217, 119, 6);
+    doc.setLineWidth(0.8);
+    doc.rect(margin, ay, 170, 14, "FD");
+    doc.setTextColor(120, 60, 0);
+    doc.setFontSize(7.5);
     doc.setFont("helvetica", "normal");
-    const cduText = [
+    doc.text(
+      "Verificare sempre la conformità urbanistica prima dell'offerta. CDU obbligatorio per aste ex art. 30 DPR 380/2001.",
+      pageW / 2,
+      ay + 6,
+      { align: "center", maxWidth: 162 }
+    );
+    ay += 20;
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(11);
+    doc.setTextColor(30, 58, 95);
+    doc.text("Checklist Pre-Offerta", margin, ay);
+    ay += 4;
+    doc.setDrawColor(30, 58, 95);
+    doc.line(margin, ay, 190, ay);
+    ay += 6;
+
+    const checklist = [
+      ["CDU allegato alla perizia", "Obbligatorio ex art. 30 DPR 380/2001"],
+      ["Conformità urbanistica", "Verifica titolo edilizio originario vs stato attuale"],
+      ["Difformità edilizie", "Planimetria catastale vs stato di fatto"],
+      ["Oneri urbanizzazione pendenti", "Verifica convenzioni urbanistiche attive"],
+      ["Sanatoria possibile", "DPR 380/2001 art. 36 — abusi sanabili?"],
+      ["Richiesta accesso atti UTC", "Ex art. 22 L.241/90, almeno 30 gg prima dell'asta"],
+    ];
+
+    doc.setFontSize(8.5);
+    checklist.forEach(([k, v], i) => {
+      if (i % 2 === 0) {
+        doc.setFillColor(245, 247, 250);
+        doc.rect(margin, ay - 4, 170, 7, "F");
+      }
+      doc.setTextColor(50, 50, 50);
+      doc.setFont("helvetica", "bold");
+      doc.text(k, margin + 2, ay);
+      doc.setFont("helvetica", "normal");
+      doc.text(v, 90, ay, { maxWidth: 96 });
+      ay += 8;
+    });
+
+    // Testo CDU precompilato
+    ay += 6;
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10);
+    doc.setTextColor(30, 58, 95);
+    doc.text(
+      "Testo Precompilato — Richiesta CDU (art. 30 DPR 380/2001)",
+      margin,
+      ay
+    );
+    ay += 4;
+    doc.setDrawColor(30, 58, 95);
+    doc.line(margin, ay, 190, ay);
+    ay += 6;
+
+    doc.setFontSize(7.5);
+    doc.setTextColor(50, 50, 50);
+    doc.setFont("helvetica", "normal");
+
+    const cduLines = [
       `Spett.le Comune di ${query.comune || "__________"}`,
-      `Ufficio Tecnico Comunale — Sportello Urbanistica`,
+      "Ufficio Tecnico Comunale — Sportello Urbanistica",
       "",
       "OGGETTO: Richiesta Certificato di Destinazione Urbanistica ai sensi dell'art. 30 del DPR 380/2001",
       "",
-      `Il/La sottoscritto/a, richiedente ai sensi dell'art. 22 della L. 241/1990, chiede il rilascio del`,
-      `Certificato di Destinazione Urbanistica per l'immobile sito nel Comune di ${query.comune || "__________"},`,
-      `identificato catastalmente al Foglio ${query.foglio || "__"}, Particella ${query.particella || "__"}${query.subalterno ? `, Subalterno ${query.subalterno}` : ""}.`,
+      "Il/La sottoscritto/a, richiedente ai sensi dell'art. 22 della L. 241/1990, chiede il rilascio",
+      `del Certificato di Destinazione Urbanistica per l'immobile sito nel Comune di ${query.comune || "__________"},`,
+      `Foglio ${query.foglio || "__"}, Particella ${query.particella || "__"}${query.subalterno ? `, Subalterno ${query.subalterno}` : ""}.`,
       "",
-      "Si allegano: copia documento d'identità, visura catastale dell'immobile, marca da bollo €16,00.",
+      "Si allegano: copia documento d'identità, visura catastale, marca da bollo €16,00.",
       "",
       `${query.comune || "__________"}, ${new Date().toLocaleDateString("it-IT")}`,
       "Firma: __________________________",
     ];
-    for (const line of cduText) {
-      if (y > pageHeight - bottomMargin - 8) break;
-      if (line === "") { y += 2; continue; }
-      doc.text(line, 22, y);
-      y += 5;
-    }
 
-    addFooter(doc, page, page, reportNum, pageWidth, pageHeight);
+    for (const line of cduLines) {
+      if (ay > 270) break;
+      if (line === "") {
+        ay += 3;
+        continue;
+      }
+      doc.text(line, margin, ay);
+      ay += 5;
+    }
   }
 
-  return { doc, reportNum };
+  // ── FOOTER SU TUTTE LE PAGINE ─────────────────────────────────────────────
+  const pageCount = doc.getNumberOfPages();
+  for (let i = 1; i <= pageCount; i++) {
+    doc.setPage(i);
+    doc.setFillColor(245, 247, 250);
+    doc.rect(0, 285, 210, 12, "F");
+    doc.setFontSize(7);
+    doc.setTextColor(120, 120, 120);
+    doc.setFont("helvetica", "normal");
+    doc.text("URBICHECK — urbicheck.it | Scheda N. " + schNum, margin, 291);
+    doc.text("Pag. " + i + "/" + pageCount, 100, 291, { align: "center" });
+    doc.text(
+      "Documento generato il " + new Date().toLocaleDateString("it-IT"),
+      190,
+      291,
+      { align: "right" }
+    );
+    doc.setFontSize(6);
+    doc.text(
+      "Documento a valore informativo. Per atti notarili e pratiche edilizie è necessaria verifica tecnica professionale.",
+      105,
+      295,
+      { align: "center" }
+    );
+  }
+
+  return { doc, reportNum: schNum };
 }
