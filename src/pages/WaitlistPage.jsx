@@ -117,8 +117,8 @@ export default function WaitlistPage() {
 
             {/* Rows */}
             {[
-              ['Comune', 'Bergeggi (SV)'],
-              ['Particella', 'Foglio 7 — Part. 199'],
+              ['Comune', <span style={{ background: '#4a4a4a', color: '#4a4a4a', padding: '0 0.25rem' }}>█████████████</span>],
+              ['Particella', <>Foglio <span style={{ background: '#4a4a4a', color: '#4a4a4a', padding: '0 0.25rem' }}>██</span> — Part. <span style={{ background: '#4a4a4a', color: '#4a4a4a', padding: '0 0.25rem' }}>███</span></>],
               ['Zona PRG', 'T — Turistica'],
               ['Superficie', '2.340 m²'],
               ['Edificabilità', 'Ammessa con SCIA'],
