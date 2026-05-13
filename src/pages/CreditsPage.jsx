@@ -66,8 +66,8 @@ export default function CreditsPage() {
   return (
     <div className="p-6 lg:p-10 max-w-5xl mx-auto">
       <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}>
-        <h1 className="text-3xl font-bold tracking-tight mb-2" style={{ color: '#1e3a5f' }}>Ricarica Crediti</h1>
-        <p className="text-muted-foreground mb-2">
+        <h1 className="text-3xl font-bold tracking-tight mb-2" style={{ color: '#0D1B2A', fontFamily: 'Georgia, serif' }}>Ricarica Crediti</h1>
+        <p className="mb-2 text-sm" style={{ color: '#6B7A8D' }}>
           Ogni analisi catastale costa €9,90. Acquista pacchetti per risparmiare.
         </p>
       </motion.div>
@@ -76,24 +76,25 @@ export default function CreditsPage() {
       <motion.div
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
-        className="bg-primary text-primary-foreground rounded-xl p-6 mb-8 flex items-center justify-between"
+        className="rounded-xl p-6 mb-8 flex items-center justify-between"
+        style={{ background: '#0D1B2A' }}
       >
         <div>
-          <p className="text-sm opacity-80">Saldo attuale</p>
-          <p className="text-4xl font-bold mt-1">
-            {creditsLoading ? <Loader2 className="w-6 h-6 animate-spin" /> : `€${(credits?.balance || 0).toFixed(2)}`}
+          <p className="text-xs uppercase tracking-widest mb-1" style={{ color: 'rgba(245,244,240,0.5)' }}>Saldo attuale</p>
+          <p className="text-4xl font-extrabold mt-1" style={{ color: '#C8A06E', fontFamily: 'Georgia, serif' }}>
+            {creditsLoading ? <Loader2 className="w-6 h-6 animate-spin text-white" /> : `€ ${(credits?.balance || 0).toFixed(2)}`}
           </p>
-          <p className="text-sm opacity-60 mt-1">
-            ≈ {Math.floor((credits?.balance || 0) / 9.90)} query disponibili
+          <p className="text-sm mt-1" style={{ color: 'rgba(245,244,240,0.45)' }}>
+            ≈ {Math.floor((credits?.balance || 0) / 9.90)} analisi disponibili
           </p>
         </div>
-        <div className="w-14 h-14 rounded-xl bg-white/10 flex items-center justify-center">
-          <CreditCard className="w-7 h-7" />
+        <div className="w-14 h-14 rounded-xl flex items-center justify-center" style={{ background: 'rgba(200,160,110,0.15)' }}>
+          <CreditCard className="w-7 h-7" style={{ color: '#C8A06E' }} />
         </div>
       </motion.div>
 
       {/* Packages */}
-      <h2 className="font-semibold text-lg mb-4">Pacchetti Disponibili</h2>
+      <p className="text-xs font-semibold uppercase tracking-widest mb-4" style={{ color: '#6B7A8D' }}>Pacchetti Disponibili</p>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-10">
         {CREDIT_PACKAGES.map((pkg, i) => (
           <CreditPackageCard key={pkg.id} pkg={pkg} onPurchase={handlePurchase} delay={i * 0.05} />
@@ -101,8 +102,8 @@ export default function CreditsPage() {
       </div>
 
       {/* Transaction History */}
-      <h2 className="font-semibold text-lg mb-4">Ultime Transazioni</h2>
-      <div className="bg-card rounded-xl border border-border overflow-hidden">
+      <p className="text-xs font-semibold uppercase tracking-widest mb-4 mt-10" style={{ color: '#6B7A8D' }}>Ultime Transazioni</p>
+      <div className="bg-white rounded-xl overflow-hidden" style={{ border: '1px solid #E8E4DC', boxShadow: '0 2px 12px rgba(13,27,42,0.06)' }}>
         {txLoading ? (
           <div className="flex items-center justify-center py-12">
             <Loader2 className="w-5 h-5 animate-spin text-primary" />
@@ -137,7 +138,7 @@ export default function CreditsPage() {
         )}
       </div>
 
-      <div className="mt-10 pt-6 border-t border-border text-center text-xs text-muted-foreground">
+      <div className="mt-10 pt-6 border-t text-center text-xs" style={{ borderColor: '#E8E4DC', color: '#6B7A8D' }}>
         urbicheck.it | Dati aggiornati da fonti GIS ufficiali regionali
       </div>
     </div>

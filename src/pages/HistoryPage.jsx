@@ -39,8 +39,8 @@ export default function HistoryPage() {
   return (
     <div className="p-6 lg:p-10 max-w-5xl mx-auto">
       <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}>
-        <h1 className="text-3xl font-bold tracking-tight mb-2" style={{ color: '#1e3a5f' }}>Le mie analisi</h1>
-        <p className="text-muted-foreground mb-6">
+        <h1 className="text-3xl font-bold tracking-tight mb-2" style={{ color: '#0D1B2A', fontFamily: 'Georgia, serif' }}>Le mie analisi</h1>
+        <p className="mb-6 text-sm" style={{ color: '#6B7A8D' }}>
           {queries.length} {queries.length === 1 ? "analisi effettuata" : "analisi effettuate"}
         </p>
       </motion.div>
@@ -92,7 +92,7 @@ export default function HistoryPage() {
               )}
             </div>
           ) : (
-            <div className="bg-card rounded-xl border border-border overflow-hidden">
+            <div className="bg-white rounded-xl overflow-hidden" style={{ border: '1px solid #E8E4DC', boxShadow: '0 2px 12px rgba(13,27,42,0.06)' }}>
               {filtered.map((query, i) => {
                 const status = statusMap[query.status] || statusMap.pending;
                 return (
@@ -106,8 +106,8 @@ export default function HistoryPage() {
                       to={`/report/${query.id}`}
                       className="flex items-center gap-4 p-5 hover:bg-muted/50 transition-colors border-b border-border last:border-0 group"
                     >
-                      <div className="w-10 h-10 rounded-lg bg-primary/5 flex items-center justify-center shrink-0">
-                        <MapPin className="w-4 h-4 text-primary" />
+                      <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0" style={{ background: 'rgba(200,160,110,0.12)' }}>
+                        <MapPin className="w-4 h-4" style={{ color: '#C8A06E' }} />
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="font-medium truncate">
@@ -136,7 +136,7 @@ export default function HistoryPage() {
 
       {activeTab === "atti" && <AttiRequestList />}
 
-      <div className="mt-10 pt-6 border-t border-border text-center text-xs text-muted-foreground">
+      <div className="mt-10 pt-6 border-t text-center text-xs" style={{ borderColor: '#E8E4DC', color: '#6B7A8D' }}>
         urbicheck.it | Dati aggiornati da fonti GIS ufficiali regionali
       </div>
     </div>

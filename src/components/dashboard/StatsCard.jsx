@@ -1,28 +1,30 @@
 import React from "react";
 import { motion } from "framer-motion";
 
-export default function StatsCard({ icon: Icon, label, value, sublabel, color = "primary" }) {
-  const colorMap = {
-    primary: "bg-primary/10 text-primary",
-    accent: "bg-accent/20 text-accent-foreground",
-    green: "bg-emerald-50 text-emerald-600",
-    blue: "bg-blue-50 text-blue-600",
-  };
-
+export default function StatsCard({ icon: Icon, label, value, sublabel, highlight = false }) {
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      className="bg-card rounded-xl border border-border p-6 hover:shadow-md transition-shadow"
+      className="bg-white rounded-xl border p-6 hover:shadow-md transition-shadow"
+      style={{ borderColor: '#E8E4DC', boxShadow: '0 2px 12px rgba(13,27,42,0.06)' }}
     >
       <div className="flex items-start justify-between">
         <div>
-          <p className="text-sm text-muted-foreground font-medium">{label}</p>
-          <p className="text-3xl font-bold mt-2 tracking-tight">{value}</p>
-          {sublabel && <p className="text-xs text-muted-foreground mt-1">{sublabel}</p>}
+          <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: '#6B7A8D' }}>{label}</p>
+          <p
+            className="text-3xl font-extrabold mt-2 tracking-tight"
+            style={{ color: highlight ? '#C8A06E' : '#0D1B2A', fontFamily: 'Georgia, serif' }}
+          >
+            {value}
+          </p>
+          {sublabel && <p className="text-xs mt-1" style={{ color: '#6B7A8D' }}>{sublabel}</p>}
         </div>
-        <div className={`p-3 rounded-xl ${colorMap[color]}`}>
-          <Icon className="w-5 h-5" />
+        <div
+          className="p-3 rounded-full"
+          style={{ background: 'rgba(200,160,110,0.12)' }}
+        >
+          <Icon className="w-5 h-5" style={{ color: '#C8A06E' }} />
         </div>
       </div>
     </motion.div>

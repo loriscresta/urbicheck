@@ -15,6 +15,30 @@ const navItems = [
   { path: "/credits", icon: CreditCard, label: "Crediti" },
 ];
 
+const Logo = ({ small = false }) => (
+  <Link to="/dashboard" className="flex items-center gap-3">
+    <div
+      className={`${small ? "w-8 h-8" : "w-10 h-10"} rounded-lg flex items-center justify-center shrink-0`}
+      style={{ background: '#C8A06E' }}
+    >
+      <Building2 className={`${small ? "w-4 h-4" : "w-5 h-5"} text-white`} />
+    </div>
+    <div>
+      <h1
+        className={`${small ? "text-base" : "text-lg"} font-bold tracking-widest text-white uppercase leading-none`}
+        style={{ fontFamily: "'Segoe UI', system-ui, sans-serif" }}
+      >
+        URBI CHECK
+      </h1>
+      {!small && (
+        <p className="text-[10px] uppercase tracking-widest mt-0.5" style={{ color: 'rgba(200,160,110,0.7)' }}>
+          analisi urbanistica
+        </p>
+      )}
+    </div>
+  </Link>
+);
+
 export default function AppLayout() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const location = useLocation();
@@ -28,24 +52,14 @@ export default function AppLayout() {
     },
   });
 
-  const handleLogout = () => {
-    base44.auth.logout();
-  };
+  const handleLogout = () => base44.auth.logout();
 
   return (
-    <div className="min-h-screen flex bg-background">
+    <div className="min-h-screen flex" style={{ background: '#F5F4F0' }}>
       {/* Desktop Sidebar */}
-      <aside className="hidden lg:flex flex-col w-64 bg-sidebar text-sidebar-foreground border-r border-sidebar-border">
-        <div className="p-6 border-b border-sidebar-border">
-          <Link to="/dashboard" className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-sidebar-primary flex items-center justify-center">
-              <Building2 className="w-5 h-5 text-sidebar-primary-foreground" />
-            </div>
-            <div>
-              <h1 className="text-lg font-bold tracking-tight text-sidebar-foreground tracking-widest">URBI CHECK</h1>
-              <p className="text-[11px] text-sidebar-foreground/50 uppercase tracking-widest">analisi urbanistica</p>
-            </div>
-          </Link>
+      <aside className="hidden lg:flex flex-col w-64" style={{ background: '#0D1B2A' }}>
+        <div className="p-6 border-b" style={{ borderColor: 'rgba(255,255,255,0.08)' }}>
+          <Logo />
         </div>
 
         <nav className="flex-1 p-4 space-y-1">
@@ -55,54 +69,53 @@ export default function AppLayout() {
               <Link
                 key={item.path}
                 to={item.path}
-                className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all duration-200
-                  ${active
-                    ? "bg-sidebar-accent text-sidebar-primary"
-                    : "text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent/50"
-                  }`}
+                className="flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all duration-200"
+                style={{
+                  background: active ? 'rgba(200,160,110,0.12)' : 'transparent',
+                  color: active ? '#C8A06E' : 'rgba(245,244,240,0.65)',
+                }}
               >
                 <item.icon className="w-4 h-4" />
                 {item.label}
-                {active && <ChevronRight className="w-3 h-3 ml-auto" />}
+                {active && <ChevronRight className="w-3 h-3 ml-auto" style={{ color: '#C8A06E' }} />}
               </Link>
             );
           })}
         </nav>
 
-        <div className="p-4 border-t border-sidebar-border">
-          <div className="bg-sidebar-accent rounded-lg p-4 mb-3">
-            <p className="text-xs text-sidebar-foreground/60 mb-1">Saldo crediti</p>
-            <p className="text-2xl font-bold text-sidebar-primary">€{(credits?.balance || 0).toFixed(2)}</p>
+        <div className="p-4 border-t" style={{ borderColor: 'rgba(255,255,255,0.08)' }}>
+          <div className="rounded-lg p-4 mb-3" style={{ background: 'rgba(200,160,110,0.1)' }}>
+            <p className="text-xs uppercase tracking-widest mb-1" style={{ color: 'rgba(245,244,240,0.5)' }}>Saldo crediti</p>
+            <p className="text-2xl font-extrabold" style={{ color: '#C8A06E', fontFamily: 'Georgia, serif' }}>
+              €{(credits?.balance || 0).toFixed(2)}
+            </p>
           </div>
-          <Button
-            variant="ghost"
-            className="w-full justify-start text-sidebar-foreground/60 hover:text-sidebar-foreground"
+          <button
             onClick={handleLogout}
+            className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors hover:bg-white/5"
+            style={{ color: 'rgba(245,244,240,0.5)' }}
           >
-            <LogOut className="w-4 h-4 mr-2" />
+            <LogOut className="w-4 h-4" />
             Esci
-          </Button>
+          </button>
         </div>
       </aside>
 
       {/* Mobile Header */}
-      <div className="lg:hidden fixed top-0 left-0 right-0 z-50 bg-sidebar text-sidebar-foreground border-b border-sidebar-border">
+      <div className="lg:hidden fixed top-0 left-0 right-0 z-50 border-b" style={{ background: '#0D1B2A', borderColor: 'rgba(255,255,255,0.08)' }}>
         <div className="flex items-center justify-between px-4 h-16">
-          <Link to="/dashboard" className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-sidebar-primary flex items-center justify-center">
-              <Building2 className="w-4 h-4 text-sidebar-primary-foreground" />
-            </div>
-            <span className="font-bold text-sidebar-foreground tracking-widest">URBI CHECK</span>
-          </Link>
-          <div className="flex items-center gap-3">
-            <span className="text-sm font-semibold text-sidebar-primary">€{(credits?.balance || 0).toFixed(2)}</span>
-            <Button variant="ghost" size="icon" onClick={() => setMobileOpen(!mobileOpen)} className="text-sidebar-foreground">
+          <Logo small />
+          <div className="flex items-center gap-4">
+            <span className="text-sm font-bold" style={{ color: '#C8A06E' }}>
+              €{(credits?.balance || 0).toFixed(2)}
+            </span>
+            <button onClick={() => setMobileOpen(!mobileOpen)} className="text-white">
               {mobileOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-            </Button>
+            </button>
           </div>
         </div>
         {mobileOpen && (
-          <nav className="px-4 pb-4 space-y-1">
+          <nav className="px-4 pb-4 space-y-1 border-t" style={{ borderColor: 'rgba(255,255,255,0.08)' }}>
             {navItems.map((item) => {
               const active = location.pathname === item.path;
               return (
@@ -110,32 +123,32 @@ export default function AppLayout() {
                   key={item.path}
                   to={item.path}
                   onClick={() => setMobileOpen(false)}
-                  className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all
-                    ${active
-                      ? "bg-sidebar-accent text-sidebar-primary"
-                      : "text-sidebar-foreground/70 hover:text-sidebar-foreground"
-                    }`}
+                  className="flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all"
+                  style={{
+                    background: active ? 'rgba(200,160,110,0.12)' : 'transparent',
+                    color: active ? '#C8A06E' : 'rgba(245,244,240,0.65)',
+                  }}
                 >
                   <item.icon className="w-4 h-4" />
                   {item.label}
                 </Link>
               );
             })}
-            <Button
-              variant="ghost"
-              className="w-full justify-start text-sidebar-foreground/60 mt-2"
+            <button
               onClick={handleLogout}
+              className="w-full flex items-center gap-2 px-4 py-3 rounded-lg text-sm mt-1"
+              style={{ color: 'rgba(245,244,240,0.5)' }}
             >
-              <LogOut className="w-4 h-4 mr-2" />
+              <LogOut className="w-4 h-4" />
               Esci
-            </Button>
+            </button>
           </nav>
         )}
       </div>
 
       {/* Main Content */}
       <main className="flex-1 lg:overflow-y-auto">
-        <div className="lg:p-0 pt-16 lg:pt-0">
+        <div className="pt-16 lg:pt-0">
           <Outlet />
         </div>
       </main>

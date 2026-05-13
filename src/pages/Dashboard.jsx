@@ -55,16 +55,12 @@ export default function Dashboard() {
   return (
     <div className="p-6 lg:p-10 max-w-6xl mx-auto">
       {/* Header */}
-      <motion.div
-        initial={{ opacity: 0, y: -10 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="mb-10"
-      >
-        <h1 className="text-3xl lg:text-4xl font-serif font-bold tracking-tight">
+      <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="mb-10">
+        <h1 className="text-3xl lg:text-4xl font-bold tracking-tight" style={{ color: '#0D1B2A', fontFamily: 'Georgia, serif' }}>
           Benvenuto, {firstName}
         </h1>
-        <p className="text-muted-foreground mt-2">
-          Panoramica della tua attività su Urbicheck
+        <p className="mt-2 text-sm" style={{ color: '#6B7A8D', fontFamily: "'Segoe UI', system-ui, sans-serif" }}>
+          Panoramica della tua attività su UrbiCheck
         </p>
       </motion.div>
 
@@ -73,26 +69,23 @@ export default function Dashboard() {
         <StatsCard
           icon={CreditCard}
           label="Saldo Crediti"
-          value={`€${(credits?.balance || 0).toFixed(2)}`}
-          color="accent"
+          value={`€ ${(credits?.balance || 0).toFixed(2)}`}
+          highlight
         />
         <StatsCard
           icon={Search}
-          label="Query Effettuate"
+          label="Analisi Effettuate"
           value={credits?.total_queries || 0}
-          color="blue"
         />
         <StatsCard
           icon={TrendingUp}
-          label="Totale Investito"
-          value={`€${(credits?.total_spent || 0).toFixed(2)}`}
-          color="green"
+          label="Crediti Utilizzati"
+          value={`€ ${(credits?.total_spent || 0).toFixed(2)}`}
         />
         <StatsCard
           icon={FileCheck}
           label="Report Disponibili"
           value={recentQueries.filter(q => q.status === "completed").length}
-          color="primary"
         />
       </div>
 
@@ -103,27 +96,37 @@ export default function Dashboard() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
-          className="bg-card rounded-xl border border-border p-6"
+          className="bg-white rounded-xl p-6"
+          style={{ border: '1px solid #E8E4DC', boxShadow: '0 2px 12px rgba(13,27,42,0.06)' }}
         >
-          <h2 className="font-semibold mb-4">Azioni Rapide</h2>
+          <p className="text-xs font-semibold uppercase tracking-widest mb-4" style={{ color: '#6B7A8D' }}>Azioni Rapide</p>
           <div className="space-y-3">
             <Link to="/search">
-              <Button className="w-full justify-start gap-3 h-12 bg-primary hover:bg-primary/90">
+              <button
+                className="w-full flex items-center gap-3 h-12 px-4 rounded-lg text-sm font-semibold text-white transition-opacity hover:opacity-90"
+                style={{ background: '#0D1B2A' }}
+              >
                 <Search className="w-4 h-4" />
                 Nuova Ricerca Catastale
-              </Button>
+              </button>
             </Link>
             <Link to="/credits">
-              <Button variant="outline" className="w-full justify-start gap-3 h-12">
+              <button
+                className="w-full flex items-center gap-3 h-12 px-4 rounded-lg text-sm font-semibold transition-colors hover:bg-gray-50"
+                style={{ border: '1.5px solid #0D1B2A', color: '#0D1B2A', background: 'transparent' }}
+              >
                 <CreditCard className="w-4 h-4" />
                 Acquista Crediti
-              </Button>
+              </button>
             </Link>
             <Link to="/history">
-              <Button variant="outline" className="w-full justify-start gap-3 h-12">
+              <button
+                className="w-full flex items-center gap-3 h-12 px-4 rounded-lg text-sm font-semibold transition-colors hover:bg-gray-50"
+                style={{ border: '1.5px solid #0D1B2A', color: '#0D1B2A', background: 'transparent' }}
+              >
                 <FileCheck className="w-4 h-4" />
                 Vedi Storico Completo
-              </Button>
+              </button>
             </Link>
           </div>
         </motion.div>
@@ -133,11 +136,12 @@ export default function Dashboard() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
-          className="lg:col-span-2 bg-card rounded-xl border border-border p-6"
+          className="lg:col-span-2 bg-white rounded-xl p-6"
+          style={{ border: '1px solid #E8E4DC', boxShadow: '0 2px 12px rgba(13,27,42,0.06)' }}
         >
           <div className="flex items-center justify-between mb-4">
-            <h2 className="font-semibold">Ricerche Recenti</h2>
-            <Link to="/history" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+            <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: '#6B7A8D' }}>Ricerche Recenti</p>
+            <Link to="/history" className="text-xs font-medium hover:underline" style={{ color: '#C8A06E' }}>
               Vedi tutte →
             </Link>
           </div>
@@ -151,20 +155,23 @@ export default function Dashboard() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3 }}
-          className="mt-6 bg-card rounded-xl border border-border p-6"
+          className="mt-6 bg-white rounded-xl p-6"
+          style={{ border: '1px solid #E8E4DC', boxShadow: '0 2px 12px rgba(13,27,42,0.06)' }}
         >
-          <div className="flex items-center gap-2 mb-4">
-            <FolderOpen className="w-5 h-5 text-primary" />
-            <h2 className="font-semibold">Accesso agli Atti Richiesti</h2>
+          <div className="flex items-center gap-3 mb-4">
+            <div className="p-2 rounded-full" style={{ background: 'rgba(200,160,110,0.12)' }}>
+              <FolderOpen className="w-4 h-4" style={{ color: '#C8A06E' }} />
+            </div>
+            <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: '#6B7A8D' }}>Accesso agli Atti Richiesti</p>
           </div>
           <div className="space-y-3">
             {attiRequests.map((atti) => {
               const st = attiStatusMap[atti.stato] || attiStatusMap.bozza;
               return (
-                <div key={atti.id} className="flex items-center gap-4 p-3 rounded-lg bg-muted/30 border border-border/50">
+                <div key={atti.id} className="flex items-center gap-4 p-3 rounded-lg" style={{ background: '#F5F4F0', border: '1px solid #E8E4DC' }}>
                   <div className="flex-1 min-w-0">
-                    <p className="font-medium text-sm truncate">{atti.comune} — F.{atti.foglio} P.{atti.particella}</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">
+                    <p className="font-medium text-sm truncate" style={{ color: '#0D1B2A' }}>{atti.comune} — F.{atti.foglio} P.{atti.particella}</p>
+                    <p className="text-xs mt-0.5" style={{ color: '#6B7A8D' }}>
                       {atti.documento_tipo} · {format(new Date(atti.created_date), "d MMM yyyy", { locale: it })}
                     </p>
                   </div>
@@ -177,7 +184,7 @@ export default function Dashboard() {
       )}
 
       {/* Footer */}
-      <div className="mt-10 pt-6 border-t border-border text-center text-xs text-muted-foreground">
+      <div className="mt-10 pt-6 border-t text-center text-xs" style={{ borderColor: '#E8E4DC', color: '#6B7A8D' }}>
         urbicheck.it | Dati aggiornati da fonti GIS ufficiali regionali
       </div>
     </div>

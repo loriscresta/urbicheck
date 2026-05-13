@@ -40,8 +40,8 @@ export default function RecentQueries({ queries = [] }) {
               to={query.status === "completed" ? `/report/${query.id}` : "#"}
               className="flex items-center gap-4 p-4 rounded-lg hover:bg-muted/50 transition-colors group"
             >
-              <div className="w-10 h-10 rounded-lg bg-primary/5 flex items-center justify-center shrink-0">
-                <MapPin className="w-4 h-4 text-primary" />
+              <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0" style={{ background: 'rgba(200,160,110,0.12)' }}>
+                <MapPin className="w-4 h-4" style={{ color: '#C8A06E' }} />
               </div>
               <div className="flex-1 min-w-0">
                 <p className="font-medium text-sm truncate">

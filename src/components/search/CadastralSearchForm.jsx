@@ -173,7 +173,7 @@ export default function CadastralSearchForm({ onSubmit, isLoading, submitLabel =
         type="submit"
         disabled={!isValid || isLoading}
         className="w-full font-semibold"
-        style={{ background: '#1e3a5f' }}
+        style={{ background: '#0D1B2A', borderRadius: '8px' }}
         size="lg"
       >
         {isLoading ? (

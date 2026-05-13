@@ -33,15 +33,15 @@ export default function SearchPage() {
   return (
     <div className="p-6 lg:p-10 max-w-4xl mx-auto">
       <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}>
-        <h1 className="text-2xl lg:text-3xl font-bold tracking-tight mb-1" style={{ color: '#1e3a5f' }}>
-          URBICHECK — Analisi Urbanistica
+        <h1 className="text-2xl lg:text-3xl font-bold tracking-tight mb-1" style={{ color: '#0D1B2A', fontFamily: 'Georgia, serif' }}>
+          Analisi Urbanistica
         </h1>
-        <p className="text-muted-foreground mb-8 text-base">
+        <p className="mb-8 text-sm" style={{ color: '#6B7A8D' }}>
           Ottieni un'<span className="font-semibold text-foreground">anteprima gratuita</span> immediata. Sblocca la scheda completa per <span className="font-semibold text-foreground">€9,90</span>.
         </p>
       </motion.div>
 
-      <div className="bg-card rounded-xl border border-border p-6 lg:p-8">
+      <div className="bg-white rounded-xl p-6 lg:p-8" style={{ border: '1px solid #E8E4DC', boxShadow: '0 2px 12px rgba(13,27,42,0.06)' }}>
         <CadastralSearchForm
           onSubmit={handleSearch}
           isLoading={isLoading}
@@ -64,9 +64,9 @@ export default function SearchPage() {
             { n: "2", icon: Shield, title: "Anteprima gratuita istantanea", desc: "Ricevi subito zonizzazione, tipologia e presenza vincoli — gratis." },
             { n: "3", icon: Info, title: "Sblocca la scheda completa", desc: "€9,90 per tutti gli indici edilizi, fattibilità interventi e dettaglio vincoli." },
           ].map(({ n, icon: Icon, title, desc }) => (
-            <div key={n} className="bg-card rounded-xl border border-border p-5 flex gap-4">
+            <div key={n} className="bg-white rounded-xl p-5 flex gap-4" style={{ border: '1px solid #E8E4DC', boxShadow: '0 2px 12px rgba(13,27,42,0.06)' }}>
               <div className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold shrink-0 mt-0.5"
-                style={{ background: '#1e3a5f', color: '#fff' }}>
+                style={{ background: '#C8A06E', color: '#fff' }}>
                 {n}
               </div>
               <div>
@@ -80,7 +80,7 @@ export default function SearchPage() {
 
       {/* Footer */}
       <div className="mt-10 pt-6 border-t border-border text-center text-xs text-muted-foreground">
-        urbicheck.it | Dati aggiornati da fonti GIS ufficiali regionali
+        urbicheck.it — Dati aggiornati da fonti GIS ufficiali regionali
       </div>
     </div>
   );
