@@ -1,0 +1,26 @@
+{
+  "name": "WaitlistSubscriber",
+  "type": "object",
+  "properties": {
+    "email": {
+      "type": "string",
+      "description": "Email dell'iscritto"
+    },
+    "ruolo": {
+      "type": "string",
+      "enum": [
+        "acquirente_privato",
+        "aste_giudiziarie",
+        "agente_immobiliare",
+        "investitore",
+        "developer_costruttore",
+        "avvocato_notaio",
+        "altro"
+      ],
+      "description": "Ruolo dell'iscritto"
+    }
+  },
+  "required": [
+    "email"
+  ]
+}

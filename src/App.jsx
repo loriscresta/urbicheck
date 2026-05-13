@@ -12,6 +12,7 @@ import ReportPage from '@/pages/ReportPage';
 import HistoryPage from '@/pages/HistoryPage';
 import CreditsPage from '@/pages/CreditsPage';
 import AppLayout from '@/components/layout/AppLayout';
+import WaitlistPage from '@/pages/WaitlistPage';
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, isAuthenticated, navigateToLogin } = useAuth();
@@ -37,6 +38,7 @@ const AuthenticatedApp = () => {
       return (
         <Routes>
           <Route path="/" element={<LandingPage />} />
+          <Route path="/waitlist" element={<WaitlistPage />} />
           <Route path="*" element={<LandingPage />} />
         </Routes>
       );
@@ -48,6 +50,7 @@ const AuthenticatedApp = () => {
     return (
       <Routes>
         <Route path="/" element={<LandingPage />} />
+        <Route path="/waitlist" element={<WaitlistPage />} />
         <Route path="*" element={<LandingPage />} />
       </Routes>
     );
@@ -57,6 +60,7 @@ const AuthenticatedApp = () => {
   return (
     <Routes>
       <Route path="/" element={<LandingPage />} />
+      <Route path="/waitlist" element={<WaitlistPage />} />
       <Route element={<AppLayout />}>
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/search" element={<SearchPage />} />
