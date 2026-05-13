@@ -19,6 +19,7 @@ import { motion } from "framer-motion";
 import { useToast } from "@/components/ui/use-toast";
 import { generatePDF } from "@/lib/generateUrbiCheckPDF";
 import FinancialDueDiligence from "@/components/report/FinancialDueDiligence";
+import AttiRequestForm from "@/components/atti/AttiRequestForm";
 
 const FINALITA_LABELS = {
   acquisto_privato: "Acquisto privato",
@@ -84,6 +85,8 @@ export default function ReportPage() {
   const queryClient = useQueryClient();
   const [isUnlocking, setIsUnlocking] = useState(false);
   const [isDownloadingPDF, setIsDownloadingPDF] = useState(false);
+  const [showAttiForm, setShowAttiForm] = useState(false);
+  const [comunePrefill, setComunePrefill] = useState(null);
 
   const { data: query, isLoading, refetch } = useQuery({
     queryKey: ["query", id],
@@ -639,12 +642,46 @@ export default function ReportPage() {
               {isDownloadingPDF ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
               Scarica PDF — €2,90
             </Button>
-            <Button className="gap-2" style={{ background: '#1e3a5f' }} onClick={() => alert("Accesso Atti — €4,90 (disponibile a breve)")}>
+            <Button className="gap-2" style={{ background: '#1e3a5f' }} onClick={async () => {
+              // Se il comune_id è disponibile, carica il record ComuneItalia per il prefill
+              let comuneRecord = null;
+              if (query.comune_id) {
+                const results = await base44.entities.ComuneItalia.filter({ id: query.comune_id });
+                comuneRecord = results[0] || null;
+              }
+              setComunePrefill(comuneRecord);
+              setShowAttiForm(true);
+            }}>
               <FileSearch className="w-4 h-4" />
               Richiedi Accesso Atti — €4,90
             </Button>
           </div>
           <p className="text-xs text-muted-foreground mt-3">Il PDF è sempre a pagamento separato (€2,90) anche dopo aver sbloccato la scheda completa.</p>
+        </motion.div>
+      )}
+
+      {/* Form Accesso Atti */}
+      {showAttiForm && (
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
+          className="mt-8 p-6 rounded-xl border-2 border-primary bg-card">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-bold text-lg" style={{ color: '#1e3a5f' }}>Richiesta Accesso agli Atti</h3>
+            <Button variant="ghost" size="sm" onClick={() => setShowAttiForm(false)}>✕</Button>
+          </div>
+          <AttiRequestForm
+            prefill={{
+              query_id: query.id,
+              comune: comunePrefill,
+              foglio: query.foglio,
+              particella: query.particella,
+              subalterno: query.subalterno,
+            }}
+            onSuccess={() => {
+              setShowAttiForm(false);
+              toast({ title: "Richiesta atti salvata ✓" });
+            }}
+            onCancel={() => setShowAttiForm(false)}
+          />
         </motion.div>
       )}
 

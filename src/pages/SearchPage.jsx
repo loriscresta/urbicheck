@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
-import CadastralSearchForm from "@/components/search/CadastralSearchForm";
+import CadastralSearchForm from "@/components/search/CadastralSearchForm.jsx";
 import { Shield, Info, Search } from "lucide-react";
 import { motion } from "framer-motion";
 
