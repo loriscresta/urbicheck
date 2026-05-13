@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { motion } from "framer-motion";
+import ItalyMap from "@/components/ItalyMap";
 
 /* ── Shared brand tokens ── */
 const T = {
@@ -281,34 +282,7 @@ export default function WaitlistPage() {
             Live su Liguria e Piemonte. In espansione su tutta Italia.
           </h2>
 
-          <div className="flex flex-wrap gap-3 mb-6">
-            {[
-              { name: 'Liguria', status: 'live' },
-              { name: 'Piemonte', status: 'live' },
-              { name: 'Lombardia', status: 'Q3 2026' },
-              { name: 'Veneto', status: 'Q3 2026' },
-              { name: 'Emilia', status: 'Q3 2026' },
-              { name: 'Toscana', status: 'Q4 2026' },
-              { name: '+14 reg.', status: '2027' },
-            ].map((r, i) => (
-              <div key={i} style={{
-                border: `1px solid ${r.status === 'live' ? T.blue : T.border}`,
-                background: r.status === 'live' ? T.blue : '#fff',
-                padding: '0.4rem 0.9rem',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '0.5rem',
-              }}>
-                <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: r.status === 'live' ? '#4ade80' : T.border, display: 'inline-block', flexShrink: 0 }} />
-                <span style={{ fontFamily: T.mono, fontSize: '0.7rem', fontWeight: 700, color: r.status === 'live' ? T.paper : T.grey }}>{r.name}</span>
-                <span style={{ fontFamily: T.mono, fontSize: '0.6rem', color: r.status === 'live' ? 'rgba(244,239,230,0.6)' : T.border }}>— {r.status}</span>
-              </div>
-            ))}
-          </div>
-
-          <p style={{ fontFamily: T.mono, fontSize: '0.65rem', color: T.grey, letterSpacing: '1px' }}>
-            ● Live — dati WFS reali &nbsp;|&nbsp; ○ In sviluppo &nbsp;|&nbsp; · Roadmap — fallback AI attivo
-          </p>
+          <ItalyMap />
         </div>
       </section>
 
