@@ -570,6 +570,14 @@ export default function ReportPage() {
           </motion.div>
         )}
 
+        {/* === MAPPA CATASTALE — visibile SOLO se geometry_geojson è popolato (API Catastomappe) === */}
+        {/* Non renderizzare nulla se il campo è null/vuoto — nessun placeholder, nessun box blu */}
+        {query.geometry_geojson &&
+          Object.keys(query.geometry_geojson).length > 0 &&
+          query.geometry_geojson.type &&
+          null /* componente MappaParticella da aggiungere quando Catastomappe sarà integrata */
+        }
+
         {/* Valutazione Sintetica */}
         {r.valutazione_sintetica && isUnlocked && (
           <ReportSection icon={Lightbulb} title="Valutazione Sintetica" delay={0.2}>

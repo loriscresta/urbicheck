@@ -109,7 +109,21 @@ Subalterno: ${formData.subalterno || "N/D"}
 Finalità analisi: ${finalitaDesc}
 
 Genera un report completo con dati plausibili e realistici per quella zona. Usa informazioni urbanistiche reali per quel comune/regione quando possibile.
-${formData.finalita === "asta_giudiziaria" ? "IMPORTANTE: per asta giudiziaria aggiungi dettagli specifici sul CDU, conformità urbanistica e guida accesso atti." : ""}`,
+${formData.finalita === "asta_giudiziaria" ? "IMPORTANTE: per asta giudiziaria aggiungi dettagli specifici sul CDU, conformità urbanistica e guida accesso atti." : ""}
+
+REGOLA LINGUISTICA OBBLIGATORIA — ITALIANO TECNICO URBANISTICO:
+Usa ESCLUSIVAMENTE la terminologia tecnica italiana del settore urbanistico ed edilizio. NON tradurre dall'inglese.
+Esempi corretti obbligatori:
+- "Distanza dai confini" (NON "setback", NON "la collana", NON "arretramento dal confine")
+- "Distanza tra fabbricati" (NON "setback between buildings", NON "Materassi tra frangiti")
+- "Distanza dalla strada" (NON "road setback", NON "Disco dalla strada")
+- "Indice di Fabbricabilità (IF)" in mc/mq (NON solo "IF")
+- "Rapporto di Copertura (RC)" in % (NON solo "RC")
+- "Altezza Massima (H max)" in metri (NON solo "H max")
+- "Destinazione d'uso" (NON "land use")
+- "Permesso di costruire" (NON "building permit")
+- "Titolo edilizio" (NON "building title")
+Tutti i valori testuali devono essere in italiano tecnico corretto usato da geometri, architetti e ingegneri italiani.`,
     add_context_from_internet: true,
     response_json_schema: {
       type: "object",
