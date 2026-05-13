@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Georgia:wght@400;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600;700&family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -6,43 +6,43 @@
 
 @layer base {
   :root {
-    --font-sans: 'Segoe UI', system-ui, -apple-system, sans-serif;
-    --font-serif: Georgia, 'Times New Roman', serif;
+    --font-mono: 'IBM Plex Mono', monospace;
+    --font-serif: 'Libre Baskerville', serif;
 
-    /* UrbiCheck Brand Palette */
-    --background: 40 14% 96%;        /* #F5F4F0 warm white */
-    --foreground: 213 55% 10%;       /* #0D1B2A navy */
-    --card: 0 0% 100%;               /* #FFFFFF */
-    --card-foreground: 213 55% 10%;
+    /* UrbiCheck Official Brand Palette */
+    --background: 36 30% 93%;         /* #F4EFE6 carta */
+    --foreground: 30 7% 10%;          /* #1C1A17 inchiostro */
+    --card: 0 0% 100%;                /* #FFFFFF */
+    --card-foreground: 30 7% 10%;
     --popover: 0 0% 100%;
-    --popover-foreground: 213 55% 10%;
-    --primary: 213 55% 10%;          /* #0D1B2A navy */
+    --popover-foreground: 30 7% 10%;
+    --primary: 217 60% 26%;           /* #1A3A6B blu istituzionale */
     --primary-foreground: 0 0% 100%;
-    --secondary: 36 20% 90%;         /* light warm gray */
-    --secondary-foreground: 213 55% 10%;
-    --muted: 40 14% 93%;
-    --muted-foreground: 213 12% 46%; /* #6B7A8D */
-    --accent: 33 49% 61%;            /* #C8A06E amber gold */
-    --accent-foreground: 213 55% 10%;
+    --secondary: 36 20% 88%;
+    --secondary-foreground: 30 7% 10%;
+    --muted: 36 20% 88%;
+    --muted-foreground: 32 7% 45%;    /* #7A7268 grigio secondario */
+    --accent: 9 60% 43%;              /* #B33A2A rosso timbro */
+    --accent-foreground: 0 0% 100%;
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 0 0% 98%;
-    --border: 36 20% 88%;            /* #E8E4DC */
-    --input: 36 20% 85%;
-    --ring: 213 55% 10%;
-    --chart-1: 213 55% 10%;
-    --chart-2: 33 49% 61%;
+    --border: 33 20% 71%;             /* #C4BAA8 */
+    --input: 33 20% 71%;
+    --ring: 217 60% 26%;
+    --chart-1: 217 60% 26%;
+    --chart-2: 9 60% 43%;
     --chart-3: 173 58% 39%;
-    --chart-4: 197 37% 24%;
-    --chart-5: 12 76% 61%;
-    --radius: 0.5rem;
-    --sidebar-background: 213 55% 10%;  /* #0D1B2A */
-    --sidebar-foreground: 40 14% 92%;
-    --sidebar-primary: 33 49% 61%;      /* #C8A06E gold */
-    --sidebar-primary-foreground: 213 55% 10%;
-    --sidebar-accent: 213 45% 16%;
-    --sidebar-accent-foreground: 40 14% 92%;
-    --sidebar-border: 213 40% 18%;
-    --sidebar-ring: 33 49% 61%;
+    --chart-4: 36 30% 93%;
+    --chart-5: 30 7% 10%;
+    --radius: 0rem;
+    --sidebar-background: 217 60% 26%; /* #1A3A6B */
+    --sidebar-foreground: 36 30% 93%;
+    --sidebar-primary: 9 60% 43%;      /* #B33A2A rosso */
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 217 55% 32%;
+    --sidebar-accent-foreground: 36 30% 93%;
+    --sidebar-border: 217 50% 20%;
+    --sidebar-ring: 9 60% 43%;
   }
 }
 
@@ -52,10 +52,9 @@
   }
   body {
     @apply bg-background text-foreground;
-    font-family: var(--font-sans);
-  }
-  h1, h2, h3, h4 {
-    font-family: var(--font-serif);
+    font-family: var(--font-mono);
+    background-color: #F4EFE6;
+    color: #1C1A17;
   }
 }
 

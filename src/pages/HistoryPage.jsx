@@ -39,23 +39,33 @@ export default function HistoryPage() {
   return (
     <div className="p-6 lg:p-10 max-w-5xl mx-auto">
       <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}>
-        <h1 className="text-3xl font-bold tracking-tight mb-2" style={{ color: '#0D1B2A', fontFamily: 'Georgia, serif' }}>Le mie analisi</h1>
-        <p className="mb-6 text-sm" style={{ color: '#6B7A8D' }}>
+        <h1 className="text-3xl font-bold tracking-tight mb-2" style={{ color: '#1A3A6B', fontFamily: "'Libre Baskerville', serif", fontStyle: 'italic' }}>Le mie analisi</h1>
+        <p className="mb-6 text-xs tracking-[1px] uppercase" style={{ color: '#7A7268', fontFamily: "'IBM Plex Mono', monospace" }}>
           {queries.length} {queries.length === 1 ? "analisi effettuata" : "analisi effettuate"}
         </p>
       </motion.div>
 
       {/* Tabs */}
-      <div className="flex gap-1 mb-6 border-b border-border">
+      <div className="flex gap-1 mb-6 border-b" style={{ borderColor: '#C4BAA8' }}>
         <button
-          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab === "queries" ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"}`}
+          className="px-4 py-2 text-xs font-semibold uppercase tracking-[2px] border-b-2 transition-colors"
+          style={{
+            borderColor: activeTab === "queries" ? '#B33A2A' : 'transparent',
+            color: activeTab === "queries" ? '#1A3A6B' : '#7A7268',
+            fontFamily: "'IBM Plex Mono', monospace",
+          }}
           onClick={() => setActiveTab("queries")}
         >
           <FileText className="w-4 h-4 inline mr-1.5 mb-0.5" />
           Query urbanistiche
         </button>
         <button
-          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab === "atti" ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"}`}
+          className="px-4 py-2 text-xs font-semibold uppercase tracking-[2px] border-b-2 transition-colors"
+          style={{
+            borderColor: activeTab === "atti" ? '#B33A2A' : 'transparent',
+            color: activeTab === "atti" ? '#1A3A6B' : '#7A7268',
+            fontFamily: "'IBM Plex Mono', monospace",
+          }}
           onClick={() => setActiveTab("atti")}
         >
           <FileSearch className="w-4 h-4 inline mr-1.5 mb-0.5" />
@@ -92,7 +102,7 @@ export default function HistoryPage() {
               )}
             </div>
           ) : (
-            <div className="bg-white rounded-xl overflow-hidden" style={{ border: '1px solid #E8E4DC', boxShadow: '0 2px 12px rgba(13,27,42,0.06)' }}>
+            <div className="bg-white overflow-hidden" style={{ border: '1px solid #C4BAA8' }}>
               {filtered.map((query, i) => {
                 const status = statusMap[query.status] || statusMap.pending;
                 return (
@@ -104,22 +114,23 @@ export default function HistoryPage() {
                   >
                     <Link
                       to={`/report/${query.id}`}
-                      className="flex items-center gap-4 p-5 hover:bg-muted/50 transition-colors border-b border-border last:border-0 group"
+                      className="flex items-center gap-4 p-5 hover:bg-stone-50 transition-colors group"
+                      style={{ borderBottom: '1px solid #C4BAA8' }}
                     >
-                      <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0" style={{ background: 'rgba(200,160,110,0.12)' }}>
-                        <MapPin className="w-4 h-4" style={{ color: '#C8A06E' }} />
+                      <div className="w-9 h-9 flex items-center justify-center shrink-0" style={{ background: '#F4EFE6', border: '1px solid #C4BAA8' }}>
+                        <MapPin className="w-4 h-4" style={{ color: '#1A3A6B' }} />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="font-medium truncate">
+                        <p className="font-semibold truncate text-sm" style={{ color: '#1A3A6B', fontFamily: "'IBM Plex Mono', monospace" }}>
                           {query.comune} — Foglio {query.foglio}, Part. {query.particella}
                           {query.subalterno ? `, Sub. ${query.subalterno}` : ""}
                         </p>
-                        <p className="text-sm text-muted-foreground mt-0.5">
+                        <p className="text-xs mt-0.5" style={{ color: '#7A7268', fontFamily: "'IBM Plex Mono', monospace" }}>
                           {query.regione}{query.provincia ? ` (${query.provincia})` : ""} · {format(new Date(query.created_date), "d MMM yyyy, HH:mm", { locale: it })}
                         </p>
                       </div>
                       <div className="flex items-center gap-3 shrink-0">
-                        <span className="text-sm font-medium text-muted-foreground">€{(query.cost || 9.90).toFixed(2)}</span>
+                        <span className="text-xs font-semibold" style={{ color: '#7A7268', fontFamily: "'IBM Plex Mono', monospace" }}>€{(query.cost || 9.90).toFixed(2)}</span>
                         <Badge variant="outline" className={`${status.className} text-[11px]`}>
                           {status.label}
                         </Badge>
@@ -136,7 +147,7 @@ export default function HistoryPage() {
 
       {activeTab === "atti" && <AttiRequestList />}
 
-      <div className="mt-10 pt-6 border-t text-center text-xs" style={{ borderColor: '#E8E4DC', color: '#6B7A8D' }}>
+      <div className="mt-10 pt-6 border-t text-center text-[10px] uppercase tracking-[2px]" style={{ borderColor: '#C4BAA8', color: '#7A7268', fontFamily: "'IBM Plex Mono', monospace" }}>
         urbicheck.it | Dati aggiornati da fonti GIS ufficiali regionali
       </div>
     </div>

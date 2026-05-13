@@ -1,5 +1,4 @@
 import React from "react";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Check } from "lucide-react";
 import { motion } from "framer-motion";
@@ -12,55 +11,59 @@ export default function CreditPackageCard({ pkg, onPurchase, delay = 0 }) {
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay }}
-      className={`rounded-xl border-2 p-6 relative transition-all hover:shadow-lg ${
-        pkg.popular
-          ? "border-accent bg-accent/5 shadow-md"
-          : "border-border bg-card hover:border-primary/30"
-      }`}
+      className="bg-white p-6 relative transition-all hover:bg-stone-50"
+      style={{
+        border: pkg.popular ? '2px solid #B33A2A' : '1px solid #C4BAA8',
+      }}
     >
       {pkg.popular && (
-        <Badge className="absolute -top-2.5 left-1/2 -translate-x-1/2 bg-accent text-accent-foreground text-[11px] px-3">
-          Più Popolare
-        </Badge>
+        <div
+          className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-0.5 text-[10px] font-bold uppercase tracking-[2px] text-white"
+          style={{ background: '#B33A2A', fontFamily: "'IBM Plex Mono', monospace" }}
+        >
+          PIÙ POPOLARE
+        </div>
       )}
 
       <div className="text-center mb-6">
-        <h3 className="font-semibold text-lg">{pkg.name}</h3>
+        <h3 className="font-bold text-xs uppercase tracking-[2px]" style={{ color: '#7A7268', fontFamily: "'IBM Plex Mono', monospace" }}>{pkg.name}</h3>
         <div className="mt-3">
-          <span className="text-4xl font-bold tracking-tight">€{pkg.price.toFixed(2)}</span>
+          <span className="text-4xl font-bold" style={{ color: '#1A3A6B', fontFamily: "'IBM Plex Mono', monospace" }}>€{pkg.price.toFixed(2)}</span>
         </div>
-        <p className="text-sm text-muted-foreground mt-2">
-          €{pricePerQuery} per query
+        <p className="text-xs mt-2" style={{ color: '#7A7268', fontFamily: "'IBM Plex Mono', monospace" }}>
+          €{pricePerQuery} per analisi
         </p>
         {pkg.savings && (
-          <Badge variant="outline" className="mt-2 bg-emerald-50 text-emerald-700 border-emerald-200 text-xs">
+          <span className="inline-block mt-2 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[1px]" style={{ background: '#F4EFE6', color: '#1A3A6B', border: '1px solid #C4BAA8', fontFamily: "'IBM Plex Mono', monospace" }}>
             Risparmi {pkg.savings}
-          </Badge>
+          </span>
         )}
       </div>
 
       <ul className="space-y-2 mb-6">
-        <li className="flex items-center gap-2 text-sm">
-          <Check className="w-4 h-4 text-emerald-500" />
-          {pkg.queries} {pkg.queries === 1 ? "report completo" : "report completi"}
-        </li>
-        <li className="flex items-center gap-2 text-sm">
-          <Check className="w-4 h-4 text-emerald-500" />
-          Analisi urbanistica dettagliata
-        </li>
-        <li className="flex items-center gap-2 text-sm">
-          <Check className="w-4 h-4 text-emerald-500" />
-          Vincoli e pratiche
-        </li>
+        {[
+          `${pkg.queries} ${pkg.queries === 1 ? "report completo" : "report completi"}`,
+          "Analisi urbanistica dettagliata",
+          "Vincoli e pratiche",
+        ].map((item, i) => (
+          <li key={i} className="flex items-center gap-2 text-xs" style={{ color: '#1C1A17', fontFamily: "'IBM Plex Mono', monospace" }}>
+            <Check className="w-3.5 h-3.5 shrink-0" style={{ color: '#B33A2A' }} />
+            {item}
+          </li>
+        ))}
       </ul>
 
-      <Button
-        className={`w-full ${pkg.popular ? "bg-accent text-accent-foreground hover:bg-accent/90" : ""}`}
-        variant={pkg.popular ? "default" : "outline"}
+      <button
         onClick={() => onPurchase(pkg)}
+        className="w-full h-11 text-xs font-bold uppercase tracking-[2px] text-white transition-opacity hover:opacity-90"
+        style={{
+          background: '#1A3A6B',
+          borderBottom: '3px solid #B33A2A',
+          fontFamily: "'IBM Plex Mono', monospace",
+        }}
       >
         Acquista
-      </Button>
+      </button>
     </motion.div>
   );
 }

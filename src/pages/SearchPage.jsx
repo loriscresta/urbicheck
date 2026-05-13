@@ -33,15 +33,15 @@ export default function SearchPage() {
   return (
     <div className="p-6 lg:p-10 max-w-4xl mx-auto">
       <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}>
-        <h1 className="text-2xl lg:text-3xl font-bold tracking-tight mb-1" style={{ color: '#0D1B2A', fontFamily: 'Georgia, serif' }}>
+        <h1 className="text-2xl lg:text-3xl font-bold tracking-tight mb-1" style={{ color: '#1A3A6B', fontFamily: "'Libre Baskerville', serif", fontStyle: 'italic' }}>
           Analisi Urbanistica
         </h1>
-        <p className="mb-8 text-sm" style={{ color: '#6B7A8D' }}>
+        <p className="mb-8 text-xs tracking-[1px] uppercase" style={{ color: '#7A7268', fontFamily: "'IBM Plex Mono', monospace" }}>
           Ottieni un'<span className="font-semibold text-foreground">anteprima gratuita</span> immediata. Sblocca la scheda completa per <span className="font-semibold text-foreground">€9,90</span>.
         </p>
       </motion.div>
 
-      <div className="bg-white rounded-xl p-6 lg:p-8" style={{ border: '1px solid #E8E4DC', boxShadow: '0 2px 12px rgba(13,27,42,0.06)' }}>
+      <div className="bg-white p-6 lg:p-8" style={{ border: '1px solid #C4BAA8' }}>
         <CadastralSearchForm
           onSubmit={handleSearch}
           isLoading={isLoading}
@@ -57,21 +57,21 @@ export default function SearchPage() {
         transition={{ delay: 0.2 }}
         className="mt-8"
       >
-        <h2 className="text-sm font-semibold uppercase tracking-widest text-muted-foreground mb-4">Come funziona</h2>
+        <h2 className="text-[10px] font-semibold uppercase tracking-[2px] mb-4" style={{ color: '#B33A2A', fontFamily: "'IBM Plex Mono', monospace" }}>Come funziona</h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {[
             { n: "1", icon: Search, title: "Inserisci i dati catastali", desc: "Regione, comune, foglio e particella. Bastano 30 secondi." },
             { n: "2", icon: Shield, title: "Anteprima gratuita istantanea", desc: "Ricevi subito zonizzazione, tipologia e presenza vincoli — gratis." },
             { n: "3", icon: Info, title: "Sblocca la scheda completa", desc: "€9,90 per tutti gli indici edilizi, fattibilità interventi e dettaglio vincoli." },
           ].map(({ n, icon: Icon, title, desc }) => (
-            <div key={n} className="bg-white rounded-xl p-5 flex gap-4" style={{ border: '1px solid #E8E4DC', boxShadow: '0 2px 12px rgba(13,27,42,0.06)' }}>
-              <div className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold shrink-0 mt-0.5"
-                style={{ background: '#C8A06E', color: '#fff' }}>
+            <div key={n} className="bg-white p-5 flex gap-4" style={{ border: '1px solid #C4BAA8' }}>
+              <div className="w-8 h-8 flex items-center justify-center text-xs font-bold shrink-0 mt-0.5"
+                style={{ background: '#1A3A6B', color: '#B33A2A', fontFamily: "'IBM Plex Mono', monospace" }}>
                 {n}
               </div>
               <div>
-                <p className="font-semibold text-sm">{title}</p>
-                <p className="text-xs text-muted-foreground mt-1">{desc}</p>
+                <p className="font-semibold text-xs uppercase tracking-[1px]" style={{ color: '#1A3A6B', fontFamily: "'IBM Plex Mono', monospace" }}>{title}</p>
+                <p className="text-xs mt-1" style={{ color: '#7A7268', fontFamily: "'IBM Plex Mono', monospace" }}>{desc}</p>
               </div>
             </div>
           ))}

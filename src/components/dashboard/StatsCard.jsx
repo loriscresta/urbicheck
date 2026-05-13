@@ -6,25 +6,34 @@ export default function StatsCard({ icon: Icon, label, value, sublabel, highligh
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      className="bg-white rounded-xl border p-6 hover:shadow-md transition-shadow"
-      style={{ borderColor: '#E8E4DC', boxShadow: '0 2px 12px rgba(13,27,42,0.06)' }}
+      className="bg-white p-6"
+      style={{ border: '1px solid #C4BAA8' }}
     >
       <div className="flex items-start justify-between">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: '#6B7A8D' }}>{label}</p>
+        <div className="flex-1 min-w-0">
           <p
-            className="text-3xl font-extrabold mt-2 tracking-tight"
-            style={{ color: highlight ? '#C8A06E' : '#0D1B2A', fontFamily: 'Georgia, serif' }}
+            className="text-[10px] font-semibold uppercase tracking-[2px] mb-3"
+            style={{ color: '#7A7268', fontFamily: "'IBM Plex Mono', monospace" }}
+          >
+            {label}
+          </p>
+          <p
+            className="text-2xl font-bold leading-none"
+            style={{
+              color: highlight ? '#B33A2A' : '#1A3A6B',
+              fontFamily: "'IBM Plex Mono', monospace",
+            }}
           >
             {value}
           </p>
-          {sublabel && <p className="text-xs mt-1" style={{ color: '#6B7A8D' }}>{sublabel}</p>}
+          {sublabel && (
+            <p className="text-xs mt-2" style={{ color: '#7A7268', fontFamily: "'IBM Plex Mono', monospace" }}>
+              {sublabel}
+            </p>
+          )}
         </div>
-        <div
-          className="p-3 rounded-full"
-          style={{ background: 'rgba(200,160,110,0.12)' }}
-        >
-          <Icon className="w-5 h-5" style={{ color: '#C8A06E' }} />
+        <div className="w-9 h-9 flex items-center justify-center shrink-0 ml-3" style={{ background: '#F4EFE6', border: '1px solid #C4BAA8' }}>
+          <Icon className="w-4 h-4" style={{ color: highlight ? '#B33A2A' : '#1A3A6B' }} />
         </div>
       </div>
     </motion.div>

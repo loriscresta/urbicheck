@@ -16,9 +16,11 @@ export default function RecentQueries({ queries = [] }) {
   if (queries.length === 0) {
     return (
       <div className="text-center py-12">
-        <FileText className="w-12 h-12 text-muted-foreground/30 mx-auto mb-3" />
-        <p className="text-muted-foreground">Nessuna ricerca effettuata</p>
-        <Link to="/search" className="text-sm text-primary font-medium hover:underline mt-1 inline-block">
+        <FileText className="w-12 h-12 mx-auto mb-3" style={{ color: '#C4BAA8' }} />
+        <p className="text-xs uppercase tracking-[1px]" style={{ color: '#7A7268', fontFamily: "'IBM Plex Mono', monospace" }}>
+          Nessuna ricerca effettuata
+        </p>
+        <Link to="/search" className="text-xs font-semibold hover:underline mt-2 inline-block uppercase tracking-[1px]" style={{ color: '#1A3A6B', fontFamily: "'IBM Plex Mono', monospace" }}>
           Fai la tua prima ricerca →
         </Link>
       </div>
@@ -26,7 +28,7 @@ export default function RecentQueries({ queries = [] }) {
   }
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-0 divide-y" style={{ borderColor: '#C4BAA8' }}>
       {queries.map((query, i) => {
         const status = statusMap[query.status] || statusMap.pending;
         return (
@@ -38,23 +40,23 @@ export default function RecentQueries({ queries = [] }) {
           >
             <Link
               to={query.status === "completed" ? `/report/${query.id}` : "#"}
-              className="flex items-center gap-4 p-4 rounded-lg hover:bg-muted/50 transition-colors group"
+              className="flex items-center gap-4 py-4 hover:bg-stone-50 transition-colors group"
             >
-              <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0" style={{ background: 'rgba(200,160,110,0.12)' }}>
-                <MapPin className="w-4 h-4" style={{ color: '#C8A06E' }} />
+              <div className="w-8 h-8 flex items-center justify-center shrink-0" style={{ background: '#F4EFE6', border: '1px solid #C4BAA8' }}>
+                <MapPin className="w-3.5 h-3.5" style={{ color: '#1A3A6B' }} />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="font-medium text-sm truncate">
-                  {query.comune} — Foglio {query.foglio}, Part. {query.particella}
+                <p className="font-semibold text-xs truncate" style={{ color: '#1A3A6B', fontFamily: "'IBM Plex Mono', monospace" }}>
+                  {query.comune} — F.{query.foglio} P.{query.particella}
                 </p>
-                <p className="text-xs text-muted-foreground mt-0.5">
+                <p className="text-[10px] mt-0.5" style={{ color: '#7A7268', fontFamily: "'IBM Plex Mono', monospace" }}>
                   {query.regione} · {format(new Date(query.created_date), "d MMM yyyy, HH:mm", { locale: it })}
                 </p>
               </div>
-              <Badge variant="outline" className={`${status.className} text-[11px] shrink-0`}>
+              <Badge variant="outline" className={`${status.className} text-[10px] shrink-0`}>
                 {status.label}
               </Badge>
-              <ChevronRight className="w-4 h-4 text-muted-foreground/40 group-hover:text-foreground transition-colors shrink-0" />
+              <ChevronRight className="w-3.5 h-3.5 shrink-0 transition-colors" style={{ color: '#C4BAA8' }} />
             </Link>
           </motion.div>
         );

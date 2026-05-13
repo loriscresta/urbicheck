@@ -173,7 +173,7 @@ export default function CadastralSearchForm({ onSubmit, isLoading, submitLabel =
         type="submit"
         disabled={!isValid || isLoading}
         className="w-full font-semibold"
-        style={{ background: '#0D1B2A', borderRadius: '8px' }}
+        style={{ background: '#1A3A6B', borderRadius: '0', borderBottom: '3px solid #B33A2A', fontFamily: "'IBM Plex Mono', monospace" }}
         size="lg"
       >
         {isLoading ? (
@@ -185,7 +185,7 @@ export default function CadastralSearchForm({ onSubmit, isLoading, submitLabel =
       </Button>
 
       {!isValid && (
-        <p className="text-xs text-muted-foreground text-center">
+        <p className="text-xs text-center" style={{ color: '#7A7268', fontFamily: "'IBM Plex Mono', monospace" }}>
           Inserisci comune, foglio, particella e finalità per procedere
         </p>
       )}
