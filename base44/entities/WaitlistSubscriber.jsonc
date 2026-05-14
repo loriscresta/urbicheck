@@ -24,7 +24,9 @@
     "email"
   ],
   "rls": {
-    "create": {},
+    "create": {
+      "data.email": "{{user.email}}"
+    },
     "read": {
       "user_condition": {
         "role": "admin"
