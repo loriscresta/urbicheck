@@ -1,0 +1,187 @@
+{
+  "name": "AttiRequest",
+  "type": "object",
+  "properties": {
+    "query_id": {
+      "type": "string",
+      "description": "ID della CadastralQuery associata"
+    },
+    "comune_id": {
+      "type": "string",
+      "description": "ID del record ComuneItalia \u2014 usato per auto-popolare PEC, piano_tipo e portale_urbanistica"
+    },
+    "user_email": {
+      "type": "string",
+      "description": "Email dell'utente richiedente"
+    },
+    "documento_tipo": {
+      "type": "string",
+      "enum": [
+        "CDU",
+        "PRG",
+        "PGT",
+        "PSC",
+        "PUC",
+        "NTA",
+        "elaborati_grafici",
+        "altro"
+      ],
+      "description": "Tipo di documento richiesto"
+    },
+    "comune": {
+      "type": "string",
+      "description": "Nome del comune (auto-popolato da ComuneItalia.nome)"
+    },
+    "provincia": {
+      "type": "string",
+      "description": "Provincia (auto-popolata da ComuneItalia.provincia)"
+    },
+    "regione": {
+      "type": "string",
+      "description": "Regione (auto-popolata da ComuneItalia.regione)"
+    },
+    "sigla_provincia": {
+      "type": "string",
+      "description": "Sigla provincia (auto-popolata da ComuneItalia.sigla_provincia)"
+    },
+    "piano_tipo": {
+      "type": "string",
+      "description": "Tipo piano urbanistico (auto-popolato da ComuneItalia.piano_tipo \u2014 PRG, PGT, PSC, PUC, ecc.)"
+    },
+    "foglio": {
+      "type": "string",
+      "description": "Foglio catastale"
+    },
+    "particella": {
+      "type": "string",
+      "description": "Particella catastale"
+    },
+    "subalterno": {
+      "type": "string",
+      "description": "Subalterno (opzionale)"
+    },
+    "testo_richiesta": {
+      "type": "string",
+      "description": "Testo precompilato della richiesta art. 22 L.241/90"
+    },
+    "pec_utc": {
+      "type": "string",
+      "description": "PEC dell'Ufficio Tecnico Comunale (auto-popolata da ComuneItalia.pec_utc, modificabile dall'utente)"
+    },
+    "email_utc": {
+      "type": "string",
+      "description": "Email ordinaria UTC (fallback se PEC non disponibile, da ComuneItalia.email_utc)"
+    },
+    "portale_urbanistica": {
+      "type": "string",
+      "description": "URL portale urbanistica (auto-popolato da ComuneItalia.portale_urbanistica)"
+    },
+    "richiedente_nome": {
+      "type": "string",
+      "description": "Nome e cognome del richiedente"
+    },
+    "richiedente_cf": {
+      "type": "string",
+      "description": "Codice fiscale del richiedente"
+    },
+    "richiedente_email": {
+      "type": "string",
+      "description": "Email del richiedente per eventuali comunicazioni"
+    },
+    "richiedente_pec": {
+      "type": "string",
+      "description": "PEC del richiedente (per risposta formale)"
+    },
+    "stato": {
+      "type": "string",
+      "enum": [
+        "bozza",
+        "pronta",
+        "inviata",
+        "ricevuta",
+        "completata",
+        "annullata"
+      ],
+      "default": "bozza",
+      "description": "Stato della richiesta di accesso agli atti"
+    },
+    "canale_invio": {
+      "type": "string",
+      "enum": [
+        "pec",
+        "sportello_fisico",
+        "portale_online",
+        "raccomandata"
+      ],
+      "default": "pec",
+      "description": "Canale scelto per l'invio della richiesta"
+    },
+    "data_invio": {
+      "type": "string",
+      "description": "Data di invio effettivo (ISO 8601)"
+    },
+    "data_scadenza": {
+      "type": "string",
+      "description": "Data scadenza legale risposta (30gg da invio, art. 22 L.241/90)"
+    },
+    "numero_protocollo": {
+      "type": "string",
+      "description": "Numero di protocollo assegnato dal comune alla richiesta ricevuta"
+    },
+    "costo": {
+      "type": "number",
+      "default": 4.9,
+      "description": "Costo del servizio accesso agli atti in euro"
+    },
+    "note": {
+      "type": "string",
+      "description": "Note aggiuntive operative o di follow-up"
+    }
+  },
+  "required": [
+    "user_email",
+    "documento_tipo",
+    "comune",
+    "foglio",
+    "particella"
+  ],
+  "rls": {
+    "create": {},
+    "read": {
+      "$or": [
+        {
+          "created_by": "{{user.email}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "update": {
+      "$or": [
+        {
+          "created_by": "{{user.email}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "delete": {
+      "$or": [
+        {
+          "created_by": "{{user.email}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    }
+  }
+}
