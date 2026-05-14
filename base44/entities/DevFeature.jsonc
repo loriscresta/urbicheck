@@ -1,0 +1,83 @@
+{
+  "name": "DevFeature",
+  "type": "object",
+  "properties": {
+    "feature_key": {
+      "type": "string",
+      "description": "Chiave univoca della feature (es. due_diligence_v2, mappa_catastale_v2)"
+    },
+    "label": {
+      "type": "string",
+      "description": "Nome leggibile della feature"
+    },
+    "description": {
+      "type": "string",
+      "description": "Descrizione dello scope di sviluppo"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "in_development",
+        "internal_testing",
+        "beta",
+        "released",
+        "archived"
+      ],
+      "default": "in_development",
+      "description": "Stato di sviluppo della feature"
+    },
+    "visible_to": {
+      "type": "string",
+      "enum": [
+        "admin_only",
+        "beta_users",
+        "all"
+      ],
+      "default": "admin_only",
+      "description": "Chi pu\u00f2 vedere questa feature"
+    },
+    "target_release": {
+      "type": "string",
+      "description": "Versione o data target di rilascio (es. v2.0, Q3 2026)"
+    },
+    "notes": {
+      "type": "string",
+      "description": "Note di sviluppo, TODO, dipendenze"
+    }
+  },
+  "required": [
+    "feature_key",
+    "label",
+    "status",
+    "visible_to"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "read": {
+      "$or": [
+        {
+          "data.visible_to": "all"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}
