@@ -98,7 +98,7 @@ async function generateReport(formData) {
   const finalitaDesc = finalitaMap[formData.finalita] || formData.finalita;
 
   const result = await base44.integrations.Core.InvokeLLM({
-    prompt: `Sei un esperto urbanista e tecnico catastale italiano. Genera un report urbanistico-catastale REALISTICO e DETTAGLIATO per il seguente immobile:
+    prompt: `Sei un esperto urbanista e tecnico catastale italiano. Genera un report urbanistico-catastale per il seguente immobile.
 
 Regione: ${formData.regione}
 Provincia: ${formData.provincia || "N/D"}
@@ -108,22 +108,40 @@ Particella: ${formData.particella}
 Subalterno: ${formData.subalterno || "N/D"}
 Finalità analisi: ${finalitaDesc}
 
-Genera un report completo con dati plausibili e realistici per quella zona. Usa informazioni urbanistiche reali per quel comune/regione quando possibile.
+REGOLA ASSOLUTA — NESSUN DATO INVENTATO:
+NON inventare mai dati catastali specifici come: nomi di intestatari, rendita catastale esatta, numero di vani, codici zona specifici (es. B1, C2), valori precisi di IF/RC/H max, classe catastale numerica.
+Questi dati esistono solo nelle banche dati ufficiali (Catasto AdE, PRG comunale) e NON possono essere generati dall'AI.
+
+Per i seguenti campi usa SEMPRE queste stringhe standard se non hai dati reali verificati:
+- intestatari: "Richiedi visura ufficiale AdE"
+- rendita_catastale: "Disponibile su visura ufficiale AdE"
+- if_mc_mq: "Stima orientativa — verificare su NTA/PRG Comunale"
+- rc_percentuale: "Stima orientativa — verificare su NTA/PRG Comunale"
+- h_max: "Stima orientativa — verificare su NTA/PRG Comunale"
+- distanza_confini: "Verificare su NTA/PRG Comunale"
+- distanza_fabbricati: "Verificare su NTA/PRG Comunale"
+- distanza_strada: "Verificare su NTA/PRG Comunale"
+- zona_censuaria: "Verificare su visura catastale ufficiale"
+- microzona: "Verificare su visura catastale ufficiale"
+- zona_codice: usa un valore generico come "Zona residenziale" o "Zona agricola" — NON inventare codici alfanumerici specifici
+
+Per la categoria catastale puoi indicare la tipologia generale (es. "Abitazione civile", "Terreno agricolo", "Immobile commerciale") basandoti sul contesto, ma NON specificare sottocategorie (A/2, C/6, ecc.) a meno che non siano verificabili.
+
+Per la colore zonizzazione (verde/giallo/rosso) puoi fare una stima orientativa basata sulla destinazione d'uso prevalente.
+Per la descrizione zonizzazione puoi descrivere il contesto urbanistico generale del comune.
+Per i vincoli (sismico, idraulico, paesaggistico) puoi indicare presenza/assenza SOLO se hai informazioni certe per quella regione/comune. In caso di dubbio imposta presente: false.
+Per fattibilità_interventi genera dati realistici basati sulla tipologia dell'immobile.
+Per pratiche_necessarie e accesso_atti genera dati realistici basati sulla normativa italiana vigente.
 ${formData.finalita === "asta_giudiziaria" ? "IMPORTANTE: per asta giudiziaria aggiungi dettagli specifici sul CDU, conformità urbanistica e guida accesso atti." : ""}
 
-REGOLA LINGUISTICA OBBLIGATORIA — ITALIANO TECNICO URBANISTICO:
-Usa ESCLUSIVAMENTE la terminologia tecnica italiana del settore urbanistico ed edilizio. NON tradurre dall'inglese.
-Esempi corretti obbligatori:
-- "Distanza dai confini" (NON "setback", NON "la collana", NON "arretramento dal confine")
-- "Distanza tra fabbricati" (NON "setback between buildings", NON "Materassi tra frangiti")
-- "Distanza dalla strada" (NON "road setback", NON "Disco dalla strada")
-- "Indice di Fabbricabilità (IF)" in mc/mq (NON solo "IF")
-- "Rapporto di Copertura (RC)" in % (NON solo "RC")
-- "Altezza Massima (H max)" in metri (NON solo "H max")
+REGOLA LINGUISTICA — ITALIANO TECNICO URBANISTICO:
+Usa ESCLUSIVAMENTE terminologia tecnica italiana. NON tradurre dall'inglese.
+- "Distanza dai confini" (NON "setback")
+- "Indice di Fabbricabilità (IF)" in mc/mq
+- "Rapporto di Copertura (RC)" in %
+- "Altezza Massima (H max)" in metri
 - "Destinazione d'uso" (NON "land use")
-- "Permesso di costruire" (NON "building permit")
-- "Titolo edilizio" (NON "building title")
-Tutti i valori testuali devono essere in italiano tecnico corretto usato da geometri, architetti e ingegneri italiani.`,
+- "Permesso di costruire" (NON "building permit")`,
     add_context_from_internet: true,
     response_json_schema: {
       type: "object",

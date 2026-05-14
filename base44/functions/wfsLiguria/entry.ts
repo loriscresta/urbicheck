@@ -133,26 +133,36 @@ async function queryOverpass(lat, lon) {
 out body;
 >;
 out skel qt;`;
-  try {
-    const res = await fetchWithTimeout('https://overpass-api.de/api/interpreter', {
-      method: 'POST',
-      body: q,
-      headers: { 'Content-Type': 'text/plain' },
-    }, 15000);
-    const data = await res.json();
-    const railways = [], waterways = [], seen = new Set();
-    for (const el of (data.elements || [])) {
-      if (el.type !== 'way' || !el.tags) continue;
-      const key = el.tags.name || el.id;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      if (el.tags.railway) railways.push({ tipo: el.tags.railway, nome: el.tags.name || el.tags.ref || 'Linea ferroviaria', operatore: el.tags.operator || null });
-      if (el.tags.waterway) waterways.push({ tipo: el.tags.waterway, nome: el.tags.name || "Corso d'acqua senza nome" });
+
+  const OVERPASS_MIRRORS = [
+    'https://overpass.kumi.systems/api/interpreter',
+    'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
+    'https://overpass-api.de/api/interpreter',
+  ];
+
+  for (const endpoint of OVERPASS_MIRRORS) {
+    try {
+      const res = await fetchWithTimeout(endpoint, {
+        method: 'POST',
+        body: q,
+        headers: { 'Content-Type': 'text/plain' },
+      }, 15000);
+      const data = await res.json();
+      const railways = [], waterways = [], seen = new Set();
+      for (const el of (data.elements || [])) {
+        if (el.type !== 'way' || !el.tags) continue;
+        const key = el.tags.name || el.id;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        if (el.tags.railway) railways.push({ tipo: el.tags.railway, nome: el.tags.name || el.tags.ref || 'Linea ferroviaria', operatore: el.tags.operator || null });
+        if (el.tags.waterway) waterways.push({ tipo: el.tags.waterway, nome: el.tags.name || "Corso d'acqua senza nome" });
+      }
+      return { railways, waterways, overpass_ok: true };
+    } catch (_e) {
+      // Try next mirror
     }
-    return { railways, waterways, overpass_ok: true };
-  } catch (_e) {
-    return { railways: [], waterways: [], overpass_ok: false };
   }
+  return { railways: [], waterways: [], overpass_ok: false };
 }
 
 // ============================================================

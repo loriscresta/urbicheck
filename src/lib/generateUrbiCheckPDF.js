@@ -80,7 +80,7 @@ export async function generatePDF(query) {
     ["Particella", query.particella],
     ["Subalterno", query.subalterno || "—"],
     ["Categoria catastale", r.dati_catastali?.categoria || "—"],
-    ["Consistenza / Superficie", r.dati_catastali?.consistenza || "—"],
+    ["Consistenza / Superficie", r.dati_catastali?.consistenza || "Non disponibile — richiedere visura ufficiale AdE"],
     ["Finalità analisi", FINALITA_LABELS[query.finalita] || query.finalita || "—"],
   ];
 
@@ -130,18 +130,25 @@ export async function generatePDF(query) {
   doc.text(zonaNome, margin + 6, y + 9);
   y += 20;
 
+  doc.setTextColor(150, 100, 0);
+  doc.setFontSize(7.5);
+  doc.setFont("helvetica", "italic");
+  doc.text("Nota: valori orientativi da elaborazione AI — verificare sempre su NTA/PRG del Comune", margin + 2, y);
+  y += 6;
+
   doc.setTextColor(50, 50, 50);
   doc.setFontSize(9);
   doc.setFont("helvetica", "normal");
 
   const ie = r.indici_edilizi || {};
+  const ND_INDICI = "Verificare su NTA/PRG Comunale";
   const indici = [
-    ["Indice di Fabbricabilità (IF)", ie.if_mc_mq, "m³/m²"],
-    ["Rapporto di Copertura (RC)", ie.rc_percentuale, "%"],
-    ["Altezza massima (H max)", ie.h_max, "m"],
-    ["Distanza dai confini", ie.distanza_confini, "m"],
-    ["Distanza dalla strada", ie.distanza_strada, "m"],
-    ["Distanza tra fabbricati", ie.distanza_fabbricati, "m"],
+    ["Indice di Fabbricabilità (IF)", ie.if_mc_mq || ND_INDICI, "m³/m²"],
+    ["Rapporto di Copertura (RC)", ie.rc_percentuale || ND_INDICI, "%"],
+    ["Altezza massima (H max)", ie.h_max || ND_INDICI, "m"],
+    ["Distanza dai confini", ie.distanza_confini || ND_INDICI, "m"],
+    ["Distanza dalla strada", ie.distanza_strada || ND_INDICI, "m"],
+    ["Distanza tra fabbricati", ie.distanza_fabbricati || ND_INDICI, "m"],
   ];
   indici.forEach(([k, v, u], i) => {
     if (i % 2 === 0) {
@@ -156,7 +163,7 @@ export async function generatePDF(query) {
     y += 8;
   });
 
-  // ── SEZIONE 3 — VINCOLI ───────────────────────────────────────────────────
+  // ── SEZIONE 3 — VINCOLI PAESAGGISTICI (fonte WFS se disponibile, altrimenti AI) ──
   y += 4;
   if (y > 240) {
     doc.addPage();
@@ -165,69 +172,126 @@ export async function generatePDF(query) {
   doc.setFont("helvetica", "bold");
   doc.setFontSize(11);
   doc.setTextColor(30, 58, 95);
-  doc.text("3. VINCOLI ATTIVI", margin, y);
+  doc.text("3. VINCOLI PAESAGGISTICI E IDROGEOLOGICI", margin, y);
   y += 4;
   doc.setDrawColor(30, 58, 95);
   doc.line(margin, y, 190, y);
   y += 6;
 
-  const vv = r.vincoli || {};
-  const vincoli = [
-    [
-      "Vincolo sismico",
-      vv.vincolo_sismico?.presente
-        ? `Presente — ${vv.vincolo_sismico?.zona || vv.vincolo_sismico?.dettagli || ""}`
-        : "Assente",
-      "OPCM 3274/2003",
-      vv.vincolo_sismico?.presente,
-    ],
-    [
-      "Rischio idraulico",
-      vv.vincolo_idraulico?.presente
-        ? `Presente — ${vv.vincolo_idraulico?.classe_rischio || vv.vincolo_idraulico?.dettagli || ""}`
-        : "Assente",
-      "PAI - Autorità di Bacino",
-      vv.vincolo_idraulico?.presente,
-    ],
-    [
-      "Vincolo paesaggistico",
-      vv.vincolo_paesaggistico?.presente
-        ? `Presente — ${vv.vincolo_paesaggistico?.tipo || vv.vincolo_paesaggistico?.dettagli || ""}`
-        : "Assente",
-      "D.Lgs. 42/2004",
-      vv.vincolo_paesaggistico?.presente,
-    ],
-    [
-      "Vincolo archeologico",
-      vv.vincolo_archeologico?.presente ? "Presente" : "Assente",
-      "D.Lgs. 42/2004",
-      vv.vincolo_archeologico?.presente,
-    ],
-    ["Rischio frana", "Vedere PAI locale", "PAI vigente", false],
-    ["Vincolo idrogeologico", "Vedere R.D. 3267/1923", "R.D. 3267/1923", false],
-  ];
+  // Prefer WFS Liguria authoritative data for vincoli paesaggistici
+  const wfsData = r.wfs_liguria?.risultati;
+  const wfsPaesagg = wfsData?.vincoli_paesaggistici_ope_legis;
+  const wfsPai = wfsData?.pai_rischio_idrogeologico;
+  const wfsSismica = wfsData?.sismica;
 
-  doc.setFontSize(8.5);
-  vincoli.forEach(([k, v, norma, presente], i) => {
-    if (i % 2 === 0) {
+  if (wfsPaesagg) {
+    // Use authoritative WFS ope legis data
+    const wfsVincoli = (wfsPaesagg.vincoli || []).filter(v => v.livello !== 'NESSUN_VINCOLO_RILEVATO');
+    const hasWfsVincoli = wfsVincoli.length > 0;
+
+    doc.setFontSize(8);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(80, 80, 80);
+    doc.text("Fonte: Analisi ope legis art.142 D.Lgs 42/2004 — liguriavincoli.it", margin + 2, y);
+    y += 6;
+
+    if (hasWfsVincoli) {
+      wfsVincoli.forEach((v, i) => {
+        if (y > 265) { doc.addPage(); y = 20; }
+        if (i % 2 === 0) { doc.setFillColor(255, 245, 245); doc.rect(margin, y - 4, 170, 7, "F"); }
+        doc.setFont("helvetica", "bold");
+        doc.setTextColor(200, 50, 50);
+        doc.text("⚠ " + (v.tipo || "Vincolo"), margin + 2, y);
+        doc.setFont("helvetica", "normal");
+        doc.setTextColor(80, 80, 80);
+        const fasciaText = v.fascia_tutela ? ` — ${v.fascia_tutela}` : "";
+        doc.text((v.riferimento_normativo || "") + fasciaText, 80, y, { maxWidth: 108 });
+        doc.setTextColor(50, 50, 50);
+        y += 8;
+      });
+    } else {
+      doc.setFillColor(240, 255, 245);
+      doc.rect(margin, y - 4, 170, 7, "F");
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(39, 174, 96);
+      doc.text("✓ Nessun vincolo paesaggistico ope legis rilevato per questo comune", margin + 2, y);
+      doc.setTextColor(50, 50, 50);
+      y += 8;
+    }
+
+    // PAI from WFS
+    if (wfsPai) {
+      y += 2;
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(8.5);
+      doc.setTextColor(30, 58, 95);
+      doc.text("PAI — Rischio idrogeologico (WFS M450 Regione Liguria):", margin + 2, y);
+      y += 6;
+      (wfsPai.dati || []).forEach((d, i) => {
+        if (y > 265) { doc.addPage(); y = 20; }
+        if (i % 2 === 0) { doc.setFillColor(245, 247, 250); doc.rect(margin, y - 4, 170, 7, "F"); }
+        doc.setFont("helvetica", "bold");
+        doc.setTextColor(50, 50, 50);
+        doc.text(d.layer || "", margin + 2, y);
+        doc.setFont("helvetica", "normal");
+        if (d.trovato) {
+          doc.setTextColor(200, 50, 50);
+          doc.text(`Rischio rilevato${d.classe ? " — Classe " + d.classe : ""}`, 90, y);
+        } else {
+          doc.setTextColor(100, 150, 100);
+          doc.text("Nessun rischio PAI rilevato", 90, y);
+        }
+        doc.setTextColor(50, 50, 50);
+        y += 8;
+      });
+    }
+
+    // Sismica from WFS
+    if (wfsSismica) {
+      y += 2;
+      if (y > 265) { doc.addPage(); y = 20; }
       doc.setFillColor(245, 247, 250);
       doc.rect(margin, y - 4, 170, 7, "F");
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(8.5);
+      doc.setTextColor(50, 50, 50);
+      doc.text("Zona sismica", margin + 2, y);
+      doc.setFont("helvetica", "normal");
+      doc.text(`Zona ${wfsSismica.zona} — ${wfsSismica.descrizione}`, 90, y, { maxWidth: 98 });
+      y += 8;
     }
-    doc.setTextColor(50, 50, 50);
-    doc.setFont("helvetica", "bold");
-    doc.text(k, margin + 2, y);
-    doc.setFont("helvetica", "normal");
-    if (presente) {
-      doc.setTextColor(200, 50, 50);
-    } else {
-      doc.setTextColor(100, 150, 100);
-    }
-    doc.text(String(v || "—"), 90, y, { maxWidth: 42 });
-    doc.setTextColor(120, 120, 120);
-    doc.text(norma, 135, y);
-    doc.setTextColor(50, 50, 50);
-    y += 8;
-  });
+  } else {
+    // Fallback: AI-generated vincoli (with disclaimer)
+    const vv = r.vincoli || {};
+    doc.setFontSize(7.5);
+    doc.setFont("helvetica", "italic");
+    doc.setTextColor(150, 100, 0);
+    doc.text("Nota: dati da elaborazione AI — per Liguria eseguire Analisi WFS per dati ufficiali", margin + 2, y);
+    y += 7;
+
+    const vincoli = [
+      ["Vincolo sismico", vv.vincolo_sismico?.presente ? `Presente — ${vv.vincolo_sismico?.zona || ""}` : "Assente", "OPCM 3274/2003", vv.vincolo_sismico?.presente],
+      ["Rischio idraulico", vv.vincolo_idraulico?.presente ? `Presente — ${vv.vincolo_idraulico?.classe_rischio || ""}` : "Assente", "PAI - Autorità di Bacino", vv.vincolo_idraulico?.presente],
+      ["Vincolo paesaggistico", vv.vincolo_paesaggistico?.presente ? `Presente — ${vv.vincolo_paesaggistico?.tipo || ""}` : "Assente", "D.Lgs. 42/2004", vv.vincolo_paesaggistico?.presente],
+      ["Vincolo archeologico", vv.vincolo_archeologico?.presente ? "Presente" : "Assente", "D.Lgs. 42/2004", vv.vincolo_archeologico?.presente],
+    ];
+
+    doc.setFontSize(8.5);
+    vincoli.forEach(([k, v, norma, presente], i) => {
+      if (y > 265) { doc.addPage(); y = 20; }
+      if (i % 2 === 0) { doc.setFillColor(245, 247, 250); doc.rect(margin, y - 4, 170, 7, "F"); }
+      doc.setTextColor(50, 50, 50);
+      doc.setFont("helvetica", "bold");
+      doc.text(k, margin + 2, y);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(presente ? 200 : 100, presente ? 50 : 150, presente ? 50 : 100);
+      doc.text(String(v || "—"), 90, y, { maxWidth: 42 });
+      doc.setTextColor(120, 120, 120);
+      doc.text(norma, 135, y);
+      doc.setTextColor(50, 50, 50);
+      y += 8;
+    });
+  }
 
   // ── SEZIONE 4 — FATTIBILITÀ ───────────────────────────────────────────────
   y += 4;
@@ -361,6 +425,130 @@ export async function generatePDF(query) {
     doc.text(n, 152, y, { maxWidth: 36 });
     y += 8;
   });
+
+  // ── SEZIONE 6 — VINCOLI INFRASTRUTTURALI (ferrovia + corsi d'acqua WFS) ──
+  y += 6;
+  if (y > 230) {
+    doc.addPage();
+    y = 20;
+  }
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(11);
+  doc.setTextColor(30, 58, 95);
+  doc.text("6. VINCOLI INFRASTRUTTURALI", margin, y);
+  y += 4;
+  doc.setDrawColor(30, 58, 95);
+  doc.line(margin, y, 190, y);
+  y += 6;
+
+  const wfsFerr = wfsData?.vincolo_ferroviario;
+  const wfsAcqua = wfsData?.vincolo_corsi_acqua;
+
+  // Ferrovia
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(9);
+  doc.setTextColor(30, 58, 95);
+  doc.text("Vincolo Ferroviario — DPR 11 luglio 1980 n.753 (fascia 30m asse binario)", margin + 2, y);
+  y += 6;
+
+  if (!wfsFerr) {
+    doc.setFont("helvetica", "italic");
+    doc.setFontSize(8);
+    doc.setTextColor(150, 100, 0);
+    doc.text("Verifica necessaria — eseguire Analisi WFS Liguria per ottenere i dati", margin + 2, y);
+    y += 7;
+  } else if (!wfsFerr.fonte_ok) {
+    doc.setFillColor(255, 248, 230);
+    doc.rect(margin, y - 4, 170, 7, "F");
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.setTextColor(150, 100, 0);
+    doc.text("Verifica necessaria — dati non disponibili automaticamente, consultare RFI", margin + 2, y);
+    doc.setTextColor(50, 50, 50);
+    y += 8;
+  } else {
+    const ferrDati = (wfsFerr.dati || []);
+    const ferrTrovati = ferrDati.filter(d => d.trovato);
+    if (ferrTrovati.length === 0) {
+      doc.setFillColor(240, 255, 245);
+      doc.rect(margin, y - 4, 170, 7, "F");
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8);
+      doc.setTextColor(39, 174, 96);
+      doc.text("✓ Nessuna ferrovia rilevata entro 250m dal punto analizzato", margin + 2, y);
+      doc.setTextColor(50, 50, 50);
+      y += 8;
+    } else {
+      ferrTrovati.forEach((f, i) => {
+        if (y > 265) { doc.addPage(); y = 20; }
+        if (i % 2 === 0) { doc.setFillColor(255, 245, 220); doc.rect(margin, y - 4, 170, 7, "F"); }
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(8.5);
+        doc.setTextColor(180, 100, 0);
+        doc.text("⚠ " + (f.nome || "Ferrovia"), margin + 2, y);
+        doc.setFont("helvetica", "normal");
+        doc.setTextColor(80, 80, 80);
+        doc.text(f.fascia_rispetto || "30m dall'asse binario", 80, y, { maxWidth: 108 });
+        doc.setTextColor(50, 50, 50);
+        y += 8;
+      });
+    }
+  }
+
+  y += 4;
+  if (y > 265) { doc.addPage(); y = 20; }
+
+  // Corsi d'acqua
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(9);
+  doc.setTextColor(30, 58, 95);
+  doc.text("Vincolo Corsi d'Acqua — Art.142 c.1 lett. c) D.Lgs 42/2004 (fascia 150m sponda)", margin + 2, y);
+  y += 6;
+
+  if (!wfsAcqua) {
+    doc.setFont("helvetica", "italic");
+    doc.setFontSize(8);
+    doc.setTextColor(150, 100, 0);
+    doc.text("Verifica necessaria — eseguire Analisi WFS Liguria per ottenere i dati", margin + 2, y);
+    y += 7;
+  } else if (!wfsAcqua.fonte_ok) {
+    doc.setFillColor(255, 248, 230);
+    doc.rect(margin, y - 4, 170, 7, "F");
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.setTextColor(150, 100, 0);
+    doc.text("Verifica necessaria — consultare Catasto Acque Regione Liguria", margin + 2, y);
+    doc.setTextColor(50, 50, 50);
+    y += 8;
+  } else {
+    const acquaDati = (wfsAcqua.dati || []);
+    const acquaTrovati = acquaDati.filter(d => d.trovato);
+    if (acquaTrovati.length === 0) {
+      doc.setFillColor(240, 255, 245);
+      doc.rect(margin, y - 4, 170, 7, "F");
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8);
+      doc.setTextColor(39, 174, 96);
+      doc.text("✓ Nessun corso d'acqua rilevato entro 250m dal punto analizzato", margin + 2, y);
+      doc.setTextColor(50, 50, 50);
+      y += 8;
+    } else {
+      acquaTrovati.forEach((w, i) => {
+        if (y > 265) { doc.addPage(); y = 20; }
+        if (i % 2 === 0) { doc.setFillColor(230, 245, 255); doc.rect(margin, y - 4, 170, 7, "F"); }
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(8.5);
+        doc.setTextColor(30, 100, 180);
+        const livTag = w.livello === 'POSSIBILE_VINCOLO_ALTO' ? " [Alta probabilità]" : "";
+        doc.text("⚠ " + (w.nome || "Corso d'acqua") + livTag, margin + 2, y);
+        doc.setFont("helvetica", "normal");
+        doc.setTextColor(80, 80, 80);
+        doc.text("150m dal ciglio di sponda — Art.142 D.Lgs 42/2004", 80, y, { maxWidth: 108 });
+        doc.setTextColor(50, 50, 50);
+        y += 8;
+      });
+    }
+  }
 
   // ── SEZIONE ASTA (pagina extra se asta giudiziaria) ───────────────────────
   if (isAsta) {
