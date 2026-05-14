@@ -1,0 +1,113 @@
+{
+  "name": "ComuneItalia",
+  "type": "object",
+  "properties": {
+    "codice_istat": {
+      "type": "string",
+      "description": "Codice ISTAT del comune (6 cifre)"
+    },
+    "nome": {
+      "type": "string",
+      "description": "Nome del comune"
+    },
+    "provincia": {
+      "type": "string",
+      "description": "Nome della provincia"
+    },
+    "sigla_provincia": {
+      "type": "string",
+      "description": "Sigla automobilistica della provincia (2 lettere)"
+    },
+    "regione": {
+      "type": "string",
+      "description": "Nome della regione"
+    },
+    "codice_regione": {
+      "type": "string",
+      "description": "Codice ISTAT della regione (2 cifre)"
+    },
+    "pec_utc": {
+      "type": "string",
+      "description": "PEC dell'Ufficio Tecnico Comunale"
+    },
+    "email_utc": {
+      "type": "string",
+      "description": "Email ordinaria dell'UTC (fallback)"
+    },
+    "portale_urbanistica": {
+      "type": "string",
+      "description": "URL del portale urbanistica del comune o della regione"
+    },
+    "tipi_documenti_disponibili": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Documenti urbanistici disponibili: CDU, PRG, PUC, NTA, elaborati_grafici"
+    },
+    "piano_tipo": {
+      "type": "string",
+      "enum": [
+        "PRG",
+        "PUC",
+        "PGT",
+        "PSC",
+        "PUGC",
+        "RU",
+        "altro"
+      ],
+      "description": "Tipo di piano urbanistico vigente nella regione"
+    },
+    "popolazione": {
+      "type": "number",
+      "description": "Popolazione residente (fonte ISTAT)"
+    },
+    "cap": {
+      "type": "string",
+      "description": "Codice di avviamento postale principale"
+    },
+    "is_capoluogo_provincia": {
+      "type": "boolean",
+      "default": false,
+      "description": "True se \u00e8 capoluogo di provincia"
+    },
+    "is_capoluogo_regione": {
+      "type": "boolean",
+      "default": false,
+      "description": "True se \u00e8 capoluogo di regione"
+    },
+    "pec_verificata": {
+      "type": "boolean",
+      "default": false,
+      "description": "True se la PEC \u00e8 stata verificata come attiva"
+    },
+    "note": {
+      "type": "string",
+      "description": "Note operative (es. orari UTC, riferimenti, procedure speciali)"
+    }
+  },
+  "required": [
+    "nome",
+    "provincia",
+    "regione",
+    "sigla_provincia"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "read": {},
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}
