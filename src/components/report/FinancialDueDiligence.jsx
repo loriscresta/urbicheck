@@ -31,7 +31,7 @@ function ScoreCircle({ score }) {
   );
 }
 
-export default function FinancialDueDiligence({ query, finData }) {
+export default function FinancialDueDiligence({ query, finData, onSnapshotReady }) {
   const [omiData, setOmiData] = useState(null);
   const [scoreData, setScoreData] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -108,6 +108,7 @@ Fornisci un punteggio complessivo e analisi sintetica.`,
       setScoreData(score);
       setLoaded(true);
       setLoading(false);
+      if (onSnapshotReady) onSnapshotReady({ omi, score });
     }).catch(() => setLoading(false));
   }, []);
 

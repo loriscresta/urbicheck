@@ -88,6 +88,7 @@ export default function ReportPage() {
   const [isDownloadingPDF, setIsDownloadingPDF] = useState(false);
   const [showAttiForm, setShowAttiForm] = useState(false);
   const [comunePrefill, setComunePrefill] = useState(null);
+  const [financialSnapshot, setFinancialSnapshot] = useState(null);
 
   const { data: query, isLoading, refetch } = useQuery({
     queryKey: ["query", id],
@@ -163,7 +164,7 @@ export default function ReportPage() {
     setIsDownloadingPDF(true);
     const user = await base44.auth.me();
 
-    const { doc, reportNum } = await generatePDF(query);
+    const { doc, reportNum } = await generatePDF(query, financialSnapshot);
 
     // Charge €2,90
     await base44.entities.UserCredits.update(credits.id, {
@@ -571,7 +572,7 @@ export default function ReportPage() {
               </div>
               <h2 className="text-lg font-bold tracking-tight" style={{ color: '#1e3a5f' }}>Analisi Finanziaria & Due Diligence</h2>
             </div>
-            <FinancialDueDiligence query={query} finData={finData} />
+            <FinancialDueDiligence query={query} finData={finData} onSnapshotReady={setFinancialSnapshot} />
           </motion.div>
         )}
 
