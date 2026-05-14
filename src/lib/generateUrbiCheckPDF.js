@@ -185,16 +185,19 @@ export async function generatePDF(query, financialSnapshot) {
     y += 2;
   }
 
+  // Disclaimer AI data for zonizzazione
   doc.setTextColor(150, 100, 0);
   doc.setFontSize(7.5);
   doc.setFont("helvetica", "italic");
-  doc.text("Nota: indici edilizi orientativi — verificare sempre su NTA/PRG del Comune", margin + 2, y);
-  y += 6;
+  doc.text("AVVISO: Zona/Codice e indici edilizi sono stime AI orientative — NON provengono da WFS ufficiale.", margin + 2, y);
+  y += 5;
+  doc.text("Richiedere il Certificato Urbanistico (CU) al Comune per dati ufficiali verificati.", margin + 2, y);
+  y += 7;
 
   const ie = r.indici_edilizi || {};
-  const ND = "Verificare su NTA/PRG Comunale";
+  const ND = "Non disponibile — richiedere CU al Comune";
   const indici = [
-    ["Indice di Fabbricabilità (IF)", ie.if_mc_mq || ND, "m³/m²"],
+    ["Indice di Fabbricabilita' (IF)", ie.if_mc_mq || ND, "m³/m²"],
     ["Rapporto di Copertura (RC)", ie.rc_percentuale || ND, "%"],
     ["Altezza massima (H max)", ie.h_max || ND, "m"],
     ["Distanza dai confini", ie.distanza_confini || ND, "m"],
@@ -384,164 +387,36 @@ export async function generatePDF(query, financialSnapshot) {
     y += 9;
   });
 
-  // ── SEZ 5 — VINCOLI INFRASTRUTTURALI (ferrovia + acque) ───────────────────
-  y += 4;
-  if (y > 235) { y = newPage(doc); }
-  y = sectionHeader(doc, margin, y, "5", "VINCOLI INFRASTRUTTURALI");
-
-  const wfsFerr = wfsData?.vincolo_ferroviario;
-  const wfsAcqua = wfsData?.vincolo_corsi_acqua;
-
-  // Ferrovia
-  y = subHeader(doc, margin, y, "Vincolo Ferroviario — DPR 753/1980 (fascia 30m asse binario)");
-  if (!wfsFerr) {
-    doc.setFont("helvetica", "italic"); doc.setFontSize(8); doc.setTextColor(150, 100, 0);
-    doc.text("Verifica necessaria — eseguire Analisi WFS Liguria", margin + 2, y); y += 7;
-  } else if (!wfsFerr.fonte_ok) {
-    doc.setFillColor(255, 248, 230); doc.rect(margin, y - 4, 170, 7, "F");
-    doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.setTextColor(150, 100, 0);
-    doc.text("Dati non disponibili automaticamente — consultare RFI", margin + 2, y);
-    doc.setTextColor(50, 50, 50); y += 8;
-  } else {
-    const ferrTrovati = (wfsFerr.dati || []).filter(d => d.trovato);
-    if (ferrTrovati.length === 0) {
-      doc.setFillColor(240, 255, 245); doc.rect(margin, y - 4, 170, 7, "F");
-      doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.setTextColor(39, 174, 96);
-      doc.text("Nessuna ferrovia rilevata entro 250m dal punto analizzato", margin + 2, y);
-      doc.setTextColor(50, 50, 50); y += 8;
-    } else {
-      ferrTrovati.forEach((f, i) => {
-        if (y > 265) { y = newPage(doc); }
-        stripe(doc, margin, y, i % 2 === 0);
-        doc.setFont("helvetica", "bold"); doc.setFontSize(8.5); doc.setTextColor(180, 100, 0);
-        doc.text("! " + (f.nome || "Ferrovia"), margin + 2, y);
-        doc.setFont("helvetica", "normal"); doc.setTextColor(80, 80, 80);
-        doc.text(f.fascia_rispetto || "30m dall'asse binario", 82, y, { maxWidth: 106 });
-        doc.setTextColor(50, 50, 50); y += 8;
-      });
-    }
-  }
-
-  y += 3;
-  if (y > 265) { y = newPage(doc); }
-  // Corsi d'acqua
-  y = subHeader(doc, margin, y, "Vincolo Corsi d'Acqua — Art.142 c.1 lett. c) D.Lgs 42/2004 (fascia 150m)");
-  if (!wfsAcqua) {
-    doc.setFont("helvetica", "italic"); doc.setFontSize(8); doc.setTextColor(150, 100, 0);
-    doc.text("Verifica necessaria — eseguire Analisi WFS Liguria", margin + 2, y); y += 7;
-  } else if (!wfsAcqua.fonte_ok) {
-    doc.setFillColor(255, 248, 230); doc.rect(margin, y - 4, 170, 7, "F");
-    doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.setTextColor(150, 100, 0);
-    doc.text("Verifica necessaria — consultare Catasto Acque Regione Liguria", margin + 2, y);
-    doc.setTextColor(50, 50, 50); y += 8;
-  } else {
-    const acquaTrovati = (wfsAcqua.dati || []).filter(d => d.trovato);
-    if (acquaTrovati.length === 0) {
-      doc.setFillColor(240, 255, 245); doc.rect(margin, y - 4, 170, 7, "F");
-      doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.setTextColor(39, 174, 96);
-      doc.text("Nessun corso d'acqua rilevato entro 250m dal punto analizzato", margin + 2, y);
-      doc.setTextColor(50, 50, 50); y += 8;
-    } else {
-      acquaTrovati.forEach((w, i) => {
-        if (y > 265) { y = newPage(doc); }
-        stripe(doc, margin, y, i % 2 === 0);
-        doc.setFont("helvetica", "bold"); doc.setFontSize(8.5); doc.setTextColor(30, 100, 180);
-        const livTag = w.livello === "POSSIBILE_VINCOLO_ALTO" ? " [Alta prob.]" : "";
-        doc.text("! " + (w.nome || "Corso d'acqua") + livTag, margin + 2, y);
-        doc.setFont("helvetica", "normal"); doc.setTextColor(80, 80, 80);
-        doc.text("150m dal ciglio di sponda — Art.142 D.Lgs 42/2004", 82, y, { maxWidth: 106 });
-        doc.setTextColor(50, 50, 50); y += 8;
-      });
-    }
-  }
-
-  // ── SEZ 6 — FONTI DATI ────────────────────────────────────────────────────
-  y += 4;
-  if (y > 230) { y = newPage(doc); }
-  y = sectionHeader(doc, margin, y, "6", "FONTI DATI UFFICIALI");
-
-  doc.setFillColor(235, 244, 255);
-  doc.rect(margin, y - 4, 170, 7, "F");
-  doc.setFontSize(8);
-  doc.setFont("helvetica", "bold");
-  doc.setTextColor(50, 50, 50);
-  doc.text("Tipo di dato", margin + 2, y);
-  doc.text("Fonte", 75, y);
-  doc.text("Rif. normativo", 152, y);
-  y += 8;
-
-  const fonti = [
-    ["Dati catastali", "Agenzia delle Entrate — Cartografia catastale", "D.Lgs. 347/1990"],
-    [
-      "Zonizzazione PRG/PUC",
-      query.regione === "Liguria"
-        ? "Analisi AI orientativa — verificare su PRG/PUC Comunale"
-        : "PRG Comunale + elaborazione AI",
-      "DPR 380/2001",
-    ],
-    ["Zona sismica", wfsSismica ? "WFS Regione Liguria + OPCM 3274/2003" : "INGV — Protezione Civile Nazionale", "OPCM 3274/2003"],
-    [
-      "Rischio idraulico",
-      query.regione === "Liguria"
-        ? "Regione Liguria — WFS M450 (Piano di Bacino)"
-        : "PAI Autorita' di Bacino",
-      "D.Lgs. 152/2006",
-    ],
-    [
-      "Vincolo paesaggistico",
-      query.regione === "Liguria"
-        ? "Analisi logica ope legis (COMUNI_COSTIERI) — liguriavincoli.it"
-        : "MiC — SITAP",
-      "D.Lgs. 42/2004 art.142",
-    ],
-    ["Normativa edilizia", "NTA del PRG/PUC Comune di " + query.comune, "DPR 380/2001"],
-  ];
-
-  doc.setFont("helvetica", "normal");
-  fonti.forEach(([k, v, n], i) => {
-    if (y > 265) { y = newPage(doc); }
-    if (i % 2 === 0) { doc.setFillColor(250, 250, 250); doc.rect(margin, y - 4, 170, 7, "F"); }
-    doc.setTextColor(50, 50, 50);
-    doc.setFont("helvetica", "bold");
-    doc.text(k, margin + 2, y, { maxWidth: 50 });
-    doc.setFont("helvetica", "normal");
-    doc.text(v, 75, y, { maxWidth: 72 });
-    doc.text(n, 152, y, { maxWidth: 36 });
-    y += 8;
-  });
-
-  // ── SEZ 7 — PRATICHE NECESSARIE ───────────────────────────────────────────
+  // ── SEZ 5 — PRATICHE NECESSARIE ───────────────────────────────────────────
   if (r.pratiche_necessarie?.length > 0) {
     y += 4;
     if (y > 230) { y = newPage(doc); }
-    y = sectionHeader(doc, margin, y, "7", "PRATICHE NECESSARIE");
-
-    r.pratiche_necessarie.forEach((p, i) => {
-      if (y > 250) { y = newPage(doc); }
-      // Sub-block for each pratica
-      if (i % 2 === 0) { doc.setFillColor(248, 250, 255); } else { doc.setFillColor(255, 255, 255); }
-      doc.rect(margin, y - 4, 170, 22, "F");
-      doc.setDrawColor(200, 210, 230);
-      doc.rect(margin, y - 4, 170, 22);
-
+    y = sectionHeader(doc, margin, y, "5", "PRATICHE EDILIZIE NECESSARIE");
+    r.pratiche_necessarie.forEach((p, idx) => {
+      if (y > 248) { y = newPage(doc); }
+      const rowH = 24;
+      if (idx % 2 === 0) { doc.setFillColor(248, 250, 255); } else { doc.setFillColor(255, 255, 255); }
+      doc.rect(margin, y - 4, 170, rowH, "F");
+      doc.setDrawColor(210, 220, 235);
+      doc.rect(margin, y - 4, 170, rowH);
       doc.setFont("helvetica", "bold"); doc.setFontSize(8.5); doc.setTextColor(30, 58, 95);
-      doc.text(String(p.tipo_intervento || "—").slice(0, 50), margin + 3, y);
-
-      doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.setTextColor(80, 80, 80);
-      doc.text("Pratica: " + (p.pratica_richiesta || "—"), margin + 3, y + 6);
-      doc.text("Ente: " + (p.ente_competente || "—"), 90, y + 6);
-      doc.text("Tempi: " + (p.tempistica_stimata || "—"), margin + 3, y + 12);
-      doc.text("Costi stimati: " + (p.costi_stimati || "—"), 90, y + 12);
-      y += 27;
+      const titoloStr = String(p.tipo_intervento || "—").slice(0, 55);
+      doc.text(titoloStr, margin + 3, y);
+      doc.setFont("helvetica", "normal"); doc.setFontSize(7.5); doc.setTextColor(80, 80, 80);
+      doc.text("Pratica: " + String(p.pratica_richiesta || "—").slice(0, 30), margin + 3, y + 7);
+      doc.text("Ente: " + String(p.ente_competente || "—").slice(0, 30), 92, y + 7);
+      doc.text("Tempi: " + String(p.tempistica_stimata || "—").slice(0, 28), margin + 3, y + 14);
+      doc.text("Costi: " + String(p.costi_stimati || "—").slice(0, 28), 92, y + 14);
+      doc.setTextColor(50, 50, 50);
+      y += rowH + 4;
     });
   }
 
-  // ── SEZ 8 — ACCESSO AGLI ATTI ─────────────────────────────────────────────
+  // ── SEZ 6 — ACCESSO AGLI ATTI ─────────────────────────────────────────────
   if (r.accesso_atti) {
     y += 4;
     if (y > 230) { y = newPage(doc); }
-    y = sectionHeader(doc, margin, y, "8", "ACCESSO AGLI ATTI");
-
+    y = sectionHeader(doc, margin, y, "6", "ACCESSO AGLI ATTI");
     const attiRows = [
       ["Ufficio Catasto", r.accesso_atti.ufficio_catasto],
       ["Ufficio Urbanistica", r.accesso_atti.ufficio_urbanistica],
@@ -550,6 +425,7 @@ export async function generatePDF(query, financialSnapshot) {
     ].filter(([, v]) => v);
     doc.setFontSize(8.5);
     attiRows.forEach(([k, v], i) => {
+      if (y > 265) { y = newPage(doc); }
       stripe(doc, margin, y, i % 2 === 0);
       doc.setFont("helvetica", "bold"); doc.setTextColor(50, 50, 50);
       doc.text(k, margin + 2, y);
@@ -557,20 +433,20 @@ export async function generatePDF(query, financialSnapshot) {
       doc.text(String(v || "—"), 90, y, { maxWidth: 98 });
       y += 8;
     });
-
     if (r.accesso_atti.documenti_ottenibili?.length > 0) {
       y += 2;
+      if (y > 265) { y = newPage(doc); }
       doc.setFont("helvetica", "bold"); doc.setFontSize(8.5); doc.setTextColor(30, 58, 95);
       doc.text("Documenti ottenibili:", margin + 2, y); y += 6;
-      const docsLine = r.accesso_atti.documenti_ottenibili.join(" — ");
+      const docsLine = r.accesso_atti.documenti_ottenibili.join("  —  ");
       doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.setTextColor(50, 50, 50);
       const docLines = doc.splitTextToSize(docsLine, 166);
-      docLines.forEach(line => { if (y > 270) return; doc.text(line, margin + 2, y); y += 5; });
+      docLines.slice(0, 3).forEach(line => { if (y > 270) return; doc.text(line, margin + 2, y); y += 5; });
       y += 2;
     }
   }
 
-  // ── SEZ 9 — ANALISI FINANZIARIA ───────────────────────────────────────────
+  // ── SEZ 7 — ANALISI FINANZIARIA ───────────────────────────────────────────
   const mq = parseFloat(fd.superficie) || 80;
   const prezzoAcquisto = parseFloat(fd.prezzo_acquisto) || 0;
   const spesePerc = parseFloat(fd.spese_accessorie) || 10;
@@ -597,7 +473,7 @@ export async function generatePDF(query, financialSnapshot) {
   if (showFinancial) {
     y += 4;
     if (y > 230) { y = newPage(doc); }
-    y = sectionHeader(doc, margin, y, "9", "ANALISI FINANZIARIA E DUE DILIGENCE");
+    y = sectionHeader(doc, margin, y, "7", "ANALISI FINANZIARIA E DUE DILIGENCE");
 
     // OMI data from financialSnapshot (passed in from page) or fallback note
     const snap = financialSnapshot || {};
@@ -638,8 +514,13 @@ export async function generatePDF(query, financialSnapshot) {
       }
     } else {
       doc.setFont("helvetica", "italic"); doc.setFontSize(8); doc.setTextColor(150, 100, 0);
-      doc.text("Dati OMI non disponibili nel snapshot PDF — visualizzare il report online per l'analisi completa.", margin + 2, y);
-      y += 8;
+      const noOmiLines = [
+        "Dati OMI non ancora caricati al momento del download.",
+        "Per l'analisi finanziaria completa: apri la scheda online, attendi il caricamento",
+        "della sezione 'Analisi Finanziaria', poi scarica nuovamente il PDF.",
+      ];
+      noOmiLines.forEach(l => { doc.text(l, margin + 2, y); y += 5; });
+      y += 3;
     }
 
     // Stima costi ristrutturazione
@@ -760,7 +641,7 @@ export async function generatePDF(query, financialSnapshot) {
   if (r.valutazione_sintetica) {
     y += 4;
     if (y > 230) { y = newPage(doc); }
-    y = sectionHeader(doc, margin, y, "10", "VALUTAZIONE SINTETICA");
+    y = sectionHeader(doc, margin, y, "8", "VALUTAZIONE SINTETICA");
 
     const vs = r.valutazione_sintetica;
     if (vs.livello_complessita) {
@@ -800,6 +681,116 @@ export async function generatePDF(query, financialSnapshot) {
       });
       y += 7;
     }
+  }
+
+  // ── SEZ 9 — VINCOLI INFRASTRUTTURALI WFS ─────────────────────────────────
+  {
+    const wfsFerr = wfsData?.vincolo_ferroviario;
+    const wfsAcqua = wfsData?.vincolo_corsi_acqua;
+    y += 4;
+    if (y > 230) { y = newPage(doc); }
+    y = sectionHeader(doc, margin, y, "9", "VINCOLI INFRASTRUTTURALI (WFS LIGURIA)");
+
+    y = subHeader(doc, margin, y, "Vincolo Ferroviario — DPR 753/1980 (fascia 30m asse binario)");
+    if (!wfsFerr) {
+      doc.setFont("helvetica", "italic"); doc.setFontSize(8); doc.setTextColor(150, 100, 0);
+      doc.text("Eseguire Analisi WFS Liguria per ottenere i dati", margin + 2, y); y += 7;
+    } else if (!wfsFerr.fonte_ok) {
+      doc.setFillColor(255, 248, 230); doc.rect(margin, y - 4, 170, 7, "F");
+      doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.setTextColor(150, 100, 0);
+      doc.text("fonte_ok=false — dati Overpass non disponibili, consultare RFI", margin + 2, y);
+      doc.setTextColor(50, 50, 50); y += 8;
+    } else {
+      const ferrTrovati = (wfsFerr.dati || []).filter(d => d.trovato);
+      if (ferrTrovati.length === 0) {
+        doc.setFillColor(240, 255, 245); doc.rect(margin, y - 4, 170, 7, "F");
+        doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.setTextColor(39, 174, 96);
+        doc.text("Nessuna ferrovia rilevata entro 250m (fonte_ok=true)", margin + 2, y);
+        doc.setTextColor(50, 50, 50); y += 8;
+      } else {
+        ferrTrovati.forEach((f, i) => {
+          if (y > 265) { y = newPage(doc); }
+          stripe(doc, margin, y, i % 2 === 0);
+          doc.setFont("helvetica", "bold"); doc.setFontSize(8.5); doc.setTextColor(180, 100, 0);
+          doc.text("! " + (f.nome || "Ferrovia"), margin + 2, y);
+          doc.setFont("helvetica", "normal"); doc.setTextColor(80, 80, 80);
+          doc.text(f.fascia_rispetto || "30m dall'asse binario", 82, y, { maxWidth: 106 });
+          doc.setTextColor(50, 50, 50); y += 8;
+        });
+      }
+    }
+
+    y += 3;
+    if (y > 265) { y = newPage(doc); }
+    y = subHeader(doc, margin, y, "Vincolo Corsi d'Acqua — Art.142 c.1 lett. c) D.Lgs 42/2004 (fascia 150m)");
+    if (!wfsAcqua) {
+      doc.setFont("helvetica", "italic"); doc.setFontSize(8); doc.setTextColor(150, 100, 0);
+      doc.text("Eseguire Analisi WFS Liguria per ottenere i dati", margin + 2, y); y += 7;
+    } else if (!wfsAcqua.fonte_ok) {
+      doc.setFillColor(255, 248, 230); doc.rect(margin, y - 4, 170, 7, "F");
+      doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.setTextColor(150, 100, 0);
+      doc.text("fonte_ok=false — consultare Catasto Acque Regione Liguria", margin + 2, y);
+      doc.setTextColor(50, 50, 50); y += 8;
+    } else {
+      const acquaTrovati = (wfsAcqua.dati || []).filter(d => d.trovato);
+      if (acquaTrovati.length === 0) {
+        doc.setFillColor(240, 255, 245); doc.rect(margin, y - 4, 170, 7, "F");
+        doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.setTextColor(39, 174, 96);
+        doc.text("Nessun corso d'acqua rilevato entro 250m (fonte_ok=true)", margin + 2, y);
+        doc.setTextColor(50, 50, 50); y += 8;
+      } else {
+        acquaTrovati.forEach((w, i) => {
+          if (y > 265) { y = newPage(doc); }
+          stripe(doc, margin, y, i % 2 === 0);
+          doc.setFont("helvetica", "bold"); doc.setFontSize(8.5); doc.setTextColor(30, 100, 180);
+          const livTag = w.livello === "POSSIBILE_VINCOLO_ALTO" ? " [Alta prob.]" : "";
+          doc.text("! " + (w.nome || "Corso d'acqua") + livTag, margin + 2, y);
+          doc.setFont("helvetica", "normal"); doc.setTextColor(80, 80, 80);
+          doc.text("150m dal ciglio di sponda — Art.142 D.Lgs 42/2004", 82, y, { maxWidth: 106 });
+          doc.setTextColor(50, 50, 50); y += 8;
+        });
+      }
+    }
+  }
+
+  // ── SEZ 10 — FONTI DATI ───────────────────────────────────────────────────
+  {
+    y += 4;
+    if (y > 230) { y = newPage(doc); }
+    y = sectionHeader(doc, margin, y, "10", "FONTI DATI UFFICIALI");
+
+    doc.setFillColor(235, 244, 255);
+    doc.rect(margin, y - 4, 170, 7, "F");
+    doc.setFontSize(8);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(50, 50, 50);
+    doc.text("Tipo di dato", margin + 2, y);
+    doc.text("Fonte", 75, y);
+    doc.text("Rif. normativo", 152, y);
+    y += 8;
+
+    const fontiList = [
+      ["Dati catastali", "Agenzia delle Entrate — Cartografia catastale", "D.Lgs. 347/1990"],
+      ["Zonizzazione PRG/PUC", "Analisi AI orientativa (verifica CU al Comune)", "DPR 380/2001"],
+      ["Zona sismica", wfsSismica ? "WFS Regione Liguria + OPCM 3274/2003" : "INGV — Protezione Civile", "OPCM 3274/2003"],
+      ["Rischio idraulico", query.regione === "Liguria" ? "WFS M450 — PAI Autorita' di Bacino Liguria" : "PAI Autorita' di Bacino", "D.Lgs. 152/2006"],
+      ["Vincolo paesaggistico", query.regione === "Liguria" ? "Analisi logica ope legis (COMUNI_COSTIERI / D.Lgs. 42/2004 art.142)" : "MiC — SITAP", "D.Lgs. 42/2004 art.142"],
+      ["Normativa edilizia", "NTA del PRG/PUC Comune di " + query.comune, "DPR 380/2001"],
+      ["Analisi finanziaria", "Stime AI su base dati OMI — verificare su agenziaentrate.gov.it/omi", "OMI AdE"],
+    ];
+
+    doc.setFont("helvetica", "normal");
+    fontiList.forEach(([k, v, n], i) => {
+      if (y > 265) { y = newPage(doc); }
+      if (i % 2 === 0) { doc.setFillColor(250, 250, 250); doc.rect(margin, y - 4, 170, 7, "F"); }
+      doc.setTextColor(50, 50, 50);
+      doc.setFont("helvetica", "bold");
+      doc.text(k, margin + 2, y, { maxWidth: 50 });
+      doc.setFont("helvetica", "normal");
+      doc.text(v, 75, y, { maxWidth: 72 });
+      doc.text(n, 152, y, { maxWidth: 36 });
+      y += 8;
+    });
   }
 
   // ── SEZ ASTA (pagina separata) ────────────────────────────────────────────
