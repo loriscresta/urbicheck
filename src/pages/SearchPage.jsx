@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import CadastralSearchForm from "@/components/search/CadastralSearchForm.jsx";
+import ErrorBoundary from "@/components/ErrorBoundary";
 import { Shield, Info, Search } from "lucide-react";
 import { motion } from "framer-motion";
 
@@ -42,12 +43,14 @@ export default function SearchPage() {
       </motion.div>
 
       <div className="bg-white p-6 lg:p-8" style={{ border: '1px solid #C4BAA8' }}>
-        <CadastralSearchForm
-          onSubmit={handleSearch}
-          isLoading={isLoading}
-          disabled={false}
-          submitLabel="Ottieni anteprima gratuita →"
-        />
+        <ErrorBoundary>
+          <CadastralSearchForm
+            onSubmit={handleSearch}
+            isLoading={isLoading}
+            disabled={false}
+            submitLabel="Ottieni anteprima gratuita →"
+          />
+        </ErrorBoundary>
       </div>
 
       {/* Come funziona */}

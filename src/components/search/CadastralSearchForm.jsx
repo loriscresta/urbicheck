@@ -50,6 +50,16 @@ export default function CadastralSearchForm({ onSubmit, isLoading, submitLabel =
 
   const isValid = selectedComune && foglio && particella && finalita;
 
+  const handleFinalitaChange = (value) => {
+    try {
+      setFinalita(value);
+      // Reset financial section visibility when switching away from financial finalità
+      if (!FIN_FINALITA.includes(value)) {
+        setShowFinancial(false);
+      }
+    } catch (_e) {}
+  };
+
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!isValid) return;
@@ -105,7 +115,7 @@ export default function CadastralSearchForm({ onSubmit, isLoading, submitLabel =
       {/* Finalità */}
       <div className="space-y-1.5">
         <Label>Finalità dell'analisi *</Label>
-        <Select value={finalita} onValueChange={setFinalita}>
+        <Select value={finalita} onValueChange={handleFinalitaChange}>
           <SelectTrigger>
             <SelectValue placeholder="Seleziona finalità..." />
           </SelectTrigger>
@@ -118,12 +128,12 @@ export default function CadastralSearchForm({ onSubmit, isLoading, submitLabel =
       </div>
 
       {/* Sezione finanziaria (opzionale, mostrata per finalità rilevanti) */}
-      {showFinancialSection && (
+      <div key="financial-section-wrapper" style={{ display: showFinancialSection ? 'block' : 'none' }}>
         <div className="rounded-lg border border-border bg-muted/30 p-4 space-y-4">
           <button
             type="button"
             className="flex items-center gap-2 w-full text-left"
-            onClick={() => setShowFinancial(!showFinancial)}
+            onClick={() => { try { setShowFinancial(v => !v); } catch (_e) {} }}
           >
             <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex-1">
               Dati finanziari (opzionale — per analisi investimento)
@@ -131,43 +141,41 @@ export default function CadastralSearchForm({ onSubmit, isLoading, submitLabel =
             {showFinancial ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
           </button>
 
-          {showFinancial && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label>Prezzo di acquisto (€)</Label>
-                <Input type="number" value={prezzoAcquisto} onChange={(e) => setPrezzoAcquisto(e.target.value)} placeholder="es. 150000" />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Superficie stimata (mq)</Label>
-                <Input type="number" value={superficie} onChange={(e) => setSuperficie(e.target.value)} placeholder="es. 80" />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Stato conservativo</Label>
-                <Select value={statoConservativo} onValueChange={setStatoConservativo}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {STATO_CONSERVATIVO.map(s => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label>Destinazione obiettivo</Label>
-                <Select value={destinazioneObiettivo} onValueChange={setDestinazioneObiettivo}>
-                  <SelectTrigger><SelectValue placeholder="Seleziona..." /></SelectTrigger>
-                  <SelectContent>
-                    {DESTINAZIONE_OBIETTIVO.map(d => <SelectItem key={d.value} value={d.value}>{d.label}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5 md:col-span-2">
-                <Label>Spese accessorie (%)</Label>
-                <Input type="number" value={speseAccessorie} onChange={(e) => setSpeseAccessorie(e.target.value)} placeholder="es. 10" />
-                <p className="text-xs text-muted-foreground">Notaio, agenzia, imposte — tipicamente 8–12%</p>
-              </div>
+          <div key="financial-fields" style={{ display: showFinancial ? 'grid' : 'none' }} className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label>Prezzo di acquisto (€)</Label>
+              <Input key="prezzo-input" type="number" value={prezzoAcquisto} onChange={(e) => { try { setPrezzoAcquisto(e.target.value); } catch (_e) {} }} placeholder="es. 150000" />
             </div>
-          )}
+            <div className="space-y-1.5">
+              <Label>Superficie stimata (mq)</Label>
+              <Input key="superficie-input" type="number" value={superficie} onChange={(e) => { try { setSuperficie(e.target.value); } catch (_e) {} }} placeholder="es. 80" />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Stato conservativo</Label>
+              <Select key="stato-select" value={statoConservativo} onValueChange={(v) => { try { setStatoConservativo(v); } catch (_e) {} }}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {STATO_CONSERVATIVO.map(s => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Destinazione obiettivo</Label>
+              <Select key="destinazione-select" value={destinazioneObiettivo} onValueChange={(v) => { try { setDestinazioneObiettivo(v); } catch (_e) {} }}>
+                <SelectTrigger><SelectValue placeholder="Seleziona..." /></SelectTrigger>
+                <SelectContent>
+                  {DESTINAZIONE_OBIETTIVO.map(d => <SelectItem key={d.value} value={d.value}>{d.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5 md:col-span-2">
+              <Label>Spese accessorie (%)</Label>
+              <Input key="spese-input" type="number" value={speseAccessorie} onChange={(e) => { try { setSpeseAccessorie(e.target.value); } catch (_e) {} }} placeholder="es. 10" />
+              <p className="text-xs text-muted-foreground">Notaio, agenzia, imposte — tipicamente 8–12%</p>
+            </div>
+          </div>
         </div>
-      )}
+      </div>
 
       <Button
         type="submit"
