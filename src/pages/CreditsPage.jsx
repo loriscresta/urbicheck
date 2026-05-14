@@ -32,35 +32,47 @@ export default function CreditsPage() {
   });
 
   const handlePurchase = async (pkg) => {
-    const user = await base44.auth.me();
+    try {
+      const user = await base44.auth.me();
 
-    if (credits) {
-      await base44.entities.UserCredits.update(credits.id, {
-        balance: (credits.balance || 0) + pkg.price,
+      if (credits) {
+        await base44.entities.UserCredits.update(credits.id, {
+          balance: (credits.balance || 0) + pkg.price,
+        });
+      } else {
+        await base44.entities.UserCredits.create({
+          user_email: user.email,
+          balance: pkg.price,
+          total_spent: 0,
+          total_queries: 0,
+        });
+      }
+
+      try {
+        await base44.entities.CreditTransaction.create({
+          user_email: user.email,
+          type: "purchase",
+          amount: pkg.price,
+          description: `Acquisto ${pkg.name}`,
+        });
+      } catch (_txErr) {
+        // Transaction log may fail due to permissions — credits still updated
+      }
+
+      queryClient.invalidateQueries({ queryKey: ["userCredits"] });
+      queryClient.invalidateQueries({ queryKey: ["transactions"] });
+
+      toast({
+        title: "Crediti aggiunti!",
+        description: `€${pkg.price.toFixed(2)} aggiunti al tuo saldo.`,
       });
-    } else {
-      await base44.entities.UserCredits.create({
-        user_email: user.email,
-        balance: pkg.price,
-        total_spent: 0,
-        total_queries: 0,
+    } catch (err) {
+      toast({
+        title: "Errore acquisto",
+        description: err.message || "Contatta il supporto.",
+        variant: "destructive",
       });
     }
-
-    await base44.entities.CreditTransaction.create({
-      user_email: user.email,
-      type: "purchase",
-      amount: pkg.price,
-      description: `Acquisto ${pkg.name}`,
-    });
-
-    queryClient.invalidateQueries({ queryKey: ["userCredits"] });
-    queryClient.invalidateQueries({ queryKey: ["transactions"] });
-
-    toast({
-      title: "Crediti aggiunti!",
-      description: `€${pkg.price.toFixed(2)} aggiunti al tuo saldo.`,
-    });
   };
 
   return (

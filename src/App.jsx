@@ -4,6 +4,7 @@ import { queryClientInstance } from '@/lib/query-client'
 import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
 import PageNotFound from './lib/PageNotFound';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
+import ErrorBoundary from '@/components/ErrorBoundary';
 import UserNotRegisteredError from '@/components/UserNotRegisteredError';
 import LandingPage from '@/pages/LandingPage';
 import Dashboard from '@/pages/Dashboard';
@@ -62,11 +63,11 @@ const AuthenticatedApp = () => {
       <Route path="/" element={<LandingPage />} />
       <Route path="/waitlist" element={<WaitlistPage />} />
       <Route element={<AppLayout />}>
-        <Route path="/dashboard" element={<Dashboard />} />
-        <Route path="/search" element={<SearchPage />} />
-        <Route path="/report/:id" element={<ReportPage />} />
-        <Route path="/history" element={<HistoryPage />} />
-        <Route path="/credits" element={<CreditsPage />} />
+        <Route path="/dashboard" element={<ErrorBoundary><Dashboard /></ErrorBoundary>} />
+        <Route path="/search" element={<ErrorBoundary><SearchPage /></ErrorBoundary>} />
+        <Route path="/report/:id" element={<ErrorBoundary><ReportPage /></ErrorBoundary>} />
+        <Route path="/history" element={<ErrorBoundary><HistoryPage /></ErrorBoundary>} />
+        <Route path="/credits" element={<ErrorBoundary><CreditsPage /></ErrorBoundary>} />
       </Route>
       <Route path="*" element={<PageNotFound />} />
     </Routes>

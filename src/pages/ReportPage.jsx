@@ -130,14 +130,16 @@ export default function ReportPage() {
     // Mark query as completed
     await base44.entities.CadastralQuery.update(id, { status: "completed" });
 
-    // Log transaction
-    await base44.entities.CreditTransaction.create({
-      user_email: user.email,
-      type: "query_charge",
-      amount: -9.90,
-      description: `Scheda completa: ${query.comune} — F.${query.foglio} P.${query.particella}`,
-      query_id: id,
-    });
+    // Log transaction (may fail due to permissions — non-blocking)
+    try {
+      await base44.entities.CreditTransaction.create({
+        user_email: user.email,
+        type: "query_charge",
+        amount: -9.90,
+        description: `Scheda completa: ${query.comune} — F.${query.foglio} P.${query.particella}`,
+        query_id: id,
+      });
+    } catch (_txErr) { /* ignore */ }
 
     queryClient.invalidateQueries({ queryKey: ["userCredits"] });
     queryClient.invalidateQueries({ queryKey: ["recentQueries"] });
@@ -168,13 +170,15 @@ export default function ReportPage() {
       balance: credits.balance - 2.90,
       total_spent: (credits.total_spent || 0) + 2.90,
     });
-    await base44.entities.CreditTransaction.create({
-      user_email: user.email,
-      type: "query_charge",
-      amount: -2.90,
-      description: `Download PDF scheda ${reportNum}`,
-      query_id: id,
-    });
+    try {
+      await base44.entities.CreditTransaction.create({
+        user_email: user.email,
+        type: "query_charge",
+        amount: -2.90,
+        description: `Download PDF scheda ${reportNum}`,
+        query_id: id,
+      });
+    } catch (_txErr) { /* ignore */ }
 
     queryClient.invalidateQueries({ queryKey: ["userCredits"] });
     doc.save(`URBICHECK_${query.comune}_${reportNum}.pdf`);
@@ -200,11 +204,11 @@ export default function ReportPage() {
   }
 
   const r = query.report_data || {};
+  const isUnlocked = query.status === "completed";
   const isAsta = query.finalita === "asta_giudiziaria";
   const FIN_FINALITA = ["investimento", "sviluppo_immobiliare", "asta_giudiziaria"];
   const showFinancial = isUnlocked && (FIN_FINALITA.includes(query.finalita) || r.fin_data?.prezzo_acquisto);
   const finData = r.fin_data || {};
-  const isUnlocked = query.status === "completed";
   const reportNum = `UB-${query.id?.slice(-8).toUpperCase()}`;
 
   const complexityColor = {
