@@ -645,8 +645,8 @@ export default function ReportPage() {
         </motion.div>
       )}
 
-      {/* === WFS LIGURIA PANEL === */}
-      {query.regione === 'Liguria' && (
+      {/* === WFS ANALISI PANEL (Liguria + Piemonte) === */}
+      {(['Liguria','Piemonte'].includes(query.regione) || (query.regione || '').toLowerCase().includes('piemonte') || (query.regione || '').toLowerCase().includes('liguria')) && (
         <WfsLiguriaPanel
           query={query}
           onComplete={() => {

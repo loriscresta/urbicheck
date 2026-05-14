@@ -88,7 +88,9 @@ export async function generatePDF(query, financialSnapshot) {
   const { jsPDF } = window.jspdf;
   const r = query.report_data || {};
   const isAsta = query.finalita === "asta_giudiziaria";
-  const wfsData = r.wfs_liguria?.risultati;
+  const wfsReport = r.wfs_liguria;
+  const wfsData = wfsReport?.risultati;
+  const isPiemonte = wfsReport?.regione_logica === 'piemonte' || (query.regione || '').toLowerCase().includes('piemonte');
   const fd = r.fin_data || {};
 
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
@@ -231,8 +233,35 @@ export async function generatePDF(query, financialSnapshot) {
     doc.setFontSize(8);
     doc.setFont("helvetica", "bold");
     doc.setTextColor(80, 80, 80);
-    doc.text("Fonte: Analisi ope legis art.142 D.Lgs 42/2004 — liguriavincoli.it", margin + 2, y);
+    const fonteLabel = isPiemonte
+      ? "Fonte: Analisi ope legis art.142 D.Lgs 42/2004 — geoportale.piemonte.it"
+      : "Fonte: Analisi ope legis art.142 D.Lgs 42/2004 — liguriavincoli.it";
+    doc.text(fonteLabel, margin + 2, y);
     y += 6;
+
+    // Vincolo lacustre (solo Piemonte)
+    if (isPiemonte && wfsPaesagg.vincolo_lacustre) {
+      if (y > 265) { y = newPage(doc); }
+      const vl = wfsPaesagg.vincolo_lacustre;
+      if (vl.presente === true) {
+        doc.setFillColor(255, 240, 240); doc.rect(margin, y - 4, 170, 7, "F");
+        doc.setFont("helvetica", "bold"); doc.setFontSize(8.5); doc.setTextColor(200, 50, 50);
+        doc.text("! Vincolo Lacustre — " + (vl.lago || "Lago"), margin + 2, y);
+        doc.setFont("helvetica", "normal"); doc.setTextColor(80, 80, 80);
+        doc.text("Art.142 c.1 lett. b) — " + (vl.fascia_tutela || "300m dalla sponda"), 100, y, { maxWidth: 88 });
+        doc.setTextColor(50, 50, 50); y += 8;
+      } else if (vl.presente === false) {
+        doc.setFillColor(240, 255, 245); doc.rect(margin, y - 4, 170, 7, "F");
+        doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.setTextColor(39, 174, 96);
+        doc.text("Vincolo lacustre: nessun lago rilevato entro 300m (Overpass API)", margin + 2, y);
+        doc.setTextColor(50, 50, 50); y += 8;
+      } else {
+        doc.setFillColor(255, 248, 230); doc.rect(margin, y - 4, 170, 7, "F");
+        doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.setTextColor(150, 100, 0);
+        doc.text("Vincolo lacustre: non verificabile — " + (vl.nota || ""), margin + 2, y, { maxWidth: 168 });
+        doc.setTextColor(50, 50, 50); y += 8;
+      }
+    }
 
     const wfsVincoli = (wfsPaesagg.vincoli || []).filter(v => v.livello !== "NESSUN_VINCOLO_RILEVATO");
     if (wfsVincoli.length > 0) {
@@ -267,7 +296,10 @@ export async function generatePDF(query, financialSnapshot) {
       doc.setFont("helvetica", "bold");
       doc.setFontSize(8.5);
       doc.setTextColor(30, 58, 95);
-      doc.text("PAI — Rischio idrogeologico (WFS M450 Regione Liguria):", margin + 2, y);
+      const paiLabel = isPiemonte
+        ? "PAI Frane — ARPA Piemonte (POLIGONALI + PIFF):"
+        : "PAI — Rischio idrogeologico (WFS M450 Regione Liguria):";
+      doc.text(paiLabel, margin + 2, y);
       y += 6;
       (wfsPai.dati || []).forEach((d, i) => {
         if (y > 265) { y = newPage(doc); }
@@ -277,12 +309,16 @@ export async function generatePDF(query, financialSnapshot) {
         doc.setTextColor(50, 50, 50);
         doc.text(d.layer || "", margin + 2, y);
         doc.setFont("helvetica", "normal");
-        if (d.trovato) {
+        if (!d.fonte_ok) {
+          doc.setTextColor(150, 100, 0);
+          doc.text("WFS non disponibile — verificare manualmente", 90, y);
+        } else if (d.trovato) {
           doc.setTextColor(200, 50, 50);
-          doc.text("Rischio rilevato" + (d.classe ? " — Classe " + d.classe : ""), 90, y);
+          const countTxt = d.features_count ? ` — ${d.features_count} geometrie` : '';
+          doc.text("Rischio rilevato" + (d.classe ? " — Classe " + d.classe : countTxt), 90, y);
         } else {
           doc.setTextColor(100, 150, 100);
-          doc.text("Nessun rischio PAI rilevato", 90, y);
+          doc.text(isPiemonte ? "Nessuna frana censita ARPA Piemonte" : "Nessun rischio PAI rilevato", 90, y);
         }
         doc.setTextColor(50, 50, 50);
         y += 8;
@@ -306,7 +342,10 @@ export async function generatePDF(query, financialSnapshot) {
     doc.setFontSize(7.5);
     doc.setFont("helvetica", "italic");
     doc.setTextColor(150, 100, 0);
-    doc.text("Nota: dati da elaborazione AI — per Liguria eseguire Analisi WFS per dati ufficiali", margin + 2, y);
+    const wfsHint = isPiemonte
+      ? "Nota: dati da elaborazione AI — per Piemonte eseguire Analisi WFS per dati ufficiali"
+      : "Nota: dati da elaborazione AI — per Liguria eseguire Analisi WFS per dati ufficiali";
+    doc.text(wfsHint, margin + 2, y);
     y += 7;
 
     const vincoli = [
@@ -689,7 +728,7 @@ export async function generatePDF(query, financialSnapshot) {
     const wfsAcqua = wfsData?.vincolo_corsi_acqua;
     y += 4;
     if (y > 230) { y = newPage(doc); }
-    y = sectionHeader(doc, margin, y, "9", "VINCOLI INFRASTRUTTURALI (WFS LIGURIA)");
+    y = sectionHeader(doc, margin, y, "9", isPiemonte ? "VINCOLI INFRASTRUTTURALI (PIEMONTE)" : "VINCOLI INFRASTRUTTURALI (WFS LIGURIA)");
 
     y = subHeader(doc, margin, y, "Vincolo Ferroviario — DPR 753/1980 (fascia 30m asse binario)");
     if (!wfsFerr) {
@@ -772,9 +811,9 @@ export async function generatePDF(query, financialSnapshot) {
     const fontiList = [
       ["Dati catastali", "Agenzia delle Entrate — Cartografia catastale", "D.Lgs. 347/1990"],
       ["Zonizzazione PRG/PUC", "Analisi AI orientativa (verifica CU al Comune)", "DPR 380/2001"],
-      ["Zona sismica", wfsSismica ? "WFS Regione Liguria + OPCM 3274/2003" : "INGV — Protezione Civile", "OPCM 3274/2003"],
-      ["Rischio idraulico", query.regione === "Liguria" ? "WFS M450 — PAI Autorita' di Bacino Liguria" : "PAI Autorita' di Bacino", "D.Lgs. 152/2006"],
-      ["Vincolo paesaggistico", query.regione === "Liguria" ? "Analisi logica ope legis (COMUNI_COSTIERI / D.Lgs. 42/2004 art.142)" : "MiC — SITAP", "D.Lgs. 42/2004 art.142"],
+      ["Zona sismica", isPiemonte ? (wfsSismica ? "DGR 6-887/2019 + NTC 2018 — ARPA Piemonte" : "DGR n.6-887/2019 Piemonte") : (wfsSismica ? "WFS Regione Liguria + OPCM 3274/2003" : "INGV — Protezione Civile"), isPiemonte ? "DGR 6-887/2019" : "OPCM 3274/2003"],
+      ["Rischio idrogeologico", isPiemonte ? "WFS ARPA Piemonte — POLIGONALI + PIFF" : (query.regione === "Liguria" ? "WFS M450 — PAI Autorita' di Bacino Liguria" : "PAI Autorita' di Bacino"), "D.Lgs. 152/2006"],
+      ["Vincolo paesaggistico", isPiemonte ? "Analisi logica ope legis + Overpass API (laghi)" : (query.regione === "Liguria" ? "Analisi logica ope legis (COMUNI_COSTIERI / D.Lgs. 42/2004 art.142)" : "MiC — SITAP"), "D.Lgs. 42/2004 art.142"],
       ["Normativa edilizia", "NTA del PRG/PUC Comune di " + query.comune, "DPR 380/2001"],
       ["Analisi finanziaria", "Stime AI su base dati OMI — verificare su agenziaentrate.gov.it/omi", "OMI AdE"],
     ];

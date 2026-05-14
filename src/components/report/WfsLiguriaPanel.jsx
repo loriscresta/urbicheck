@@ -348,6 +348,151 @@ function ZonaUrbanisticaCard({ data }) {
   );
 }
 
+// ── Lago Card (Piemonte) ──
+function LagoCard({ vincolo_lacustre }) {
+  if (!vincolo_lacustre) return null;
+  if (vincolo_lacustre.presente === false) {
+    return (
+      <div style={{ border: '1px solid #6ee7b7', background: '#f0fdf4' }}>
+        <div className="flex items-start justify-between p-4 gap-3">
+          <div className="flex items-start gap-3">
+            <div style={{ width: 32, height: 32, background: '#d1fae5', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <Waves className="w-4 h-4" style={{ color: '#059669' }} />
+            </div>
+            <div>
+              <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.7rem', fontWeight: 700, color: '#1C1A17', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                Vincolo Lacustre
+              </p>
+              <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.58rem', color: '#7A7268', marginTop: 2 }}>
+                Art.142 c.1 lett. b) D.Lgs 42/2004 — Overpass (raggio 300m)
+              </p>
+            </div>
+          </div>
+          <Badge className="text-[10px] bg-emerald-100 text-emerald-800 border-emerald-200 whitespace-nowrap">✓ Nessun lago entro 300m</Badge>
+        </div>
+        <div style={{ borderTop: '1px solid #6ee7b7', padding: '0.6rem 1rem' }}>
+          <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.6rem', color: '#059669', fontStyle: 'italic' }}>{vincolo_lacustre.nota}</p>
+        </div>
+      </div>
+    );
+  }
+  if (vincolo_lacustre.presente === true) {
+    return (
+      <div style={{ border: '1px solid #fca5a5', background: '#fff7f7' }}>
+        <div className="flex items-start justify-between p-4 gap-3">
+          <div className="flex items-start gap-3">
+            <div style={{ width: 32, height: 32, background: '#fee2e2', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <Waves className="w-4 h-4" style={{ color: '#dc2626' }} />
+            </div>
+            <div>
+              <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.7rem', fontWeight: 700, color: '#1C1A17', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                Vincolo Lacustre
+              </p>
+              <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.58rem', color: '#7A7268', marginTop: 2 }}>
+                Art.142 c.1 lett. b) D.Lgs 42/2004 — 300m dalla sponda
+              </p>
+            </div>
+          </div>
+          <Badge className="text-[10px] bg-red-100 text-red-800 border-red-200 whitespace-nowrap">⚠ Lago rilevato</Badge>
+        </div>
+        <div style={{ borderTop: '1px solid #fca5a5', padding: '0.75rem 1rem' }}>
+          <div className="flex items-center gap-2 mb-1">
+            <AlertTriangle className="w-3 h-3 text-red-500 shrink-0" />
+            <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.68rem', fontWeight: 700, color: '#dc2626' }}>{vincolo_lacustre.lago}</span>
+            {vincolo_lacustre.fascia_tutela && <Badge variant="outline" className="text-[10px]">{vincolo_lacustre.fascia_tutela}</Badge>}
+          </div>
+          {vincolo_lacustre.descrizione && (
+            <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.6rem', color: '#7A7268', marginLeft: '1.25rem', lineHeight: 1.6 }}>{vincolo_lacustre.descrizione}</p>
+          )}
+        </div>
+      </div>
+    );
+  }
+  // presente === null (non verificabile)
+  return (
+    <div style={{ border: '1px solid #fde68a', background: '#fffbeb' }}>
+      <div className="flex items-start justify-between p-4 gap-3">
+        <div className="flex items-start gap-3">
+          <div style={{ width: 32, height: 32, background: '#fef3c7', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <Waves className="w-4 h-4" style={{ color: '#d97706' }} />
+          </div>
+          <div>
+            <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.7rem', fontWeight: 700, color: '#1C1A17', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+              Vincolo Lacustre
+            </p>
+          </div>
+        </div>
+        <Badge className="text-[10px] bg-amber-100 text-amber-800 border-amber-200 whitespace-nowrap">⚠ Non verificato</Badge>
+      </div>
+      <div style={{ borderTop: '1px solid #fde68a', padding: '0.6rem 1rem' }}>
+        <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.6rem', color: '#d97706', fontStyle: 'italic' }}>{vincolo_lacustre.nota}</p>
+      </div>
+    </div>
+  );
+}
+
+// ── PAI Piemonte Card ──
+function PaiFraneCard({ data }) {
+  if (!data) return null;
+  const totali = data.features_totali || 0;
+  const fonteOk = data.fonte_ok;
+  const hasFrane = totali > 0;
+  const borderColor = !fonteOk ? '#fde68a' : hasFrane ? '#fca5a5' : '#6ee7b7';
+  const bgColor = !fonteOk ? '#fffbeb' : hasFrane ? '#fff7f7' : '#f0fdf4';
+
+  return (
+    <div style={{ border: `1px solid ${borderColor}`, background: bgColor }}>
+      <div className="flex items-start justify-between p-4 gap-3">
+        <div className="flex items-start gap-3">
+          <div style={{ width: 32, height: 32, background: !fonteOk ? '#fef3c7' : hasFrane ? '#fee2e2' : '#d1fae5', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <Droplets className="w-4 h-4" style={{ color: !fonteOk ? '#d97706' : hasFrane ? '#dc2626' : '#059669' }} />
+          </div>
+          <div>
+            <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.7rem', fontWeight: 700, color: '#1C1A17', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+              PAI Frane — ARPA Piemonte
+            </p>
+            <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.58rem', color: '#7A7268', marginTop: 2 }}>
+              Inventario Fenomeni Franosi (POLIGONALI + PIFF)
+            </p>
+          </div>
+        </div>
+        {!fonteOk
+          ? <Badge className="text-[10px] bg-amber-100 text-amber-800 border-amber-200 whitespace-nowrap">⚠ WFS non disponibile</Badge>
+          : hasFrane
+            ? <Badge className="text-[10px] bg-red-100 text-red-800 border-red-200 whitespace-nowrap">⚠ {totali} geometrie</Badge>
+            : <Badge className="text-[10px] bg-emerald-100 text-emerald-800 border-emerald-200 whitespace-nowrap">✓ Nessuna frana</Badge>
+        }
+      </div>
+      <div style={{ borderTop: `1px solid ${borderColor}`, padding: '0.75rem 1rem' }}>
+        {(data.dati || []).map((d, i) => (
+          <div key={i} className="flex items-center justify-between mb-1 last:mb-0">
+            <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.65rem', color: '#1C1A17' }}>{d.layer}</span>
+            <div className="flex items-center gap-2">
+              {!d.fonte_ok
+                ? <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.58rem', color: '#d97706' }}>N/D</span>
+                : d.trovato
+                  ? <><span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.58rem', color: '#dc2626' }}>{d.features_count} geometrie</span><AlertTriangle className="w-3 h-3 text-amber-500" /></>
+                  : <CheckCircle2 className="w-3 h-3 text-emerald-500" />
+              }
+            </div>
+          </div>
+        ))}
+        {data.nota && (
+          <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.6rem', color: '#7A7268', fontStyle: 'italic', marginTop: 4 }}>{data.nota}</p>
+        )}
+      </div>
+      {data.link_pai && (
+        <div style={{ borderTop: `1px solid ${borderColor}`, padding: '0.5rem 1rem' }}>
+          <a href={data.link_pai} target="_blank" rel="noopener noreferrer"
+            style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.58rem', color: '#1A3A6B', display: 'flex', alignItems: 'center', gap: 4 }}>
+            <ExternalLink className="w-3 h-3" /> webgis.arpa.piemonte.it
+          </a>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main Panel ──
 const POLL_INTERVAL_MS = 3000;
 const POLL_TIMEOUT_MS = 120000; // 2 min max
@@ -431,6 +576,8 @@ export default function WfsLiguriaPanel({ query, onComplete }) {
 
   const isLoading = launching || polling;
   const risultati = wfsData?.risultati;
+  const regioneLower = (query?.regione || '').toLowerCase();
+  const isPiemonte = wfsData?.regione_logica === 'piemonte' || regioneLower.includes('piemonte');
 
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
@@ -442,10 +589,12 @@ export default function WfsLiguriaPanel({ query, onComplete }) {
           <Map className="w-4 h-4 text-white shrink-0" />
           <div>
             <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontWeight: 700, fontSize: '0.75rem', color: '#fff', textTransform: 'uppercase', letterSpacing: '1px' }}>
-              Analisi Urbanistica — Regione Liguria
+              Analisi Urbanistica — {isPiemonte ? 'Regione Piemonte' : 'Regione Liguria'}
             </p>
             <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.6rem', color: 'rgba(244,239,230,0.65)', marginTop: 2 }}>
-              WFS PAI (M450) + vincoli ope legis + Overpass API (EPSG:3003)
+              {isPiemonte
+                ? 'WFS PAI ARPA Piemonte + vincoli ope legis + Overpass API'
+                : 'WFS PAI (M450) + vincoli ope legis + Overpass API (EPSG:3003)'}
             </p>
           </div>
         </div>
@@ -537,7 +686,13 @@ export default function WfsLiguriaPanel({ query, onComplete }) {
           {/* Cards */}
           <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-3">
             <VincoliCard data={risultati?.vincoli_paesaggistici_ope_legis} />
-            <PaiCard data={risultati?.pai_rischio_idrogeologico} />
+            {isPiemonte
+              ? <PaiFraneCard data={risultati?.pai_rischio_idrogeologico} />
+              : <PaiCard data={risultati?.pai_rischio_idrogeologico} />
+            }
+            {isPiemonte && risultati?.vincoli_paesaggistici_ope_legis?.vincolo_lacustre && (
+              <LagoCard vincolo_lacustre={risultati.vincoli_paesaggistici_ope_legis.vincolo_lacustre} />
+            )}
             <CorsiAcquaCard data={risultati?.vincolo_corsi_acqua} />
             <FerroviaCard data={risultati?.vincolo_ferroviario} />
             <SismicaCard data={risultati?.sismica} />
@@ -558,13 +713,24 @@ export default function WfsLiguriaPanel({ query, onComplete }) {
       {/* Idle */}
       {!wfsData && !isLoading && !error && (
         <div style={{ padding: '1.5rem 1.25rem', borderTop: '1px solid #C4BAA8' }}>
-          <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.7rem', color: '#7A7268', lineHeight: 1.8 }}>
-            Analisi urbanistica ibrida per la Liguria:<br />
-            — Vincoli ope legis (art.142 D.Lgs 42/2004) — analisi logica per comune<br />
-            — PAI rischio idrogeologico/idraulico — WFS ufficiale M450<br />
-            — Corsi d'acqua e ferrovie — Overpass API (raggio 250m)<br />
-            — Classificazione sismica DGR Liguria
-          </p>
+          {isPiemonte ? (
+            <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.7rem', color: '#7A7268', lineHeight: 1.8 }}>
+              Analisi urbanistica ibrida per il Piemonte:<br />
+              — Vincoli ope legis (art.142 D.Lgs 42/2004) — nessun vincolo costiero<br />
+              — Vincolo lacustre (art.142 lett.b) — Overpass API (raggio 300m)<br />
+              — PAI Frane — WFS ARPA Piemonte (POLIGONALI + PIFF)<br />
+              — Corsi d'acqua e ferrovie — Overpass API (raggio 250m)<br />
+              — Classificazione sismica DGR n.6-887/2019
+            </p>
+          ) : (
+            <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.7rem', color: '#7A7268', lineHeight: 1.8 }}>
+              Analisi urbanistica ibrida per la Liguria:<br />
+              — Vincoli ope legis (art.142 D.Lgs 42/2004) — analisi logica per comune<br />
+              — PAI rischio idrogeologico/idraulico — WFS ufficiale M450<br />
+              — Corsi d'acqua e ferrovie — Overpass API (raggio 250m)<br />
+              — Classificazione sismica DGR Liguria
+            </p>
+          )}
         </div>
       )}
     </motion.div>
