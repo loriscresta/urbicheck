@@ -20,6 +20,7 @@ import { useToast } from "@/components/ui/use-toast";
 import { generatePDF } from "@/lib/generateUrbiCheckPDF";
 import FinancialDueDiligence from "@/components/report/FinancialDueDiligence";
 import AttiRequestForm from "@/components/atti/AttiRequestForm";
+import WfsLiguriaPanel from "@/components/report/WfsLiguriaPanel";
 
 const FINALITA_LABELS = {
   acquisto_privato: "Acquisto privato",
@@ -637,6 +638,17 @@ export default function ReportPage() {
             Sblocca scheda completa →
           </Button>
         </motion.div>
+      )}
+
+      {/* === WFS LIGURIA PANEL === */}
+      {query.regione === 'Liguria' && (
+        <WfsLiguriaPanel
+          query={query}
+          onComplete={() => {
+            queryClient.invalidateQueries({ queryKey: ["query", id] });
+            refetch();
+          }}
+        />
       )}
 
       {/* Servizi aggiuntivi (solo dopo sblocco) */}
