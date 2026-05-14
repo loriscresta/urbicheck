@@ -1,33 +1,74 @@
 {
   "name": "CadastralQuery",
-  "type": "object",
   "properties": {
-    "regione": {
-      "type": "string",
-      "description": "Regione italiana"
+    "atti_request_id": {
+      "description": "ID dell'AttiRequest collegata",
+      "type": "string"
     },
-    "provincia": {
-      "type": "string",
-      "description": "Provincia"
+    "categoria_catastale": {
+      "description": "Categoria catastale (es. A/2, C/6, D/1, terreno agricolo)",
+      "type": "string"
+    },
+    "centroid_lat": {
+      "description": "Latitudine del centroide della particella (da Catastomappe API)",
+      "type": "number"
+    },
+    "centroid_lng": {
+      "description": "Longitudine del centroide della particella (da Catastomappe API)",
+      "type": "number"
+    },
+    "classe_catastale": {
+      "description": "Classe catastale (1\u20137)",
+      "type": "string"
+    },
+    "codice_comune_catasto": {
+      "description": "Codice amministrativo catastale del comune (es. B042_) \u2014 richiesto da Catastomappe API",
+      "type": "string"
     },
     "comune": {
-      "type": "string",
-      "description": "Comune"
+      "description": "Nome del comune (auto-popolato da ComuneItalia.nome)",
+      "type": "string"
     },
-    "foglio": {
-      "type": "string",
-      "description": "Numero foglio catastale"
+    "comune_id": {
+      "description": "ID del record ComuneItalia",
+      "type": "string"
     },
-    "particella": {
-      "type": "string",
-      "description": "Numero particella"
+    "consistenza": {
+      "description": "Consistenza: vani, mq o ettari secondo la tipologia",
+      "type": "string"
     },
-    "subalterno": {
-      "type": "string",
-      "description": "Subalterno (opzionale)"
+    "cost": {
+      "default": 9.9,
+      "description": "Costo base della query in euro (include geometria interattiva Catastomappe)",
+      "type": "number"
+    },
+    "data_visura": {
+      "description": "Data visura catastale (ISO 8601)",
+      "type": "string"
+    },
+    "estratto_mappa_cost": {
+      "default": 10,
+      "description": "Costo upsell estratto mappa ufficiale AdE (Openapi.com /estratto_mappa)",
+      "type": "number"
+    },
+    "estratto_mappa_richiesto": {
+      "default": false,
+      "description": "True se l'utente ha acquistato l'estratto mappa ufficiale AdE",
+      "type": "boolean"
+    },
+    "estratto_mappa_status": {
+      "default": "not_requested",
+      "description": "Stato della richiesta estratto mappa ufficiale",
+      "enum": [
+        "not_requested",
+        "pending",
+        "completed",
+        "failed"
+      ],
+      "type": "string"
     },
     "finalita": {
-      "type": "string",
+      "description": "Finalit\u00e0 dell'analisi",
       "enum": [
         "acquisto_privato",
         "investimento",
@@ -36,25 +77,126 @@
         "due_diligence",
         "valutazione_professionale"
       ],
-      "description": "Finalit\u00e0 dell'analisi"
+      "type": "string"
+    },
+    "foglio": {
+      "description": "Numero foglio catastale",
+      "type": "string"
+    },
+    "fonte_dati_catastali": {
+      "default": "tbd",
+      "description": "Fonte dati catastali strutturati",
+      "enum": [
+        "openapi_com",
+        "catastomappe",
+        "sister_manual",
+        "input_utente",
+        "tbd"
+      ],
+      "type": "string"
+    },
+    "geometry_geojson": {
+      "description": "Geometria GeoJSON della particella (Polygon) \u2014 fonte Catastomappe. Inclusa nel piano base.",
+      "type": "object"
+    },
+    "indirizzo_catastale": {
+      "description": "Indirizzo risultante dalla visura catastale",
+      "type": "string"
+    },
+    "intestatari": {
+      "description": "Lista intestatari catastali (nome, quota)",
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "mappa_image_url": {
+      "description": "URL immagine estratto mappa ufficiale AdE (disponibile solo se estratto_mappa_richiesto=true)",
+      "type": "string"
+    },
+    "note": {
+      "description": "Note interne o anomalie",
+      "type": "string"
+    },
+    "particella": {
+      "description": "Numero particella (mappale)",
+      "type": "string"
+    },
+    "piano_tipo": {
+      "description": "Tipo piano urbanistico vigente (auto-popolato da ComuneItalia.piano_tipo)",
+      "type": "string"
+    },
+    "provincia": {
+      "description": "Provincia (auto-popolata)",
+      "type": "string"
+    },
+    "regione": {
+      "description": "Regione italiana (auto-popolata)",
+      "type": "string"
+    },
+    "report_data": {
+      "description": "JSON con tutti i dati del report (analisi AI, dati urbanistici, ecc.)",
+      "type": "object"
+    },
+    "report_url": {
+      "description": "URL al PDF del report finale elaborato da UrbiCheck",
+      "type": "string"
+    },
+    "sigla_provincia": {
+      "description": "Sigla provincia (auto-popolata)",
+      "type": "string"
     },
     "status": {
-      "type": "string",
+      "default": "pending",
+      "description": "Stato elaborazione query",
       "enum": [
+        "pending",
+        "processing",
+        "completed",
+        "failed"
+      ],
+      "type": "string"
+    },
+    "subalterno": {
+      "description": "Subalterno (opzionale)",
+      "type": "string"
+    },
+    "superficie_mq": {
+      "description": "Superficie della particella in mq (calcolata dalla geometria o da visura)",
+      "type": "number"
+    },
+    "visura_cost": {
+      "default": 5,
+      "description": "Costo upsell visura catastale ufficiale (Openapi.com /visura_catastale)",
+      "type": "number"
+    },
+    "visura_openapi_id": {
+      "description": "ID visura catastale su Openapi.com (per polling status)",
+      "type": "string"
+    },
+    "visura_pdf_url": {
+      "description": "URL PDF visura catastale ufficiale \u2014 disponibile solo se visura_richiesta=true",
+      "type": "string"
+    },
+    "visura_richiesta": {
+      "default": false,
+      "description": "True se l'utente ha acquistato la visura catastale ufficiale (\u20ac5)",
+      "type": "boolean"
+    },
+    "visura_status": {
+      "default": "not_requested",
+      "description": "Stato della richiesta visura catastale ufficiale",
+      "enum": [
+        "not_requested",
         "pending",
         "completed",
         "failed"
       ],
-      "default": "pending"
+      "type": "string"
     },
-    "report_data": {
-      "type": "object",
-      "description": "JSON con tutti i dati del report generato"
-    },
-    "cost": {
-      "type": "number",
-      "default": 9.9,
-      "description": "Costo della query in euro"
+    "zona_censuaria": {
+      "description": "Zona censuaria",
+      "type": "string"
     }
   },
   "required": [
@@ -62,5 +204,45 @@
     "comune",
     "foglio",
     "particella"
-  ]
+  ],
+  "type": "object",
+  "rls": {
+    "create": {},
+    "read": {
+      "$or": [
+        {
+          "created_by": "{{user.email}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "update": {
+      "$or": [
+        {
+          "created_by": "{{user.email}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "delete": {
+      "$or": [
+        {
+          "created_by": "{{user.email}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    }
+  }
 }
