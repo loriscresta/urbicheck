@@ -1,11 +1,12 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
   Map, Shield, Droplets, Activity, ExternalLink, Train, Waves,
-  Loader2, CheckCircle2, AlertTriangle, Info, ChevronDown, ChevronUp
+  Loader2, CheckCircle2, AlertTriangle, Info, XCircle
 } from "lucide-react";
+import { base44 } from "@/api/base44Client";
 import { wfsLiguria } from "@/functions/wfsLiguria";
 
 // ── Vincoli Paesaggistici Card ──
@@ -348,27 +349,87 @@ function ZonaUrbanisticaCard({ data }) {
 }
 
 // ── Main Panel ──
+const POLL_INTERVAL_MS = 3000;
+const POLL_TIMEOUT_MS = 120000; // 2 min max
+
 export default function WfsLiguriaPanel({ query, onComplete }) {
-  const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState(null);
+  const [launching, setLaunching] = useState(false);
+  const [polling, setPolling] = useState(false);
+  const [wfsData, setWfsData] = useState(query?.report_data?.wfs_liguria || null);
   const [error, setError] = useState('');
+  const pollRef = useRef(null);
+  const pollStartRef = useRef(null);
 
-  const existingWfs = query?.report_data?.wfs_liguria;
-
-  const handleAnalyze = async () => {
-    setLoading(true);
-    setError('');
-    const resp = await wfsLiguria({ query_id: query.id });
-    setLoading(false);
-    if (resp.data?.success) {
-      setResult(resp.data.report);
-      if (onComplete) onComplete();
-    } else {
-      setError(resp.data?.errore || resp.data?.error || "Errore durante l'analisi WFS.");
+  // If query already has wfs data on mount, show it
+  useEffect(() => {
+    if (query?.report_data?.wfs_liguria) {
+      setWfsData(query.report_data.wfs_liguria);
     }
+  }, [query?.id]);
+
+  const stopPolling = () => {
+    if (pollRef.current) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+    setPolling(false);
   };
 
-  const wfsData = result || existingWfs;
+  const startPolling = () => {
+    setPolling(true);
+    pollStartRef.current = Date.now();
+    pollRef.current = setInterval(async () => {
+      // Timeout guard
+      if (Date.now() - pollStartRef.current > POLL_TIMEOUT_MS) {
+        stopPolling();
+        setError("Analisi scaduta (timeout 2 min). Riprova.");
+        return;
+      }
+      try {
+        const results = await base44.entities.CadastralQuery.filter({ id: query.id });
+        const updated = results[0];
+        if (!updated) return;
+        if (updated.status === 'completed' && updated.report_data?.wfs_liguria) {
+          stopPolling();
+          setWfsData(updated.report_data.wfs_liguria);
+          if (onComplete) onComplete();
+        } else if (updated.status === 'failed') {
+          stopPolling();
+          setError("Analisi fallita. Riprova.");
+        }
+      } catch (_e) {
+        // Network hiccup — keep polling
+      }
+    }, POLL_INTERVAL_MS);
+  };
+
+  useEffect(() => () => stopPolling(), []);
+
+  const handleAnalyze = async () => {
+    setLaunching(true);
+    setError('');
+    setWfsData(null);
+    try {
+      await wfsLiguria({ query_id: query.id });
+      // Function saved results directly — check immediately then poll
+      const results = await base44.entities.CadastralQuery.filter({ id: query.id });
+      const updated = results[0];
+      if (updated?.status === 'completed' && updated?.report_data?.wfs_liguria) {
+        setWfsData(updated.report_data.wfs_liguria);
+        if (onComplete) onComplete();
+        setLaunching(false);
+        return;
+      }
+      // Not yet — start polling
+      startPolling();
+    } catch (err) {
+      // Function call failed entirely — still try polling in case it saved before throwing
+      startPolling();
+    }
+    setLaunching(false);
+  };
+
+  const isLoading = launching || polling;
   const risultati = wfsData?.risultati;
 
   return (
@@ -376,9 +437,9 @@ export default function WfsLiguriaPanel({ query, onComplete }) {
       style={{ border: '2px solid #1A3A6B', background: '#fff', marginTop: '1.5rem' }}>
 
       {/* Header */}
-      <div style={{ background: '#1A3A6B', padding: '1rem 1.25rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+      <div style={{ background: '#1A3A6B', padding: '1rem 1.25rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.75rem' }}>
         <div className="flex items-center gap-3">
-          <Map className="w-4 h-4 text-white" />
+          <Map className="w-4 h-4 text-white shrink-0" />
           <div>
             <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontWeight: 700, fontSize: '0.75rem', color: '#fff', textTransform: 'uppercase', letterSpacing: '1px' }}>
               Analisi Urbanistica — Regione Liguria
@@ -389,40 +450,65 @@ export default function WfsLiguriaPanel({ query, onComplete }) {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {wfsData && (
+          {wfsData && !isLoading && (
             <Badge className="bg-emerald-500 text-white text-[10px] border-0">
               <CheckCircle2 className="w-3 h-3 mr-1" /> Completata
             </Badge>
           )}
-          <Button
+          {polling && (
+            <Badge className="bg-amber-500 text-white text-[10px] border-0">
+              <Loader2 className="w-3 h-3 mr-1 animate-spin" /> In corso…
+            </Badge>
+          )}
+          <button
             onClick={handleAnalyze}
-            disabled={loading}
-            style={{ background: '#B33A2A', color: '#fff', fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.65rem', fontWeight: 700, letterSpacing: '1px', textTransform: 'uppercase', border: 'none', height: '2.25rem', padding: '0 1.25rem', cursor: loading ? 'not-allowed' : 'pointer' }}
+            disabled={isLoading}
+            style={{
+              background: isLoading ? '#7A7268' : '#B33A2A',
+              color: '#fff',
+              fontFamily: "'IBM Plex Mono', monospace",
+              fontSize: '0.65rem',
+              fontWeight: 700,
+              letterSpacing: '1px',
+              textTransform: 'uppercase',
+              border: 'none',
+              height: '2.25rem',
+              padding: '0 1.25rem',
+              cursor: isLoading ? 'not-allowed' : 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.4rem',
+            }}
           >
-            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : wfsData ? 'Riesegui →' : 'Avvia Analisi →'}
-          </Button>
+            {launching && <Loader2 className="w-3 h-3 animate-spin" />}
+            {isLoading ? (launching ? 'Avvio…' : 'In corso…') : wfsData ? 'Riesegui →' : 'Avvia Analisi →'}
+          </button>
         </div>
       </div>
 
-      {/* Loading */}
-      {loading && (
-        <div style={{ padding: '2rem', textAlign: 'center' }}>
+      {/* Loading state */}
+      {isLoading && (
+        <div style={{ padding: '2rem', textAlign: 'center', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
           <Loader2 className="w-6 h-6 animate-spin mx-auto mb-3" style={{ color: '#1A3A6B' }} />
           <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.7rem', color: '#7A7268' }}>
-            Geocoding → EPSG:3003 → WFS PAI + Overpass API…
+            {launching ? 'Avvio analisi…' : 'Geocoding → EPSG:3003 → WFS PAI + Overpass API…'}
+          </p>
+          <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.6rem', color: '#C4BAA8', marginTop: 6 }}>
+            Attendi, elaborazione in corso (30–60s)
           </p>
         </div>
       )}
 
       {/* Error */}
-      {error && !loading && (
-        <div style={{ padding: '1rem 1.25rem', borderTop: '1px solid #C4BAA8' }}>
-          <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.7rem', color: '#B33A2A' }}>✗ {error}</p>
+      {error && !isLoading && (
+        <div style={{ padding: '1rem 1.25rem', borderTop: '1px solid #fca5a5', background: '#fff7f7', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <XCircle className="w-4 h-4 text-red-500 shrink-0" />
+          <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.7rem', color: '#B33A2A' }}>{error}</p>
         </div>
       )}
 
       {/* Results */}
-      {wfsData && !loading && (
+      {wfsData && !isLoading && (
         <>
           {/* Meta */}
           <div style={{ padding: '0.6rem 1.25rem', borderBottom: '1px solid #C4BAA8', background: '#F4EFE6', display: 'flex', flexWrap: 'wrap', gap: '1.5rem', alignItems: 'center' }}>
@@ -435,6 +521,11 @@ export default function WfsLiguriaPanel({ query, onComplete }) {
                   EPSG:3003 → X:{wfsData.coordinate.x_gauss_boaga?.toLocaleString('it-IT')} Y:{wfsData.coordinate.y_gauss_boaga?.toLocaleString('it-IT')}
                 </span>
               </>
+            )}
+            {wfsData.geocoding_error && (
+              <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.6rem', color: '#B33A2A' }}>
+                ⚠ Geocoding parziale: {wfsData.geocoding_error}
+              </span>
             )}
             {wfsData.data_elaborazione && (
               <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.6rem', color: '#7A7268' }}>
@@ -465,7 +556,7 @@ export default function WfsLiguriaPanel({ query, onComplete }) {
       )}
 
       {/* Idle */}
-      {!wfsData && !loading && !error && (
+      {!wfsData && !isLoading && !error && (
         <div style={{ padding: '1.5rem 1.25rem', borderTop: '1px solid #C4BAA8' }}>
           <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.7rem', color: '#7A7268', lineHeight: 1.8 }}>
             Analisi urbanistica ibrida per la Liguria:<br />
