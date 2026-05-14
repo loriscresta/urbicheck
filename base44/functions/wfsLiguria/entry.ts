@@ -84,6 +84,11 @@ Deno.serve(async (req) => {
     const query = queries[0];
     if (!query) return Response.json({ error: 'Query not found' }, { status: 404 });
 
+    // Ownership check: only the creator or an admin can run this analysis
+    if (query.created_by !== user.email && user.role !== 'admin') {
+      return Response.json({ error: 'Forbidden: non sei il proprietario di questa query' }, { status: 403 });
+    }
+
     if (query.regione !== 'Liguria') {
       return Response.json({ error: 'Questo servizio è disponibile solo per la Liguria' }, { status: 400 });
     }
