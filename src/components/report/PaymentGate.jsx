@@ -6,7 +6,6 @@ import { Loader2, Unlock, ArrowLeft, AlertTriangle, CreditCard } from "lucide-re
 import { Button } from "@/components/ui/button";
 import { motion } from "framer-motion";
 
-const DEV_EMAIL = "loris.cresta@gmail.com";
 const PRICE = 9.90;
 
 export default function PaymentGate({ query, onPaid }) {
@@ -61,8 +60,8 @@ export default function PaymentGate({ query, onPaid }) {
         status: "completed",
       });
 
-      // Dev mode: auto-refund dopo 60s
-      if (user.email === DEV_EMAIL) {
+      // Dev mode: auto-refund dopo 60s (solo admin)
+      if (user.role === "admin") {
         setTimeout(async () => {
           try {
             const latestCredits = await base44.entities.UserCredits.filter({ user_email: user.email });
