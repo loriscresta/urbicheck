@@ -510,7 +510,9 @@ export async function generatePDF(query, financialSnapshot) {
   }
 
   // ── SEZ 7 — ANALISI FINANZIARIA ───────────────────────────────────────────
-  const mq = parseFloat(fd.superficie) || 80;
+  // BUG2: usa superficie reale dall'entità (visura/catasto resolver), poi fin_data, poi default 80
+  const mqRaw = query.superficie_mq || parseFloat(fd.superficie) || null;
+  const mq = mqRaw ? parseFloat(mqRaw) : 80;
   const prezzoAcquisto = parseFloat(fd.prezzo_acquisto) || 0;
   const spesePerc = parseFloat(fd.spese_accessorie) || 10;
   const RISTR_COSTS = {
@@ -529,7 +531,14 @@ export async function generatePDF(query, financialSnapshot) {
   const totMid = prezzoAcquisto + ristrMid + spese;
   const totMax = prezzoAcquisto + ristrMax + spese;
 
-  // We always render financial section if there's ANY financial data OR if it's an investment/asta finalita
+  // BUG3: usa valore OMI come proxy se prezzo non inserito
+  const snap = financialSnapshot || {};
+  const omi = snap.omi || null;
+  const score = snap.score || null;
+  const omiProxyPrezzo = prezzoAcquisto === 0 && omi ? (omi.omi_min_mq + omi.omi_max_mq) / 2 * mq : 0;
+  const prezzoEffettivo = prezzoAcquisto > 0 ? prezzoAcquisto : omiProxyPrezzo;
+  const usandoProxyPrezzo = prezzoAcquisto === 0 && omiProxyPrezzo > 0;
+
   const FIN_FINALITA = ["investimento", "sviluppo_immobiliare", "asta_giudiziaria"];
   const showFinancial = FIN_FINALITA.includes(query.finalita) || prezzoAcquisto > 0;
 
@@ -538,10 +547,18 @@ export async function generatePDF(query, financialSnapshot) {
     if (y > 230) { y = newPage(doc); }
     y = sectionHeader(doc, margin, y, "7", "ANALISI FINANZIARIA E DUE DILIGENCE");
 
-    // OMI data from financialSnapshot (passed in from page) or fallback note
-    const snap = financialSnapshot || {};
-    const omi = snap.omi || null;
-    const score = snap.score || null;
+    // Avviso superficie non reale
+    if (!mqRaw) {
+      doc.setFont("helvetica", "italic"); doc.setFontSize(7.5); doc.setTextColor(150, 100, 0);
+      doc.text("Nota: superficie non disponibile — calcoli su 80 mq di default. Inserire superficie reale per risultati precisi.", margin + 2, y, { maxWidth: 166 }); y += 6;
+      doc.setTextColor(50, 50, 50);
+    }
+    // Avviso prezzo proxy
+    if (usandoProxyPrezzo) {
+      doc.setFont("helvetica", "italic"); doc.setFontSize(7.5); doc.setTextColor(150, 100, 0);
+      doc.text("Avviso: prezzo d'acquisto non inserito — rendimento calcolato su valore OMI stimato (" + fmtEur(prezzoEffettivo) + ").", margin + 2, y, { maxWidth: 166 }); y += 6;
+      doc.setTextColor(50, 50, 50);
+    }
 
     if (omi) {
       y = subHeader(doc, margin, y, "Valori OMI — Osservatorio Mercato Immobiliare (stime AI — verifica su agenziaentrate.gov.it)");
@@ -553,7 +570,7 @@ export async function generatePDF(query, financialSnapshot) {
         ["Semestre riferimento", omi.semestre_riferimento || "—"],
         ["Fascia OMI", omi.fascia_omi || "—"],
         ["Valore mercato /mq", fmtEur(omi.omi_min_mq) + " – " + fmtEur(omi.omi_max_mq)],
-        ["Valore stimato oggi (" + mq + " mq)", fmtEur(valoreMercatoMin) + " – " + fmtEur(valoreMercatoMax)],
+        ["Valore stimato oggi (" + mq + " mq" + (mqRaw ? "" : " — stima") + ")", fmtEur(valoreMercatoMin) + " – " + fmtEur(valoreMercatoMax)],
         ["Post-ristrutturazione /mq", fmtEur(omi.omi_post_ristr_min) + " – " + fmtEur(omi.omi_post_ristr_max)],
         ["Valore post-ristr (" + mq + " mq)", fmtEur(valorePostRistrMin) + " – " + fmtEur(valorePostRistrMax)],
         ["Canone locazione /mq/mese", fmtEur(omi.canone_locazione_min) + " – " + fmtEur(omi.canone_locazione_max)],
@@ -586,8 +603,23 @@ export async function generatePDF(query, financialSnapshot) {
       y += 3;
     }
 
-    // Stima costi ristrutturazione
-    if (prezzoAcquisto > 0) {
+    // BUG5: Stima costi ristrutturazione — sempre presente per finalità investimento
+    // Costi corretti: ottimo=manutenzione, buono=upgrade, da_ristrutturare=ristr., fatiscente=integrale
+    const RISTR_COSTS_PDF = {
+      ottimo:           { min: 150,  mid: 250,  max: 400  },
+      buono:            { min: 400,  mid: 600,  max: 900  },
+      da_ristrutturare: { min: 700,  mid: 950,  max: 1200 },
+      fatiscente:       { min: 900,  mid: 1150, max: 1400 },
+    };
+    const costsCorretti = RISTR_COSTS_PDF[statoKey] || RISTR_COSTS_PDF.buono;
+    const ristrMinC = costsCorretti.min * mq;
+    const ristrMidC = costsCorretti.mid * mq;
+    const ristrMaxC = costsCorretti.max * mq;
+    const totMinC = prezzoAcquisto + ristrMinC + spese;
+    const totMidC = prezzoAcquisto + ristrMidC + spese;
+    const totMaxC = prezzoAcquisto + ristrMaxC + spese;
+
+    if (FIN_FINALITA.includes(query.finalita)) {
       y += 4;
       if (y > 240) { y = newPage(doc); }
       y = subHeader(doc, margin, y, "Stima Costi Ristrutturazione — 3 Scenari (stato: " + (fd.stato_conservativo || "buono") + ", " + mq + " mq)");
@@ -602,12 +634,14 @@ export async function generatePDF(query, financialSnapshot) {
       doc.text("Premium", 150, y);
       y += 9;
 
+      const prezzoLabel = prezzoAcquisto > 0 ? fmtEur(prezzoAcquisto) : "—";
+      const speseLabel = prezzoAcquisto > 0 ? fmtEur(spese) : "—";
       const ristrRows = [
-        ["Costo ristr. (€/mq)", String(costs.min), String(costs.mid), String(costs.max)],
-        ["Totale ristrutturazione", fmtEur(ristrMin), fmtEur(ristrMid), fmtEur(ristrMax)],
-        ["Prezzo acquisto", fmtEur(prezzoAcquisto), fmtEur(prezzoAcquisto), fmtEur(prezzoAcquisto)],
-        ["Spese accessorie (" + spesePerc + "%)", fmtEur(spese), fmtEur(spese), fmtEur(spese)],
-        ["INVESTIMENTO TOTALE", fmtEur(totMin), fmtEur(totMid), fmtEur(totMax)],
+        ["Costo ristr. (€/mq)", String(costsCorretti.min), String(costsCorretti.mid), String(costsCorretti.max)],
+        ["Totale ristrutturazione", fmtEur(ristrMinC), fmtEur(ristrMidC), fmtEur(ristrMaxC)],
+        ["Prezzo acquisto", prezzoLabel, prezzoLabel, prezzoLabel],
+        ["Spese accessorie (" + spesePerc + "%)", speseLabel, speseLabel, speseLabel],
+        ["INVESTIMENTO TOTALE", prezzoAcquisto > 0 ? fmtEur(totMinC) : "—", prezzoAcquisto > 0 ? fmtEur(totMidC) : "—", prezzoAcquisto > 0 ? fmtEur(totMaxC) : "—"],
       ];
       doc.setFontSize(8);
       ristrRows.forEach(([label, v1, v2, v3], i) => {
@@ -668,12 +702,12 @@ export async function generatePDF(query, financialSnapshot) {
       const canoneMaxMese = (omi.canone_locazione_max || 0) * mq;
       const canoneMinAnno = canoneMinMese * 12;
       const canoneMaxAnno = canoneMaxMese * 12;
-      const rendLordoMin = prezzoAcquisto > 0 ? (canoneMinAnno / prezzoAcquisto) * 100 : 0;
-      const rendLordoMax = prezzoAcquisto > 0 ? (canoneMaxAnno / prezzoAcquisto) * 100 : 0;
+      const rendLordoMin = prezzoEffettivo > 0 ? (canoneMinAnno / prezzoEffettivo) * 100 : 0;
+      const rendLordoMax = prezzoEffettivo > 0 ? (canoneMaxAnno / prezzoEffettivo) * 100 : 0;
       const rendNettoMin = rendLordoMin * 0.7;
       const rendNettoMax = rendLordoMax * 0.7;
-      const paybackMin = canoneMaxAnno * 0.7 > 0 ? prezzoAcquisto / (canoneMaxAnno * 0.7) : 0;
-      const paybackMax = canoneMinAnno * 0.7 > 0 ? prezzoAcquisto / (canoneMinAnno * 0.7) : 0;
+      const paybackMin = canoneMaxAnno * 0.7 > 0 ? prezzoEffettivo / (canoneMaxAnno * 0.7) : 0;
+      const paybackMax = canoneMinAnno * 0.7 > 0 ? prezzoEffettivo / (canoneMinAnno * 0.7) : 0;
 
       y += 4;
       if (y > 240) { y = newPage(doc); }
@@ -758,7 +792,10 @@ export async function generatePDF(query, financialSnapshot) {
         ["Coordinate WGS84 (lat, lon)", `${Number(coordLat2).toFixed(6)}, ${Number(coordLon2).toFixed(6)}`],
         ...(catastoData2.inspire_id ? [["INSPIRE ID", catastoData2.inspire_id]] : []),
         ["Fonte coordinate", catastoData2.fonte || "OnData CC BY 4.0"],
-        ...(query.sezione_catastale ? [["Sezione catastale", query.sezione_catastale]] : []),
+        // BUG4: non mostrare "NULL" come sezione catastale
+        ...(query.sezione_catastale && query.sezione_catastale !== "NULL" && query.sezione_catastale !== "null"
+          ? [["Sezione catastale", query.sezione_catastale]]
+          : []),
       ];
       doc.setFontSize(8.5);
       mapRows.forEach(([k, v], i) => {
@@ -902,6 +939,38 @@ export async function generatePDF(query, financialSnapshot) {
           doc.setTextColor(50, 50, 50); y += 8;
         });
       }
+    }
+
+    // BUG6: Classificazione sismica — da WFS se disponibile, altrimenti default Piemonte
+    y += 3;
+    if (y > 265) { y = newPage(doc); }
+    y = subHeader(doc, margin, y, "Classificazione Sismica (Ordinanza PCM 3274/2003 — NTC 2018)");
+    if (wfsSismica) {
+      stripe(doc, margin, y, true);
+      doc.setFillColor(240, 248, 255); doc.rect(margin, y - 4, 170, 8, "F");
+      doc.setFont("helvetica", "bold"); doc.setFontSize(8.5); doc.setTextColor(50, 50, 50);
+      doc.text("Zona sismica", margin + 2, y);
+      doc.setFont("helvetica", "normal");
+      const sismicaText = "Zona " + wfsSismica.zona + (wfsSismica.descrizione ? " — " + wfsSismica.descrizione : "");
+      doc.text(sismicaText, 90, y, { maxWidth: 98 });
+      y += 8;
+      if (wfsSismica.normativa || wfsSismica.nota) {
+        doc.setFont("helvetica", "italic"); doc.setFontSize(7.5); doc.setTextColor(100, 100, 100);
+        doc.text(wfsSismica.normativa || wfsSismica.nota || "", margin + 2, y, { maxWidth: 166 }); y += 5;
+        doc.setTextColor(50, 50, 50);
+      }
+    } else if (isPiemonte) {
+      stripe(doc, margin, y, true);
+      doc.setFillColor(240, 248, 255); doc.rect(margin, y - 4, 170, 8, "F");
+      doc.setFont("helvetica", "bold"); doc.setFontSize(8.5); doc.setTextColor(50, 50, 50);
+      doc.text("Zona sismica", margin + 2, y);
+      doc.setFont("helvetica", "normal");
+      doc.text("Zona 3 — Media sismicita' — DGR n.6-887/2019 — NTC 2018", 90, y, { maxWidth: 98 });
+      y += 8;
+    } else {
+      doc.setFont("helvetica", "italic"); doc.setFontSize(8); doc.setTextColor(150, 100, 0);
+      doc.text("Classificazione sismica: eseguire analisi WFS per dato ufficiale.", margin + 2, y); y += 7;
+      doc.setTextColor(50, 50, 50);
     }
   }
 

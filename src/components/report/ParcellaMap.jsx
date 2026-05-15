@@ -50,24 +50,40 @@ export default function ParcellaMap({ lat, lon, geojsonPolygon, height = 280 }) 
         maxZoom: 19,
       }).addTo(map);
 
-      if (geojsonPolygon && geojsonPolygon.type === 'Polygon') {
-        // Disegna poligono
-        const layer = L.geoJSON(geojsonPolygon, {
+      // Supporta sia GeoJSON Polygon che Feature (wrapper)
+      const geomToCheck = geojsonPolygon?.type === 'Feature'
+        ? geojsonPolygon.geometry
+        : geojsonPolygon;
+
+      if (geomToCheck && (geomToCheck.type === 'Polygon' || geomToCheck.type === 'MultiPolygon')) {
+        // Disegna poligono con stile ufficiale AdE
+        const layer = L.geoJSON(geomToCheck, {
           style: {
-            color: '#1A3A6B',
-            weight: 2.5,
-            fillColor: '#3b82f6',
-            fillOpacity: 0.25,
+            color: '#C0392B',
+            weight: 2,
+            fillColor: '#F5A623',
+            fillOpacity: 0.3,
           },
         }).addTo(map);
 
+        // Aggiunge anche il marker centroide
+        const icon = L.divIcon({
+          className: '',
+          html: `<div style="width:10px;height:10px;background:#C0392B;border:2px solid white;border-radius:50%;box-shadow:0 1px 4px rgba(0,0,0,0.5);"></div>`,
+          iconSize: [10, 10],
+          iconAnchor: [5, 5],
+        });
+        L.marker([lat, lon], { icon })
+          .addTo(map)
+          .bindPopup(`📍 Centroide — AdE WFS`);
+
         try {
-          map.fitBounds(layer.getBounds(), { padding: [20, 20] });
+          map.fitBounds(layer.getBounds(), { padding: [30, 30] });
         } catch (_e) {
           map.setView([lat, lon], 17);
         }
       } else {
-        // Solo marker puntuale
+        // Solo marker puntuale (fallback quando poligono non disponibile)
         const icon = L.divIcon({
           className: '',
           html: `<div style="width:16px;height:16px;background:#1A3A6B;border:3px solid #B33A2A;border-radius:50%;box-shadow:0 2px 6px rgba(0,0,0,0.4);"></div>`,
@@ -103,7 +119,10 @@ export default function ParcellaMap({ lat, lon, geojsonPolygon, height = 280 }) 
         fontSize: '0.55rem',
         color: '#7A7268',
       }}>
-        {geojsonPolygon ? '🟦 Poligono particella — AdE WFS CC-BY 4.0' : '📍 Centroide — OnData CC BY 4.0'}
+        {(geojsonPolygon?.type === 'Feature' ? geojsonPolygon.geometry : geojsonPolygon)?.type === 'Polygon' || (geojsonPolygon?.type === 'Feature' ? geojsonPolygon.geometry : geojsonPolygon)?.type === 'MultiPolygon'
+          ? '🟧 Poligono particella — AdE WFS CC-BY 4.0'
+          : '📍 Centroide — OnData CC BY 4.0 · Poligono non disponibile — vedi Geoportale AdE'
+        }
       </div>
     </div>
   );

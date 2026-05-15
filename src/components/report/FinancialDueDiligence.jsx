@@ -39,7 +39,10 @@ export default function FinancialDueDiligence({ query, finData, onSnapshotReady 
 
   const r = query.report_data || {};
   const fd = finData || {};
-  const mq = parseFloat(fd.superficie) || 80;
+  // BUG2: usa superficie reale dall'entità (visura/catasto), poi form, poi default 80
+  const mqRaw = query.superficie_mq || parseFloat(fd.superficie) || null;
+  const mq = mqRaw ? parseFloat(mqRaw) : 80;
+  const mqNote = !mqRaw ? " (superficie non disponibile — valore default 80 mq)" : "";
   const prezzoAcquisto = parseFloat(fd.prezzo_acquisto) || 0;
   const spesePerc = parseFloat(fd.spese_accessorie) || 10;
   const statoKey = (fd.stato_conservativo || "buono").replace(/\s.*/, "").toLowerCase();
@@ -163,11 +166,17 @@ Fornisci un punteggio complessivo e analisi sintetica.`,
   const roiFlip = totMid > 0 ? (margineLordo / totMid) * 100 : 0;
   const breakEvenMq = totMid > 0 && mq > 0 ? totMid / mq : 0;
 
+  // BUG3: usa valore OMI come proxy se prezzo non inserito
+  const prezzoEffettivo = prezzoAcquisto > 0
+    ? prezzoAcquisto
+    : (omiData ? (omiData.omi_min_mq + omiData.omi_max_mq) / 2 * mq : 0);
+  const usandoProxyPrezzo = prezzoAcquisto === 0 && prezzoEffettivo > 0;
+
   // Affitto calcs
   const canoneAnnuo = omiData ? ((omiData.canone_locazione_min + omiData.canone_locazione_max) / 2) * mq : null;
-  const rendimentoLordo = canoneAnnuo && totMid > 0 ? (canoneAnnuo / totMid) * 100 : null;
+  const rendimentoLordo = canoneAnnuo && prezzoEffettivo > 0 ? (canoneAnnuo / prezzoEffettivo) * 100 : null;
   const rendimentoNetto = rendimentoLordo ? rendimentoLordo * 0.79 : null;
-  const payback = canoneAnnuo && rendimentoNetto ? totMid / (canoneAnnuo * 0.79) : null;
+  const payback = canoneAnnuo && rendimentoNetto ? prezzoEffettivo / (canoneAnnuo * 0.79) : null;
 
   // Affitto breve
   const nottiAnno = 219;
@@ -177,6 +186,21 @@ Fornisci un punteggio complessivo e analisi sintetica.`,
 
   return (
     <div className="space-y-6">
+      {/* Avviso superficie non disponibile */}
+      {!mqRaw && (
+        <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-800">
+          <span className="shrink-0">⚠</span>
+          <span>Superficie non inserita — calcoli basati su 80 mq di default. Inserisci la superficie reale nel form per risultati precisi.</span>
+        </div>
+      )}
+      {/* Avviso prezzo proxy */}
+      {usandoProxyPrezzo && omiData && (
+        <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-800">
+          <span className="shrink-0">⚠</span>
+          <span>Prezzo d'acquisto non inserito — rendimento calcolato su valore OMI stimato ({fmtEur(prezzoEffettivo)}). Per un'analisi reale inserisci il prezzo richiesto nel form.</span>
+        </div>
+      )}
+
       {/* BLOCCO 1 — OMI */}
       {omiData && (
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
@@ -196,9 +220,9 @@ Fornisci un punteggio complessivo e analisi sintetica.`,
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
               {[
                 { label: "Valore mercato attuale /mq", value: `${fmtEur(omiData.omi_min_mq)} – ${fmtEur(omiData.omi_max_mq)}` },
-                { label: `Valore stimato OGGI (${mq}mq)`, value: `${fmtEur(valoreMercatoMin)} – ${fmtEur(valoreMercatoMax)}` },
+                { label: `Valore stimato OGGI (${mq} mq${mqNote})`, value: `${fmtEur(valoreMercatoMin)} – ${fmtEur(valoreMercatoMax)}` },
                 { label: "Post-ristrutturazione /mq", value: `${fmtEur(omiData.omi_post_ristr_min)} – ${fmtEur(omiData.omi_post_ristr_max)}` },
-                { label: `Valore POST-RISTR (${mq}mq)`, value: `${fmtEur(valorePostRistrMin)} – ${fmtEur(valorePostRistrMax)}` },
+                { label: `Valore POST-RISTR (${mq} mq)`, value: `${fmtEur(valorePostRistrMin)} – ${fmtEur(valorePostRistrMax)}` },
               ].map(d => (
                 <div key={d.label} className="bg-muted/40 rounded-lg p-3">
                   <p className="text-xs text-muted-foreground mb-1">{d.label}</p>
@@ -388,7 +412,10 @@ Fornisci un punteggio complessivo e analisi sintetica.`,
                     <CheckCircle2 className="w-4 h-4" /> Punti di forza
                   </p>
                   <ul className="space-y-1">
-                    {scoreData.punti_forza.slice(0, 3).map((p, i) => (
+                    {scoreData.punti_forza
+                      // BUG3: filtra punti forza che menzionano prezzo €0
+                      .filter(p => !(prezzoAcquisto === 0 && /prezzo|acquisto|€0|0€/i.test(p)))
+                      .slice(0, 3).map((p, i) => (
                       <li key={i} className="text-sm text-muted-foreground">• {p}</li>
                     ))}
                   </ul>
