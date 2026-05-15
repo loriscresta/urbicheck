@@ -21,6 +21,7 @@ import { generatePDF } from "@/lib/generateUrbiCheckPDF";
 import FinancialDueDiligence from "@/components/report/FinancialDueDiligence";
 import AttiRequestForm from "@/components/atti/AttiRequestForm";
 import WfsLiguriaPanel from "@/components/report/WfsLiguriaPanel";
+import ParcellaMap from "@/components/report/ParcellaMap";
 
 const FINALITA_LABELS = {
   acquisto_privato: "Acquisto privato",
@@ -591,13 +592,22 @@ export default function ReportPage() {
           </motion.div>
         )}
 
-        {/* === MAPPA CATASTALE — visibile SOLO se geometry_geojson è popolato (API Catastomappe) === */}
-        {/* Non renderizzare nulla se il campo è null/vuoto — nessun placeholder, nessun box blu */}
-        {query.geometry_geojson &&
-          Object.keys(query.geometry_geojson).length > 0 &&
-          query.geometry_geojson.type &&
-          null /* componente MappaParticella da aggiungere quando Catastomappe sarà integrata */
-        }
+        {/* === MAPPA CATASTALE — da catasto_resolver (OnData + AdE WFS) === */}
+        {(query.centroid_lat || r.catasto_data?.lat) && (
+          <ReportSection icon={MapPin} title="Mappa Particella Catastale" delay={0.05}>
+            <div className="mb-2 flex flex-wrap gap-4 text-xs text-muted-foreground">
+              <span>📍 WGS84: {(r.catasto_data?.lat || query.centroid_lat)?.toFixed(5)}, {(r.catasto_data?.lon || query.centroid_lng)?.toFixed(5)}</span>
+              {r.catasto_data?.inspire_id && <span>INSPIRE ID: {r.catasto_data.inspire_id}</span>}
+              {r.catasto_data?.fonte && <span className="italic">{r.catasto_data.fonte}</span>}
+            </div>
+            <ParcellaMap
+              lat={r.catasto_data?.lat || query.centroid_lat}
+              lon={r.catasto_data?.lon || query.centroid_lng}
+              geojsonPolygon={query.geometry_geojson || r.catasto_data?.geojson_polygon}
+              height={320}
+            />
+          </ReportSection>
+        )}
 
         {/* Valutazione Sintetica */}
         {r.valutazione_sintetica && isUnlocked && (

@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
+import { catasto_resolver } from "@/functions/catasto_resolver";
 import CadastralSearchForm from "@/components/search/CadastralSearchForm.jsx";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import { Shield, Info, Search } from "lucide-react";
@@ -26,6 +27,14 @@ export default function SearchPage() {
       report_data: { ...reportData, fin_data },
       cost: 9.90,
     });
+
+    // Risolvi coordinate precise in background (non bloccante)
+    catasto_resolver({
+      nome_comune: formData.comune,
+      foglio: formData.foglio,
+      particella: formData.particella,
+      query_id: query.id,
+    }).catch(() => {/* ignora errori — coordinate opzionali */});
 
     setIsLoading(false);
     navigate(`/report/${query.id}`);

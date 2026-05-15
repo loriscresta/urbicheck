@@ -132,6 +132,11 @@ export async function generatePDF(query, financialSnapshot) {
   let y = 38;
   y = sectionHeader(doc, margin, y, "1", "DATI IDENTIFICATIVI IMMOBILE");
 
+  const catastoData = r.catasto_data || {};
+  const hasCoords = catastoData.lat || query.centroid_lat;
+  const coordLat = catastoData.lat || query.centroid_lat;
+  const coordLon = catastoData.lon || query.centroid_lng;
+
   const rows1 = [
     ["Regione", query.regione],
     ["Provincia", query.provincia || "—"],
@@ -145,6 +150,11 @@ export async function generatePDF(query, financialSnapshot) {
     ["Zona urbanistica", r.zonizzazione?.zona_codice || r.zonizzazione?.destinazione_prevalente || "—"],
     ["Stato conservativo", fd.stato_conservativo || "—"],
     ["Rendita catastale", r.dati_catastali?.rendita_catastale || "Disponibile su visura ufficiale AdE"],
+    ...(hasCoords ? [
+      ["Coordinate WGS84 (lat, lon)", `${coordLat?.toFixed(5)}, ${coordLon?.toFixed(5)}`],
+      ...(catastoData.inspire_id ? [["INSPIRE ID", catastoData.inspire_id]] : []),
+      ["Fonte coordinate", catastoData.fonte || "OnData CC BY 4.0"],
+    ] : []),
   ];
 
   doc.setFontSize(9);
