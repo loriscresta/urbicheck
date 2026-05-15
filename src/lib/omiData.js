@@ -10,9 +10,9 @@
 
 const OMI_DB = {
   // ── PIEMONTE ──────────────────────────────────────────────────────────────
-  "A182": { // Alessandria
-    residenziale:  { valore_min: 850,  valore_max: 1350, loc_min: 4.0, loc_max: 6.5 },
-    zona_centrale: { valore_min: 1100, valore_max: 1800, loc_min: 5.5, loc_max: 8.5 },
+  "A182": { // Alessandria — OMI AdE 2024-II (fascia B semicentrale)
+    residenziale:  { valore_min: 850,  valore_max: 1350, loc_min: 4.5, loc_max: 7.0 },
+    zona_centrale: { valore_min: 1100, valore_max: 1600, loc_min: 5.5, loc_max: 8.0 },
     anno_sem: "2024-II", is_costiero: false,
   },
   "L219": { // Torino
@@ -186,8 +186,11 @@ export function calcolaTariffaNotteOMI(locMin, locMax, mq, isCostiero = false) {
   const stagionalita = isCostiero ? 1.5 : 1.0;
   const canoneMin = locMin * mq;
   const canoneMax = locMax * mq;
-  // Premium breve: 1.5x min, 2.5x max rispetto al canone mensile lungo termine
-  const notteMin = Math.round((canoneMin / 30) * 1.5 * stagionalita);
-  const notteMax = Math.round((canoneMax / 30) * 2.5 * stagionalita);
+  // Premium breve: 5x min, 7x max rispetto alla tariffa giornaliera equivalente
+  // Floor assoluto: min €50/notte, max €90/notte (Airbnb market minimum)
+  const notteMinCalc = Math.round((canoneMin / 30) * 5 * stagionalita);
+  const notteMaxCalc = Math.round((canoneMax / 30) * 7 * stagionalita);
+  const notteMin = isCostiero ? Math.max(80, notteMinCalc) : Math.max(50, notteMinCalc);
+  const notteMax = isCostiero ? Math.max(130, notteMaxCalc) : Math.max(90, notteMaxCalc);
   return { notte_min: notteMin, notte_max: notteMax };
 }

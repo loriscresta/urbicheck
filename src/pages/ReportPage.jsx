@@ -269,13 +269,49 @@ export default function ReportPage() {
         {/* Tipologia immobile / Dati Catastali */}
         {r.dati_catastali && (
           <ReportSection icon={Building2} title="Tipologia Immobile" delay={0.02}>
-            <DataRow label="Categoria catastale" value={r.dati_catastali.categoria} />
-            <DataRow label="Consistenza / Superficie stimata" value={r.dati_catastali.consistenza} />
-            <DataRow label="Classe" value={r.dati_catastali.classe} />
-            <DataRow label="Rendita Catastale" value={r.dati_catastali.rendita_catastale} />
-            <DataRow label="Zona Censuaria" value={r.dati_catastali.zona_censuaria} />
+            {/* Se visura caricata, usa sempre i dati reali dall'entity (non il testo generico AI) */}
+            <DataRow
+              label="Categoria catastale"
+              value={query.visura_uploaded && query.categoria_catastale
+                ? query.categoria_catastale
+                : r.dati_catastali.categoria}
+            />
+            <DataRow
+              label="Consistenza / Superficie"
+              value={query.visura_uploaded && query.vani
+                ? `${query.vani} vani`
+                : query.visura_uploaded && query.superficie_mq
+                ? `${query.superficie_mq} mq`
+                : r.dati_catastali.consistenza}
+            />
+            <DataRow
+              label="Classe"
+              value={query.visura_uploaded
+                ? (query.classe_catastale || "Vedi visura caricata")
+                : r.dati_catastali.classe}
+            />
+            <DataRow
+              label="Rendita Catastale"
+              value={query.visura_uploaded && query.rendita_catastale != null
+                ? `€${Number(query.rendita_catastale).toFixed(2)}`
+                : r.dati_catastali.rendita_catastale}
+            />
+            <DataRow
+              label="Zona Censuaria"
+              value={query.visura_uploaded
+                ? (query.zona_censuaria || "Vedi visura caricata")
+                : r.dati_catastali.zona_censuaria}
+            />
             <DataRow label="Microzona" value={r.dati_catastali.microzona} />
-            <DataRow label="Intestatari" value={r.dati_catastali.intestatari} />
+            <DataRow
+              label="Intestatari"
+              value={query.visura_uploaded
+                ? (query.intestatari?.length > 0 ? query.intestatari.join(", ") : "Vedi visura caricata")
+                : r.dati_catastali.intestatari}
+            />
+            {query.visura_uploaded && query.superficie_mq && (
+              <DataRow label="Superficie catastale" value={`${query.superficie_mq} mq`} />
+            )}
           </ReportSection>
         )}
 
@@ -477,6 +513,9 @@ export default function ReportPage() {
               lat={r.catasto_data?.lat || query.centroid_lat}
               lon={r.catasto_data?.lon || query.centroid_lng}
               geojsonPolygon={query.geometry_geojson || r.catasto_data?.geojson_polygon}
+              queryId={query.id}
+              foglio={query.foglio}
+              particella={query.particella}
               height={320}
             />
           </ReportSection>

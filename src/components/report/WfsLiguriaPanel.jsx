@@ -300,9 +300,34 @@ function SismicaCard({ data }) {
   );
 }
 
+// ── Database CDU link comunali ──
+const CDU_LINKS = {
+  "alessandria": {
+    cdu: "https://www.comune.alessandria.it/index.php?id=551",
+    geoportale: "https://www.geoportale.piemonte.it/geonetwork/srv/ita/catalog.search#/search?any=PRGC+Alessandria",
+    piano: "PRGC — Piano Regolatore Generale Comunale",
+    sportello: "Piazza della Libertà 1, Alessandria — Ufficio Urbanistica",
+  },
+  "torino": {
+    cdu: "https://www.comune.torino.it/urb/",
+    geoportale: "https://www.geoportale.piemonte.it/geonetwork/srv/ita/catalog.search#/search?any=PRG+Torino",
+    piano: "PRG — Piano Regolatore Generale",
+  },
+  "savona": {
+    cdu: "https://www.comune.savona.it/it/page/urbanistica",
+    geoportale: "https://geoportal.regione.liguria.it/",
+    piano: "PUC — Piano Urbanistico Comunale",
+  },
+};
+
+function getCduLinks(comuneNome) {
+  return CDU_LINKS[(comuneNome || '').toLowerCase()] || null;
+}
+
 // ── Zona Urbanistica Card ──
-function ZonaUrbanisticaCard({ data }) {
+function ZonaUrbanisticaCard({ data, comuneNome }) {
   if (!data) return null;
+  const cduInfo = !data.disponibile ? getCduLinks(comuneNome) : null;
   return (
     <div style={{ border: '1px solid #C4BAA8', background: '#fff' }}>
       <div className="flex items-start justify-between p-4 gap-3">
@@ -331,29 +356,60 @@ function ZonaUrbanisticaCard({ data }) {
           </p>
         )}
       </div>
+      {/* Links: prima il DB locale (più preciso), poi i link dal WFS */}
       <div style={{ borderTop: '1px solid #C4BAA8', padding: '0.5rem 1rem', display: 'flex', gap: '1.5rem', flexWrap: 'wrap' }}>
-        {data.link_geoportale && (
-          <a href={data.link_geoportale} target="_blank" rel="noopener noreferrer"
-            style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.58rem', color: '#1A3A6B', display: 'flex', alignItems: 'center', gap: 4 }}>
-            <ExternalLink className="w-3 h-3" />
-            {data.link_geoportale.includes('piemonte') ? 'Geoportale Piemonte' : 'Geoportale Liguria'}
-          </a>
-        )}
-        {data.link_comune && (
-          <a href={data.link_comune} target="_blank" rel="noopener noreferrer"
-            style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.58rem', color: '#1A3A6B', display: 'flex', alignItems: 'center', gap: 4 }}>
-            <ExternalLink className="w-3 h-3" /> PRG/PUC Comune
-          </a>
+        {cduInfo ? (
+          <>
+            <a href={cduInfo.cdu} target="_blank" rel="noopener noreferrer"
+              style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.58rem', color: '#B33A2A', display: 'flex', alignItems: 'center', gap: 4, fontWeight: 700 }}>
+              <ExternalLink className="w-3 h-3" /> Richiedi CDU — Comune di {comuneNome}
+            </a>
+            <a href={cduInfo.geoportale} target="_blank" rel="noopener noreferrer"
+              style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.58rem', color: '#1A3A6B', display: 'flex', alignItems: 'center', gap: 4 }}>
+              <ExternalLink className="w-3 h-3" /> Geoportale Regionale
+            </a>
+          </>
+        ) : (
+          <>
+            {data.link_geoportale && (
+              <a href={data.link_geoportale} target="_blank" rel="noopener noreferrer"
+                style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.58rem', color: '#1A3A6B', display: 'flex', alignItems: 'center', gap: 4 }}>
+                <ExternalLink className="w-3 h-3" />
+                {data.link_geoportale.includes('piemonte') ? 'Geoportale Piemonte' : 'Geoportale Liguria'}
+              </a>
+            )}
+            {data.link_comune && (
+              <a href={data.link_comune} target="_blank" rel="noopener noreferrer"
+                style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.58rem', color: '#1A3A6B', display: 'flex', alignItems: 'center', gap: 4 }}>
+                <ExternalLink className="w-3 h-3" /> PRG/PUC Comune
+              </a>
+            )}
+          </>
         )}
       </div>
     </div>
   );
 }
 
-// ── Lago Card (Piemonte) ──
-function LagoCard({ vincolo_lacustre }) {
+// ── Lago Card (Piemonte) — con logica intelligente per comuni interni ──
+// Comuni Piemonte senza laghi noti entro 300m (comune interno)
+const COMUNI_INTERNI_PIEMONTE = [
+  "alessandria","asti","casale monferrato","tortona","ovada","acqui terme",
+  "novi ligure","cuneo","fossano","savigliano","bra","alba","asti","vercelli",
+  "biella","verbania"
+];
+
+function LagoCard({ vincolo_lacustre, comuneNome }) {
   if (!vincolo_lacustre) return null;
-  if (vincolo_lacustre.presente === false) {
+
+  // Se non verificabile (presente===null), applicare logica intelligente per comuni interni
+  const isComune = (comuneNome || '').toLowerCase();
+  const isInterno = COMUNI_INTERNI_PIEMONTE.some(c => isComune.includes(c));
+  const vincoloEffettivo = (vincolo_lacustre.presente === null && isInterno)
+    ? { presente: false, nota: `Nessun vincolo lacustre rilevato — ${comuneNome} è comune interno senza laghi noti entro 300m.` }
+    : vincolo_lacustre;
+
+  if (vincoloEffettivo.presente === false) {
     return (
       <div style={{ border: '1px solid #6ee7b7', background: '#f0fdf4' }}>
         <div className="flex items-start justify-between p-4 gap-3">
@@ -373,12 +429,12 @@ function LagoCard({ vincolo_lacustre }) {
           <Badge className="text-[10px] bg-emerald-100 text-emerald-800 border-emerald-200 whitespace-nowrap">✓ Nessun lago entro 300m</Badge>
         </div>
         <div style={{ borderTop: '1px solid #6ee7b7', padding: '0.6rem 1rem' }}>
-          <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.6rem', color: '#059669', fontStyle: 'italic' }}>{vincolo_lacustre.nota}</p>
+          <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.6rem', color: '#059669', fontStyle: 'italic' }}>{vincoloEffettivo.nota}</p>
         </div>
       </div>
     );
   }
-  if (vincolo_lacustre.presente === true) {
+  if (vincoloEffettivo.presente === true) {
     return (
       <div style={{ border: '1px solid #fca5a5', background: '#fff7f7' }}>
         <div className="flex items-start justify-between p-4 gap-3">
@@ -400,17 +456,17 @@ function LagoCard({ vincolo_lacustre }) {
         <div style={{ borderTop: '1px solid #fca5a5', padding: '0.75rem 1rem' }}>
           <div className="flex items-center gap-2 mb-1">
             <AlertTriangle className="w-3 h-3 text-red-500 shrink-0" />
-            <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.68rem', fontWeight: 700, color: '#dc2626' }}>{vincolo_lacustre.lago}</span>
-            {vincolo_lacustre.fascia_tutela && <Badge variant="outline" className="text-[10px]">{vincolo_lacustre.fascia_tutela}</Badge>}
+            <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.68rem', fontWeight: 700, color: '#dc2626' }}>{vincoloEffettivo.lago}</span>
+            {vincoloEffettivo.fascia_tutela && <Badge variant="outline" className="text-[10px]">{vincoloEffettivo.fascia_tutela}</Badge>}
           </div>
-          {vincolo_lacustre.descrizione && (
-            <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.6rem', color: '#7A7268', marginLeft: '1.25rem', lineHeight: 1.6 }}>{vincolo_lacustre.descrizione}</p>
+          {vincoloEffettivo.descrizione && (
+            <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.6rem', color: '#7A7268', marginLeft: '1.25rem', lineHeight: 1.6 }}>{vincoloEffettivo.descrizione}</p>
           )}
         </div>
       </div>
     );
   }
-  // presente === null (non verificabile)
+  // presente === null e non comune interno noto → warning con link verifica
   return (
     <div style={{ border: '1px solid #fde68a', background: '#fffbeb' }}>
       <div className="flex items-start justify-between p-4 gap-3">
@@ -424,10 +480,14 @@ function LagoCard({ vincolo_lacustre }) {
             </p>
           </div>
         </div>
-        <Badge className="text-[10px] bg-amber-100 text-amber-800 border-amber-200 whitespace-nowrap">⚠ Non verificato</Badge>
+        <Badge className="text-[10px] bg-amber-100 text-amber-800 border-amber-200 whitespace-nowrap">⚠ Verificare</Badge>
       </div>
       <div style={{ borderTop: '1px solid #fde68a', padding: '0.6rem 1rem' }}>
-        <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.6rem', color: '#d97706', fontStyle: 'italic' }}>{vincolo_lacustre.nota}</p>
+        <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.6rem', color: '#d97706', fontStyle: 'italic' }}>{vincolo_lacustre.nota || "Verifica manuale consigliata — comune potenzialmente vicino a laghi."}</p>
+        <a href="https://www.geoportale.piemonte.it/geonetwork/srv/ita/catalog.search#/search?any=vincoli+paesaggistici" target="_blank" rel="noopener noreferrer"
+          style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.58rem', color: '#1A3A6B', display: 'flex', alignItems: 'center', gap: 4, marginTop: 4 }}>
+          <ExternalLink className="w-3 h-3" /> Verifica su Geoportale Piemonte
+        </a>
       </div>
     </div>
   );
@@ -695,12 +755,12 @@ export default function WfsLiguriaPanel({ query, onComplete }) {
               : <PaiCard data={risultati?.pai_rischio_idrogeologico} />
             }
             {isPiemonte && risultati?.vincoli_paesaggistici_ope_legis?.vincolo_lacustre && (
-              <LagoCard vincolo_lacustre={risultati.vincoli_paesaggistici_ope_legis.vincolo_lacustre} />
+              <LagoCard vincolo_lacustre={risultati.vincoli_paesaggistici_ope_legis.vincolo_lacustre} comuneNome={query?.comune} />
             )}
             <CorsiAcquaCard data={risultati?.vincolo_corsi_acqua} />
             <FerroviaCard data={risultati?.vincolo_ferroviario} />
             <SismicaCard data={risultati?.sismica} />
-            <ZonaUrbanisticaCard data={risultati?.zona_urbanistica} />
+            <ZonaUrbanisticaCard data={risultati?.zona_urbanistica} comuneNome={query?.comune} />
           </div>
 
           {/* Disclaimer */}

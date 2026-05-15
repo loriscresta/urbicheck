@@ -1,12 +1,53 @@
 /**
  * ParcellaMap — mappa Leaflet per particella catastale
- * Mostra poligono GeoJSON (se disponibile) o marker puntuale
+ * Mostra poligono GeoJSON (se disponibile) o tenta WFS AdE, poi fallback marker puntuale
  */
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
+import { base44 } from "@/api/base44Client";
+import { ExternalLink } from "lucide-react";
 
-export default function ParcellaMap({ lat, lon, geojsonPolygon, height = 280 }) {
+const ADE_GEOPORTALE_URL = "https://www.agenziaentrate.gov.it/portale/web/guest/schede/fabbricatiterreni/consultazione-cartografia-catastale/servizio-consultazione-cartografia";
+
+async function fetchParcellaWFS(lat, lon) {
+  try {
+    const delta = 0.001;
+    const url = `https://wfs.cartografia.agenziaentrate.gov.it/inspire/wfs/owfs01.php?SERVICE=WFS&VERSION=2.0.0&REQUEST=GetFeature&TYPENAMES=CP:CadastralParcel&CRS=EPSG:4326&BBOX=${lat-delta},${lon-delta},${lat+delta},${lon+delta}&outputFormat=application/json`;
+    const resp = await fetch(url, { signal: AbortSignal.timeout(6000) });
+    if (!resp.ok) return null;
+    const data = await resp.json();
+    if (data?.features?.length > 0) {
+      return data.features[0].geometry;
+    }
+  } catch (_e) { /* WFS non disponibile */ }
+  return null;
+}
+
+export default function ParcellaMap({ lat, lon, geojsonPolygon, queryId, foglio, particella, height = 280 }) {
   const mapRef = useRef(null);
   const leafletMapRef = useRef(null);
+  const [resolvedPolygon, setResolvedPolygon] = useState(geojsonPolygon || null);
+  const [wfsAttempted, setWfsAttempted] = useState(false);
+
+  // Tenta WFS AdE se nessun poligono disponibile
+  useEffect(() => {
+    if (resolvedPolygon || wfsAttempted || !lat || !lon) return;
+    setWfsAttempted(true);
+    fetchParcellaWFS(lat, lon).then(async (geom) => {
+      if (geom) {
+        setResolvedPolygon(geom);
+        // Salva nel db se abbiamo un queryId
+        if (queryId) {
+          try {
+            const list = await base44.entities.CadastralQuery.filter({ id: queryId });
+            const q = list[0];
+            if (q && !q.geometry_geojson) {
+              await base44.entities.CadastralQuery.update(queryId, { geometry_geojson: geom });
+            }
+          } catch (_e) { /* non bloccante */ }
+        }
+      }
+    });
+  }, [lat, lon]);
 
   useEffect(() => {
     if (!lat || !lon || !mapRef.current) return;
@@ -51,9 +92,9 @@ export default function ParcellaMap({ lat, lon, geojsonPolygon, height = 280 }) 
       }).addTo(map);
 
       // Supporta sia GeoJSON Polygon che Feature (wrapper)
-      const geomToCheck = geojsonPolygon?.type === 'Feature'
-        ? geojsonPolygon.geometry
-        : geojsonPolygon;
+      const geomToCheck = resolvedPolygon?.type === 'Feature'
+        ? resolvedPolygon.geometry
+        : resolvedPolygon;
 
       if (geomToCheck && (geomToCheck.type === 'Polygon' || geomToCheck.type === 'MultiPolygon')) {
         // Disegna poligono con stile ufficiale AdE
@@ -103,9 +144,12 @@ export default function ParcellaMap({ lat, lon, geojsonPolygon, height = 280 }) 
         leafletMapRef.current = null;
       }
     };
-  }, [lat, lon, geojsonPolygon]);
+  }, [lat, lon, resolvedPolygon]);
 
   if (!lat || !lon) return null;
+
+  const geomToDisplay = resolvedPolygon?.type === 'Feature' ? resolvedPolygon.geometry : resolvedPolygon;
+  const hasPolygon = geomToDisplay?.type === 'Polygon' || geomToDisplay?.type === 'MultiPolygon';
 
   return (
     <div style={{ position: 'relative', border: '1px solid #C4BAA8', overflow: 'hidden' }}>
@@ -118,10 +162,19 @@ export default function ParcellaMap({ lat, lon, geojsonPolygon, height = 280 }) 
         fontFamily: "'IBM Plex Mono', monospace",
         fontSize: '0.55rem',
         color: '#7A7268',
+        maxWidth: '90%',
       }}>
-        {(geojsonPolygon?.type === 'Feature' ? geojsonPolygon.geometry : geojsonPolygon)?.type === 'Polygon' || (geojsonPolygon?.type === 'Feature' ? geojsonPolygon.geometry : geojsonPolygon)?.type === 'MultiPolygon'
+        {hasPolygon
           ? '🟧 Poligono particella — AdE WFS CC-BY 4.0'
-          : '📍 Centroide — OnData CC BY 4.0 · Poligono non disponibile — vedi Geoportale AdE'
+          : (
+            <span className="flex items-center gap-1 flex-wrap">
+              <span>📍 {foglio && particella ? `Foglio ${foglio}, Part. ${particella} — ` : ''}Poligono non disponibile</span>
+              <a href={ADE_GEOPORTALE_URL} target="_blank" rel="noopener noreferrer"
+                style={{ color: '#1A3A6B', display: 'inline-flex', alignItems: 'center', gap: 2 }}>
+                ➜ Geoportale AdE
+              </a>
+            </span>
+          )
         }
       </div>
     </div>
