@@ -144,12 +144,17 @@ export async function generatePDF(query, financialSnapshot) {
     ["Foglio catastale", query.foglio],
     ["Particella", query.particella],
     ["Subalterno", query.subalterno || "—"],
-    ["Categoria catastale", r.dati_catastali?.categoria || "—"],
-    ["Consistenza / Superficie", r.dati_catastali?.consistenza || "Non disponibile — richiedere visura ufficiale AdE"],
+    ["Categoria catastale", query.categoria_catastale || r.dati_catastali?.categoria || "—"],
+    ["Consistenza / Superficie",
+      query.superficie_mq ? `${query.superficie_mq} mq` :
+      r.dati_catastali?.consistenza || "Non disponibile — richiedere visura ufficiale AdE"],
     ["Finalità analisi", FINALITA_LABELS[query.finalita] || query.finalita || "—"],
     ["Zona urbanistica", r.zonizzazione?.zona_codice || r.zonizzazione?.destinazione_prevalente || "—"],
     ["Stato conservativo", fd.stato_conservativo || "—"],
-    ["Rendita catastale", r.dati_catastali?.rendita_catastale || "Disponibile su visura ufficiale AdE"],
+    ["Rendita catastale",
+      query.rendita_catastale != null
+        ? fmtEur(query.rendita_catastale)
+        : r.dati_catastali?.rendita_catastale || "Disponibile su visura ufficiale AdE"],
     ...(hasCoords ? [
       ["Coordinate WGS84 (lat, lon)", `${coordLat?.toFixed(5)}, ${coordLon?.toFixed(5)}`],
       ...(catastoData.inspire_id ? [["INSPIRE ID", catastoData.inspire_id]] : []),
@@ -657,6 +662,50 @@ export async function generatePDF(query, financialSnapshot) {
       });
     }
 
+    // ── ROI Locazione (per finalità investimento) ──
+    if (query.finalita === "investimento" && omi && mq > 0) {
+      const canoneMinMese = (omi.canone_locazione_min || 0) * mq;
+      const canoneMaxMese = (omi.canone_locazione_max || 0) * mq;
+      const canoneMinAnno = canoneMinMese * 12;
+      const canoneMaxAnno = canoneMaxMese * 12;
+      const rendLordoMin = prezzoAcquisto > 0 ? (canoneMinAnno / prezzoAcquisto) * 100 : 0;
+      const rendLordoMax = prezzoAcquisto > 0 ? (canoneMaxAnno / prezzoAcquisto) * 100 : 0;
+      const rendNettoMin = rendLordoMin * 0.7;
+      const rendNettoMax = rendLordoMax * 0.7;
+      const paybackMin = canoneMaxAnno * 0.7 > 0 ? prezzoAcquisto / (canoneMaxAnno * 0.7) : 0;
+      const paybackMax = canoneMinAnno * 0.7 > 0 ? prezzoAcquisto / (canoneMinAnno * 0.7) : 0;
+
+      y += 4;
+      if (y > 240) { y = newPage(doc); }
+      y = subHeader(doc, margin, y, "Analisi Rendimento da Locazione");
+
+      const roiRows = [
+        ["Canone mensile stimato", fmtEur(canoneMinMese) + " – " + fmtEur(canoneMaxMese)],
+        ["Canone annuo stimato", fmtEur(canoneMinAnno) + " – " + fmtEur(canoneMaxAnno)],
+        ["Rendimento lordo annuo", rendLordoMin.toFixed(1) + "% – " + rendLordoMax.toFixed(1) + "%"],
+        ["Rendimento netto stimato (×0.7)", rendNettoMin.toFixed(1) + "% – " + rendNettoMax.toFixed(1) + "%"],
+        ["Anni per recupero investimento (payback)", paybackMin > 0 ? paybackMin.toFixed(0) + " – " + paybackMax.toFixed(0) + " anni" : "—"],
+      ];
+      doc.setFontSize(8.5);
+      roiRows.forEach(([k, v], i) => {
+        if (y > 265) { y = newPage(doc); }
+        stripe(doc, margin, y, i % 2 === 0);
+        doc.setFont("helvetica", i >= 2 ? "bold" : "normal");
+        doc.setTextColor(50, 50, 50);
+        doc.text(k, margin + 2, y);
+        doc.setFont("helvetica", "normal");
+        doc.setTextColor(i >= 2 ? 30 : 50, i >= 2 ? 80 : 50, i >= 2 ? 180 : 50);
+        doc.text(String(v), 90, y, { maxWidth: 98 });
+        doc.setTextColor(50, 50, 50);
+        y += 8;
+      });
+      y += 2;
+      doc.setFont("helvetica", "italic"); doc.setFontSize(7.5); doc.setTextColor(120, 120, 120);
+      doc.text("Rendimento netto calcolato con detrazione stimata 30% (fiscalità, spese gestione, manutenzione).", margin + 2, y, { maxWidth: 166 }); y += 5;
+      doc.text("Canoni basati su valori OMI — verifica su agenziaentrate.gov.it/omi.", margin + 2, y, { maxWidth: 166 }); y += 7;
+      doc.setTextColor(50, 50, 50);
+    }
+
     // Scorecard
     if (score) {
       y += 4;
@@ -695,20 +744,20 @@ export async function generatePDF(query, financialSnapshot) {
     }
   }
 
-  // ── SEZ 7b — MAPPA PARTICELLA CATASTALE ──────────────────────────────────
+  // ── SEZ 8 — MAPPA PARTICELLA CATASTALE ──────────────────────────────────
   {
-    const catastoData = r.catasto_data || {};
-    const hasCoords2 = catastoData.lat || query.centroid_lat;
-    if (hasCoords2) {
-      y += 4;
-      if (y > 230) { y = newPage(doc); }
-      y = sectionHeader(doc, margin, y, showFinancial ? "8" : "7", "MAPPA PARTICELLA CATASTALE");
-      const coordLat2 = catastoData.lat || query.centroid_lat;
-      const coordLon2 = catastoData.lon || query.centroid_lng;
+    const catastoData2 = r.catasto_data || {};
+    const coordLat2 = catastoData2.lat || query.centroid_lat;
+    const coordLon2 = catastoData2.lon || query.centroid_lng;
+    y += 4;
+    if (y > 230) { y = newPage(doc); }
+    y = sectionHeader(doc, margin, y, "8", "MAPPA PARTICELLA CATASTALE");
+
+    if (coordLat2 && coordLon2) {
       const mapRows = [
-        ["Coordinate WGS84 (lat, lon)", `${coordLat2?.toFixed(6)}, ${coordLon2?.toFixed(6)}`],
-        ...(catastoData.inspire_id ? [["INSPIRE ID", catastoData.inspire_id]] : []),
-        ["Fonte coordinate", catastoData.fonte || "OnData CC BY 4.0"],
+        ["Coordinate WGS84 (lat, lon)", `${Number(coordLat2).toFixed(6)}, ${Number(coordLon2).toFixed(6)}`],
+        ...(catastoData2.inspire_id ? [["INSPIRE ID", catastoData2.inspire_id]] : []),
+        ["Fonte coordinate", catastoData2.fonte || "OnData CC BY 4.0"],
         ...(query.sezione_catastale ? [["Sezione catastale", query.sezione_catastale]] : []),
       ];
       doc.setFontSize(8.5);
@@ -721,17 +770,26 @@ export async function generatePDF(query, financialSnapshot) {
         doc.text(String(v || "—"), 90, y, { maxWidth: 98 });
         y += 8;
       });
-      // Nota poligono
+      // Link geoportali
       y += 2;
-      if (y > 265) { y = newPage(doc); }
-      doc.setFont("helvetica", "italic"); doc.setFontSize(7.5); doc.setTextColor(100, 100, 100);
-      if (query.geometry_geojson || catastoData.geojson_polygon) {
-        doc.text("Poligono vettoriale disponibile nel dashboard online — urbicheck.it/report/" + (query.id || ""), margin + 2, y, { maxWidth: 168 });
+      if (y > 258) { y = newPage(doc); }
+      doc.setFont("helvetica", "bold"); doc.setFontSize(8); doc.setTextColor(30, 58, 95);
+      doc.text("Link mappa:", margin + 2, y); y += 6;
+      doc.setFont("helvetica", "normal"); doc.setFontSize(7.5); doc.setTextColor(30, 80, 180);
+      doc.text("Geoportale AdE: https://geoportale.cartografia.agenziaentrate.gov.it/age-inspire/srv/ita/catalog.search#/map", margin + 4, y, { maxWidth: 164 }); y += 6;
+      doc.text(`OpenStreetMap: https://www.openstreetmap.org/?mlat=${Number(coordLat2).toFixed(6)}&mlon=${Number(coordLon2).toFixed(6)}&zoom=18`, margin + 4, y, { maxWidth: 164 }); y += 6;
+      if (query.geometry_geojson || catastoData2.geojson_polygon) {
+        doc.setTextColor(80, 80, 80);
+        doc.text("Poligono catastale vettoriale disponibile nel dashboard: urbicheck.it/report/" + (query.id || ""), margin + 4, y, { maxWidth: 164 });
       } else {
-        doc.text("Visualizza il poligono sul dashboard online: urbicheck.it/report/" + (query.id || ""), margin + 2, y, { maxWidth: 168 });
+        doc.setTextColor(80, 80, 80);
+        doc.text("Poligono catastale: urbicheck.it/report/" + (query.id || ""), margin + 4, y, { maxWidth: 164 });
       }
       doc.setTextColor(50, 50, 50);
       y += 7;
+    } else {
+      doc.setFont("helvetica", "italic"); doc.setFontSize(8); doc.setTextColor(150, 100, 0);
+      doc.text("Coordinate non disponibili — eseguire la risoluzione catastale dalla scheda online.", margin + 2, y); y += 7;
     }
   }
 
@@ -739,8 +797,7 @@ export async function generatePDF(query, financialSnapshot) {
   if (r.valutazione_sintetica) {
     y += 4;
     if (y > 230) { y = newPage(doc); }
-    const secNumVs = showFinancial ? "9" : "8";
-    y = sectionHeader(doc, margin, y, secNumVs, "VALUTAZIONE SINTETICA");
+    y = sectionHeader(doc, margin, y, "9", "VALUTAZIONE SINTETICA");
 
     const vs = r.valutazione_sintetica;
     if (vs.livello_complessita) {
@@ -783,8 +840,7 @@ export async function generatePDF(query, financialSnapshot) {
     const wfsAcqua = wfsData?.vincolo_corsi_acqua;
     y += 4;
     if (y > 230) { y = newPage(doc); }
-    const secNumWfs = showFinancial ? "10" : "9";
-    y = sectionHeader(doc, margin, y, secNumWfs, isPiemonte ? "VINCOLI INFRASTRUTTURALI (PIEMONTE)" : "VINCOLI INFRASTRUTTURALI (WFS LIGURIA)");
+    y = sectionHeader(doc, margin, y, "10", isPiemonte ? "VINCOLI INFRASTRUTTURALI (PIEMONTE)" : "VINCOLI INFRASTRUTTURALI (WFS LIGURIA)");
 
     y = subHeader(doc, margin, y, "Vincolo Ferroviario — DPR 753/1980 (fascia 30m asse binario)");
     if (!wfsFerr) {
@@ -793,7 +849,7 @@ export async function generatePDF(query, financialSnapshot) {
     } else if (!wfsFerr.fonte_ok) {
       doc.setFillColor(255, 248, 230); doc.rect(margin, y - 4, 170, 7, "F");
       doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.setTextColor(150, 100, 0);
-      doc.text("fonte_ok=false — dati Overpass non disponibili, consultare RFI", margin + 2, y);
+      doc.text("⚠ Dato non disponibile dalla fonte WFS — Si consiglia verifica manuale presso RFI", margin + 2, y);
       doc.setTextColor(50, 50, 50); y += 8;
     } else {
       const ferrTrovati = (wfsFerr.dati || []).filter(d => d.trovato);
@@ -824,7 +880,8 @@ export async function generatePDF(query, financialSnapshot) {
     } else if (!wfsAcqua.fonte_ok) {
       doc.setFillColor(255, 248, 230); doc.rect(margin, y - 4, 170, 7, "F");
       doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.setTextColor(150, 100, 0);
-      doc.text(isPiemonte ? "fonte_ok=false — consultare ARPA Piemonte" : "fonte_ok=false — consultare Catasto Acque Regione Liguria", margin + 2, y);
+      const acquaEnteLabel = isPiemonte ? "ARPA Piemonte" : "Catasto Acque Regione Liguria";
+      doc.text(`\u26a0 Dato non disponibile dalla fonte WFS — Si consiglia verifica manuale presso ${acquaEnteLabel}`, margin + 2, y, { maxWidth: 166 });
       doc.setTextColor(50, 50, 50); y += 8;
     } else {
       const acquaTrovati = (wfsAcqua.dati || []).filter(d => d.trovato);
@@ -852,8 +909,7 @@ export async function generatePDF(query, financialSnapshot) {
   {
     y += 4;
     if (y > 230) { y = newPage(doc); }
-    const secNumFonti = showFinancial ? "11" : "10";
-    y = sectionHeader(doc, margin, y, secNumFonti, "FONTI DATI UFFICIALI");
+    y = sectionHeader(doc, margin, y, "11", "FONTI DATI UFFICIALI");
 
     doc.setFillColor(235, 244, 255);
     doc.rect(margin, y - 4, 170, 7, "F");
