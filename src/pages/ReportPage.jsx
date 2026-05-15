@@ -152,37 +152,8 @@ export default function ReportPage() {
   };
 
   const handleDownloadPDF = async () => {
-    if (!credits || credits.balance < 2.90) {
-      toast({
-        title: "Crediti insufficienti",
-        description: `Saldo: €${(credits?.balance || 0).toFixed(2)}. Servono €2,90 per il PDF.`,
-        variant: "destructive",
-      });
-      navigate("/credits");
-      return;
-    }
-
     setIsDownloadingPDF(true);
-    const user = await base44.auth.me();
-
     const { doc, reportNum } = await generatePDF(query, financialSnapshot);
-
-    // Charge €2,90
-    await base44.entities.UserCredits.update(credits.id, {
-      balance: credits.balance - 2.90,
-      total_spent: (credits.total_spent || 0) + 2.90,
-    });
-    try {
-      await base44.entities.CreditTransaction.create({
-        user_email: user.email,
-        type: "query_charge",
-        amount: -2.90,
-        description: `Download PDF scheda ${reportNum}`,
-        query_id: id,
-      });
-    } catch (_txErr) { /* ignore */ }
-
-    queryClient.invalidateQueries({ queryKey: ["userCredits"] });
     doc.save(`URBICHECK_${query.comune}_${reportNum}.pdf`);
     setIsDownloadingPDF(false);
     toast({ title: "PDF scaricato ✓", description: `Scheda ${reportNum} salvata.` });
@@ -243,6 +214,26 @@ export default function ReportPage() {
     r.vincoli.altri_vincoli?.some(v => v.presente)
   );
 
+  // Avviso multi-sezione catastale
+  const sezioniDisponibili = r.catasto_data?.sezioni_disponibili || [];
+  const hasMultiSezioni = sezioniDisponibili.length > 1 && !query.sezione_catastale;
+
+  const handleSelezioneSezione = async (sezione) => {
+    const sez = sezioniDisponibili.find(s => s.sezione === sezione);
+    if (!sez) return;
+    await base44.entities.CadastralQuery.update(id, {
+      sezione_catastale: sezione,
+      centroid_lat: sez.lat,
+      centroid_lng: sez.lon,
+      report_data: {
+        ...r,
+        catasto_data: { ...r.catasto_data, lat: sez.lat, lon: sez.lon, inspire_id: sez.id },
+      },
+    });
+    await refetch();
+    toast({ title: `Sezione ${sezione} selezionata ✓` });
+  };
+
   return (
     <div className="p-6 lg:p-10 max-w-5xl mx-auto pb-20">
       {/* Header */}
@@ -289,6 +280,25 @@ export default function ReportPage() {
           </div>
         </div>
       </motion.div>
+
+      {/* ===== AVVISO MULTI-SEZIONE CATASTALE ===== */}
+      {hasMultiSezioni && (
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+          className="mb-6 rounded-xl border-2 border-amber-400 bg-amber-50 p-5">
+          <p className="font-bold text-amber-900 mb-2">
+            Trovata particella in {sezioniDisponibili.length} sezioni catastali — seleziona quella corretta
+          </p>
+          <div className="flex flex-wrap gap-3">
+            {sezioniDisponibili.map(s => (
+              <Button key={s.sezione || 'principale'} variant="outline"
+                className="border-amber-400 text-amber-800 hover:bg-amber-100"
+                onClick={() => handleSelezioneSezione(s.sezione)}>
+                {s.sezione ? `Sezione ${s.sezione}` : 'Principale'} — {s.lat?.toFixed(4)}, {s.lon?.toFixed(4)}
+              </Button>
+            ))}
+          </div>
+        </motion.div>
+      )}
 
       {/* ===== UNLOCK BANNER (preview mode) ===== */}
       {!isUnlocked && (
@@ -681,19 +691,20 @@ export default function ReportPage() {
         />
       )}
 
-      {/* Servizi aggiuntivi (solo dopo sblocco) */}
+      {/* Download PDF (incluso nel prezzo base) + Servizi Aggiuntivi */}
       {isUnlocked && (
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}
           className="mt-8 p-6 rounded-xl border border-border bg-card">
-          <h3 className="font-semibold mb-1">Servizi Aggiuntivi (opzionali)</h3>
-          <p className="text-sm text-muted-foreground mb-4">Servizi extra a pagamento separato, non inclusi nella scheda.</p>
-          <div className="flex flex-col sm:flex-row gap-3">
+          <div className="flex flex-col sm:flex-row gap-3 mb-6">
             <Button variant="outline" className="gap-2" onClick={handleDownloadPDF} disabled={isDownloadingPDF}>
               {isDownloadingPDF ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-              Scarica PDF — €2,90
+              Scarica PDF completo
             </Button>
+          </div>
+          <h3 className="font-semibold mb-1">Servizi Aggiuntivi (opzionali)</h3>
+          <p className="text-sm text-muted-foreground mb-4">Servizi extra a pagamento separato, non inclusi nella scheda base.</p>
+          <div className="flex flex-col sm:flex-row gap-3">
             <Button className="gap-2" style={{ background: '#1e3a5f' }} onClick={async () => {
-              // Se il comune_id è disponibile, carica il record ComuneItalia per il prefill
               let comuneRecord = null;
               if (query.comune_id) {
                 const results = await base44.entities.ComuneItalia.filter({ id: query.comune_id });
@@ -706,7 +717,6 @@ export default function ReportPage() {
               Richiedi Accesso Atti — €4,90
             </Button>
           </div>
-          <p className="text-xs text-muted-foreground mt-3">Il PDF è sempre a pagamento separato (€2,90) anche dopo aver sbloccato la scheda completa.</p>
         </motion.div>
       )}
 

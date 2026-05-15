@@ -1,5 +1,6 @@
 {
   "name": "CadastralQuery",
+  "type": "object",
   "properties": {
     "atti_request_id": {
       "description": "ID dell'AttiRequest collegata",
@@ -142,6 +143,10 @@
       "description": "URL al PDF del report finale elaborato da UrbiCheck",
       "type": "string"
     },
+    "sezione_catastale": {
+      "description": "Sezione catastale (es. A, B) \u2014 presente solo in comuni con pi\u00f9 sezioni",
+      "type": "string"
+    },
     "sigla_provincia": {
       "description": "Sigla provincia (auto-popolata)",
       "type": "string"
@@ -205,7 +210,6 @@
     "foglio",
     "particella"
   ],
-  "type": "object",
   "rls": {
     "create": {
       "created_by": "{{user.email}}"

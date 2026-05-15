@@ -37,6 +37,7 @@ export default function CadastralSearchForm({ onSubmit, isLoading, submitLabel =
   const [particella, setParticella] = useState("");
   const [subalterno, setSubalterno] = useState("");
   const [sezione, setSezione] = useState("");
+  const [sezoneCatastale, setSezoneCatastale] = useState("");
   const [finalita, setFinalita] = useState("");
   const [showFinancial, setShowFinancial] = useState(false);
 
@@ -75,6 +76,7 @@ export default function CadastralSearchForm({ onSubmit, isLoading, submitLabel =
       foglio,
       particella,
       subalterno,
+      sezione_catastale: sezoneCatastale || undefined,
       finalita,
       // financial fields
       prezzo_acquisto: prezzoAcquisto,
@@ -97,7 +99,7 @@ export default function CadastralSearchForm({ onSubmit, isLoading, submitLabel =
       {/* Dati catastali */}
       <div>
         <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">Dati catastali</p>
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1.5">
             <Label>Foglio *</Label>
             <Input value={foglio} onChange={(e) => setFoglio(e.target.value)} placeholder="es. 15" />
@@ -105,6 +107,10 @@ export default function CadastralSearchForm({ onSubmit, isLoading, submitLabel =
           <div className="space-y-1.5">
             <Label>Particella *</Label>
             <Input value={particella} onChange={(e) => setParticella(e.target.value)} placeholder="es. 342" />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Sezione catastale</Label>
+            <Input value={sezoneCatastale} onChange={(e) => setSezoneCatastale(e.target.value.toUpperCase())} placeholder="es. A, B — solo se il tuo comune ha sezioni catastali" maxLength={1} />
           </div>
           <div className="space-y-1.5">
             <Label>Subalterno</Label>

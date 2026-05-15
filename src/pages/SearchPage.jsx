@@ -31,8 +31,10 @@ export default function SearchPage() {
     // Risolvi coordinate precise in background (non bloccante)
     catasto_resolver({
       nome_comune: formData.comune,
+      regione: formData.regione,
       foglio: formData.foglio,
       particella: formData.particella,
+      sezione: formData.sezione_catastale || undefined,
       query_id: query.id,
     }).catch(() => {/* ignora errori — coordinate opzionali */});
 

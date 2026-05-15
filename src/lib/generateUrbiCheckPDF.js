@@ -695,59 +695,96 @@ export async function generatePDF(query, financialSnapshot) {
     }
   }
 
-  // ── SEZ 10 — VALUTAZIONE SINTETICA ────────────────────────────────────────
+  // ── SEZ 7b — MAPPA PARTICELLA CATASTALE ──────────────────────────────────
+  {
+    const catastoData = r.catasto_data || {};
+    const hasCoords2 = catastoData.lat || query.centroid_lat;
+    if (hasCoords2) {
+      y += 4;
+      if (y > 230) { y = newPage(doc); }
+      y = sectionHeader(doc, margin, y, showFinancial ? "8" : "7", "MAPPA PARTICELLA CATASTALE");
+      const coordLat2 = catastoData.lat || query.centroid_lat;
+      const coordLon2 = catastoData.lon || query.centroid_lng;
+      const mapRows = [
+        ["Coordinate WGS84 (lat, lon)", `${coordLat2?.toFixed(6)}, ${coordLon2?.toFixed(6)}`],
+        ...(catastoData.inspire_id ? [["INSPIRE ID", catastoData.inspire_id]] : []),
+        ["Fonte coordinate", catastoData.fonte || "OnData CC BY 4.0"],
+        ...(query.sezione_catastale ? [["Sezione catastale", query.sezione_catastale]] : []),
+      ];
+      doc.setFontSize(8.5);
+      mapRows.forEach(([k, v], i) => {
+        if (y > 265) { y = newPage(doc); }
+        stripe(doc, margin, y, i % 2 === 0);
+        doc.setFont("helvetica", "bold"); doc.setTextColor(50, 50, 50);
+        doc.text(k, margin + 2, y);
+        doc.setFont("helvetica", "normal");
+        doc.text(String(v || "—"), 90, y, { maxWidth: 98 });
+        y += 8;
+      });
+      // Nota poligono
+      y += 2;
+      if (y > 265) { y = newPage(doc); }
+      doc.setFont("helvetica", "italic"); doc.setFontSize(7.5); doc.setTextColor(100, 100, 100);
+      if (query.geometry_geojson || catastoData.geojson_polygon) {
+        doc.text("Poligono vettoriale disponibile nel dashboard online — urbicheck.it/report/" + (query.id || ""), margin + 2, y, { maxWidth: 168 });
+      } else {
+        doc.text("Visualizza il poligono sul dashboard online: urbicheck.it/report/" + (query.id || ""), margin + 2, y, { maxWidth: 168 });
+      }
+      doc.setTextColor(50, 50, 50);
+      y += 7;
+    }
+  }
+
+  // ── SEZ — VALUTAZIONE SINTETICA COMPLETA ──────────────────────────────────
   if (r.valutazione_sintetica) {
     y += 4;
     if (y > 230) { y = newPage(doc); }
-    y = sectionHeader(doc, margin, y, "8", "VALUTAZIONE SINTETICA");
+    const secNumVs = showFinancial ? "9" : "8";
+    y = sectionHeader(doc, margin, y, secNumVs, "VALUTAZIONE SINTETICA");
 
     const vs = r.valutazione_sintetica;
     if (vs.livello_complessita) {
       const compColor = vs.livello_complessita === "Basso" ? [39, 174, 96] : vs.livello_complessita === "Alto" ? [220, 50, 50] : [200, 130, 0];
       doc.setFillColor(...compColor);
-      doc.roundedRect(margin, y, 50, 9, 2, 2, "F");
+      doc.roundedRect(margin, y, 60, 9, 2, 2, "F");
       doc.setTextColor(255, 255, 255); doc.setFont("helvetica", "bold"); doc.setFontSize(8.5);
       doc.text("Complessita': " + vs.livello_complessita, margin + 3, y + 6);
       y += 14;
     }
 
-    const colW = 52;
-    const sections3 = [
-      { title: "Criticita'", items: vs.criticita_principali, color: [200, 80, 0] },
+    // Render each sub-section separately (full, no truncation)
+    const sinteticaSections = [
+      { title: "Criticita' principali", items: vs.criticita_principali, color: [200, 80, 0] },
       { title: "Opportunita'", items: vs.opportunita, color: [39, 150, 80] },
       { title: "Raccomandazioni", items: vs.raccomandazioni, color: [30, 80, 180] },
     ];
-
-    sections3.forEach((sec, si) => {
+    sinteticaSections.forEach(sec => {
       if (!sec.items?.length) return;
-      const colX = margin + si * (colW + 5);
-      doc.setFont("helvetica", "bold"); doc.setFontSize(8); doc.setTextColor(...sec.color);
-      doc.text(sec.title, colX, y);
-    });
-    y += 5;
-
-    const maxItems = Math.max(...sections3.map(s => s.items?.length || 0));
-    for (let row = 0; row < Math.min(maxItems, 5); row++) {
-      if (y > 265) { y = newPage(doc); }
-      sections3.forEach((sec, si) => {
-        const item = sec.items?.[row];
-        if (!item) return;
-        const colX = margin + si * (colW + 5);
-        doc.setFont("helvetica", "normal"); doc.setFontSize(7.5); doc.setTextColor(60, 60, 60);
-        const truncated = String(item).length > 38 ? String(item).slice(0, 36) + "…" : String(item);
-        doc.text("• " + truncated, colX, y, { maxWidth: colW });
+      if (y > 260) { y = newPage(doc); }
+      doc.setFont("helvetica", "bold"); doc.setFontSize(8.5); doc.setTextColor(...sec.color);
+      doc.text(sec.title + ":", margin + 2, y); y += 6;
+      sec.items.forEach((item, i) => {
+        if (y > 268) { y = newPage(doc); }
+        if (i % 2 === 0) { doc.setFillColor(248, 250, 255); doc.rect(margin, y - 4, 170, 7, "F"); }
+        doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.setTextColor(60, 60, 60);
+        const lines = doc.splitTextToSize("• " + String(item), 164);
+        lines.forEach(line => {
+          if (y > 268) { y = newPage(doc); }
+          doc.text(line, margin + 2, y); y += 5;
+        });
       });
-      y += 7;
-    }
+      y += 4;
+    });
   }
 
-  // ── SEZ 9 — VINCOLI INFRASTRUTTURALI WFS ─────────────────────────────────
+  // ── SEZ — VINCOLI INFRASTRUTTURALI WFS ─────────────────────────────────
   {
     const wfsFerr = wfsData?.vincolo_ferroviario;
     const wfsAcqua = wfsData?.vincolo_corsi_acqua;
     y += 4;
     if (y > 230) { y = newPage(doc); }
-    y = sectionHeader(doc, margin, y, "9", isPiemonte ? "VINCOLI INFRASTRUTTURALI (PIEMONTE)" : "VINCOLI INFRASTRUTTURALI (WFS LIGURIA)");
+    const secNumWfs = showFinancial ? "10" : "9";
+    y = sectionHeader(doc, margin, y, secNumWfs, isPiemonte ? "VINCOLI INFRASTRUTTURALI (PIEMONTE)" : "VINCOLI INFRASTRUTTURALI (WFS LIGURIA)");
 
     y = subHeader(doc, margin, y, "Vincolo Ferroviario — DPR 753/1980 (fascia 30m asse binario)");
     if (!wfsFerr) {
@@ -811,11 +848,12 @@ export async function generatePDF(query, financialSnapshot) {
     }
   }
 
-  // ── SEZ 10 — FONTI DATI ───────────────────────────────────────────────────
+  // ── SEZ FONTI DATI ───────────────────────────────────────────────────────
   {
     y += 4;
     if (y > 230) { y = newPage(doc); }
-    y = sectionHeader(doc, margin, y, "10", "FONTI DATI UFFICIALI");
+    const secNumFonti = showFinancial ? "11" : "10";
+    y = sectionHeader(doc, margin, y, secNumFonti, "FONTI DATI UFFICIALI");
 
     doc.setFillColor(235, 244, 255);
     doc.rect(margin, y - 4, 170, 7, "F");
