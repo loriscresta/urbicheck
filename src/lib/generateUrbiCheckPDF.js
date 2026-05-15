@@ -349,7 +349,11 @@ export async function generatePDF(query, financialSnapshot) {
     y += 7;
 
     // Per Piemonte il vincolo sismico è SEMPRE presente (Zona 3 o 3S per DGR 6-887/2019)
-    const sismicoPiemonteText = "Presente — Zona 3, DGR n.6-887/2019 (media sismicità)";
+    // Leggi zona dal campo WFS se disponibile
+    const wfsSismicaZona = wfsSismica ? String(wfsSismica.zona) : '3';
+    const sismicoPiemonteText = wfsSismicaZona === '3S'
+      ? "Presente — Zona 3S (Alta sismicità), DGR n.6-887/2019"
+      : "Presente — Zona 3 (Media sismicità), DGR n.6-887/2019";
     const sismicoVal = isPiemonte
       ? { presente: true, testo: sismicoPiemonteText }
       : { presente: vv.vincolo_sismico?.presente, testo: vv.vincolo_sismico?.presente ? "Presente — " + (vv.vincolo_sismico?.zona || "") : "Assente" };

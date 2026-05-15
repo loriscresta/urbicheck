@@ -207,6 +207,21 @@ export default function ReportPage() {
   const r = query.report_data || {};
   const isUnlocked = query.status === "completed";
   const isAsta = query.finalita === "asta_giudiziaria";
+
+  // Dati sismici reali da WFS (override sull'AI che può sbagliare)
+  const isPiemonte = (query.regione || '').toLowerCase().includes('piemonte');
+  const wfsRis = r.wfs_liguria?.risultati;
+  const wfsSismica = wfsRis?.sismica;
+  // Per Piemonte: vincolo sismico sempre presente (Zona 3 o 3S per legge)
+  const sismicoPiemonteZona = wfsSismica
+    ? (String(wfsSismica.zona) === '3S' ? 'Zona 3S' : 'Zona 3')
+    : 'Zona 3';
+  const sismicoPiemonteDesc = wfsSismica
+    ? (String(wfsSismica.zona) === '3S' ? 'Alta sismicità — DGR n.6-887/2019' : 'Media sismicità — DGR n.6-887/2019')
+    : 'Media sismicità — DGR n.6-887/2019';
+  const vincoloSismicoEffettivo = isPiemonte
+    ? { presente: true, zona: `${sismicoPiemonteZona} (${sismicoPiemonteDesc})`, dettagli: `${sismicoPiemonteZona} — ${sismicoPiemonteDesc}. Applicare NTC 2018.` }
+    : (r.vincoli?.vincolo_sismico || { presente: false });
   const FIN_FINALITA = ["investimento", "sviluppo_immobiliare", "asta_giudiziaria"];
   const showFinancial = isUnlocked && (FIN_FINALITA.includes(query.finalita) || r.fin_data?.prezzo_acquisto);
   const finData = r.fin_data || {};
@@ -353,7 +368,7 @@ export default function ReportPage() {
             {isUnlocked ? (
               <>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <VincoloCard label="Vincolo Sismico" presente={r.vincoli.vincolo_sismico?.presente} dettagli={r.vincoli.vincolo_sismico?.dettagli} extra={r.vincoli.vincolo_sismico?.zona} />
+                  <VincoloCard label="Vincolo Sismico" presente={vincoloSismicoEffettivo.presente} dettagli={vincoloSismicoEffettivo.dettagli} extra={vincoloSismicoEffettivo.zona} />
                   <VincoloCard label="Vincolo Idraulico" presente={r.vincoli.vincolo_idraulico?.presente} dettagli={r.vincoli.vincolo_idraulico?.dettagli} extra={r.vincoli.vincolo_idraulico?.classe_rischio} />
                   <VincoloCard label="Vincolo Paesaggistico" presente={r.vincoli.vincolo_paesaggistico?.presente} dettagli={r.vincoli.vincolo_paesaggistico?.dettagli} extra={r.vincoli.vincolo_paesaggistico?.tipo} />
                   <VincoloCard label="Vincolo Archeologico" presente={r.vincoli.vincolo_archeologico?.presente} dettagli={r.vincoli.vincolo_archeologico?.dettagli} />
@@ -370,7 +385,7 @@ export default function ReportPage() {
             ) : (
               <div className="space-y-2">
                 {[
-                  { label: "Vincolo Sismico", presente: r.vincoli.vincolo_sismico?.presente },
+                  { label: "Vincolo Sismico", presente: vincoloSismicoEffettivo.presente },
                   { label: "Vincolo Idraulico", presente: r.vincoli.vincolo_idraulico?.presente },
                   { label: "Vincolo Paesaggistico", presente: r.vincoli.vincolo_paesaggistico?.presente },
                   { label: "Vincolo Archeologico", presente: r.vincoli.vincolo_archeologico?.presente },
