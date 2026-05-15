@@ -59,12 +59,29 @@ export default function FinancialDueDiligence({ query, finData, onSnapshotReady 
 
   useEffect(() => {
     if (loaded) return;
+
+    // Se i dati OMI sono già salvati nell'entità, usali direttamente (evita doppia chiamata LLM e garantisce coerenza PDF/dashboard)
+    const savedOmi = r.fin_data?.omi_snapshot;
+    const savedScore = r.fin_data?.score_snapshot;
+    if (savedOmi) {
+      setOmiData(savedOmi);
+      setScoreData(savedScore || null);
+      setLoaded(true);
+      if (onSnapshotReady) onSnapshotReady({ omi: savedOmi, score: savedScore });
+      return;
+    }
+
     setLoading(true);
     const zona = r.zonizzazione?.destinazione_prevalente || r.quadro_urbanistico?.zona_urbanistica || "residenziale";
+    const isPiemonte = (query.regione || '').toLowerCase().includes('piemonte');
+    const wfsSismicaZona = query.report_data?.wfs_liguria?.risultati?.sismica?.zona;
+    const sismicaInfo = isPiemonte
+      ? `Zona sismica 3 (DGR 6-887/2019 — media sismicità). ${wfsSismicaZona === '3S' ? 'Zona 3S — alta sismicità.' : ''}`
+      : `vincolo_sismico=${r.vincoli?.vincolo_sismico?.presente}`;
 
     Promise.all([
       base44.integrations.Core.InvokeLLM({
-        prompt: `Sei un esperto di valutazioni immobiliari italiane con accesso ai dati OMI (Osservatorio del Mercato Immobiliare dell'Agenzia delle Entrate). Per l'immobile in ${query.comune}, ${query.regione}, categoria urbanistica: ${zona}, superficie ${mq} mq, stato conservativo: ${fd.stato_conservativo || "buono"}, fornisci stime realistiche aggiornate al 2025.`,
+        prompt: `Sei un esperto di valutazioni immobiliari italiane con accesso ai dati OMI (Osservatorio del Mercato Immobiliare dell'Agenzia delle Entrate). Per l'immobile in ${query.comune}, ${query.regione}, categoria urbanistica: ${zona}, superficie ${mq} mq, stato conservativo: ${fd.stato_conservativo || "buono"}, fornisci stime realistiche aggiornate al 2025. Il valore post-ristrutturazione deve essere superiore al valore attuale (applicare fattore +30/40% per interventi completi su zona residenziale).`,
         response_json_schema: {
           type: "object",
           properties: {
@@ -92,7 +109,8 @@ export default function FinancialDueDiligence({ query, finData, onSnapshotReady 
 - Superficie: ${mq} mq
 - Stato: ${fd.stato_conservativo || "buono"}
 - Destinazione obiettivo: ${fd.destinazione_obiettivo || "non specificato"}
-- Vincoli presenti: sismico=${r.vincoli?.vincolo_sismico?.presente}, idraulico=${r.vincoli?.vincolo_idraulico?.presente}, paesaggistico=${r.vincoli?.vincolo_paesaggistico?.presente}
+- Vincoli presenti: ${sismicaInfo}, idraulico=${r.vincoli?.vincolo_idraulico?.presente}, paesaggistico=${r.vincoli?.vincolo_paesaggistico?.presente}
+${isPiemonte ? 'NOTA: Per Piemonte il vincolo sismico Zona 3 è sempre presente per legge (DGR 6-887/2019) — non indicare mai "assenza di vincoli sismici".' : ''}
 Fornisci un punteggio complessivo e analisi sintetica.`,
         response_json_schema: {
           type: "object",
@@ -103,12 +121,23 @@ Fornisci un punteggio complessivo e analisi sintetica.`,
           }
         }
       })
-    ]).then(([omi, score]) => {
+    ]).then(async ([omi, score]) => {
       setOmiData(omi);
       setScoreData(score);
       setLoaded(true);
       setLoading(false);
       if (onSnapshotReady) onSnapshotReady({ omi, score });
+      // Salva snapshot nell'entità per garantire coerenza PDF/dashboard nelle chiamate successive
+      try {
+        const currentData = await base44.entities.CadastralQuery.filter({ id: query.id });
+        const current = currentData[0];
+        if (current) {
+          const updatedFinData = { ...(current.report_data?.fin_data || {}), omi_snapshot: omi, score_snapshot: score };
+          await base44.entities.CadastralQuery.update(query.id, {
+            report_data: { ...current.report_data, fin_data: updatedFinData }
+          });
+        }
+      } catch (_saveErr) { /* non bloccante */ }
     }).catch(() => setLoading(false));
   }, []);
 

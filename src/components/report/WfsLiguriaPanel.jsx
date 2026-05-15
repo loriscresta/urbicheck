@@ -72,7 +72,8 @@ function VincoliCard({ data }) {
         {data.link_verifica_ufficiale && (
           <a href={data.link_verifica_ufficiale} target="_blank" rel="noopener noreferrer"
             style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.58rem', color: '#1A3A6B', display: 'flex', alignItems: 'center', gap: 4 }}>
-            <ExternalLink className="w-3 h-3" /> liguriavincoli.it
+            <ExternalLink className="w-3 h-3" />
+            {data.link_verifica_ufficiale.includes('piemonte') ? 'geoportale.piemonte.it' : 'liguriavincoli.it'}
           </a>
         )}
         <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.58rem', color: '#7A7268', fontStyle: 'italic' }}>
@@ -334,7 +335,8 @@ function ZonaUrbanisticaCard({ data }) {
         {data.link_geoportale && (
           <a href={data.link_geoportale} target="_blank" rel="noopener noreferrer"
             style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.58rem', color: '#1A3A6B', display: 'flex', alignItems: 'center', gap: 4 }}>
-            <ExternalLink className="w-3 h-3" /> Geoportale Liguria
+            <ExternalLink className="w-3 h-3" />
+            {data.link_geoportale.includes('piemonte') ? 'Geoportale Piemonte' : 'Geoportale Liguria'}
           </a>
         )}
         {data.link_comune && (
@@ -664,11 +666,13 @@ export default function WfsLiguriaPanel({ query, onComplete }) {
             {wfsData.coordinate && (
               <>
                 <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.6rem', color: '#7A7268' }}>
-                  📍 {wfsData.coordinate.lat?.toFixed(5)}, {wfsData.coordinate.lon?.toFixed(5)}
+                  📍 WGS84: {wfsData.coordinate.lat?.toFixed(5)}, {wfsData.coordinate.lon?.toFixed(5)}
                 </span>
-                <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.6rem', color: '#7A7268' }}>
-                  EPSG:3003 → X:{wfsData.coordinate.x_gauss_boaga?.toLocaleString('it-IT')} Y:{wfsData.coordinate.y_gauss_boaga?.toLocaleString('it-IT')}
-                </span>
+                {!isPiemonte && wfsData.coordinate.x_gauss_boaga && (
+                  <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.6rem', color: '#7A7268' }}>
+                    EPSG:3003 → X:{wfsData.coordinate.x_gauss_boaga?.toLocaleString('it-IT')} Y:{wfsData.coordinate.y_gauss_boaga?.toLocaleString('it-IT')}
+                  </span>
+                )}
               </>
             )}
             {wfsData.geocoding_error && (

@@ -348,8 +348,13 @@ export async function generatePDF(query, financialSnapshot) {
     doc.text(wfsHint, margin + 2, y);
     y += 7;
 
+    // Per Piemonte il vincolo sismico è SEMPRE presente (Zona 3 o 3S per DGR 6-887/2019)
+    const sismicoPiemonteText = "Presente — Zona 3, DGR n.6-887/2019 (media sismicità)";
+    const sismicoVal = isPiemonte
+      ? { presente: true, testo: sismicoPiemonteText }
+      : { presente: vv.vincolo_sismico?.presente, testo: vv.vincolo_sismico?.presente ? "Presente — " + (vv.vincolo_sismico?.zona || "") : "Assente" };
     const vincoli = [
-      ["Vincolo sismico", vv.vincolo_sismico?.presente ? "Presente — " + (vv.vincolo_sismico?.zona || "") : "Assente", "OPCM 3274/2003", vv.vincolo_sismico?.presente],
+      ["Vincolo sismico", sismicoVal.testo, isPiemonte ? "DGR 6-887/2019" : "OPCM 3274/2003", sismicoVal.presente],
       ["Rischio idraulico", vv.vincolo_idraulico?.presente ? "Presente — " + (vv.vincolo_idraulico?.classe_rischio || "") : "Assente", "PAI - Autorità di Bacino", vv.vincolo_idraulico?.presente],
       ["Vincolo paesaggistico", vv.vincolo_paesaggistico?.presente ? "Presente — " + (vv.vincolo_paesaggistico?.tipo || "") : "Assente", "D.Lgs. 42/2004", vv.vincolo_paesaggistico?.presente],
       ["Vincolo archeologico", vv.vincolo_archeologico?.presente ? "Presente" : "Assente", "D.Lgs. 42/2004", vv.vincolo_archeologico?.presente],
@@ -733,7 +738,7 @@ export async function generatePDF(query, financialSnapshot) {
     y = subHeader(doc, margin, y, "Vincolo Ferroviario — DPR 753/1980 (fascia 30m asse binario)");
     if (!wfsFerr) {
       doc.setFont("helvetica", "italic"); doc.setFontSize(8); doc.setTextColor(150, 100, 0);
-      doc.text("Eseguire Analisi WFS Liguria per ottenere i dati", margin + 2, y); y += 7;
+      doc.text(isPiemonte ? "Dati non disponibili — eseguire analisi WFS Piemonte" : "Dati non disponibili — eseguire analisi WFS Liguria", margin + 2, y); y += 7;
     } else if (!wfsFerr.fonte_ok) {
       doc.setFillColor(255, 248, 230); doc.rect(margin, y - 4, 170, 7, "F");
       doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.setTextColor(150, 100, 0);
@@ -764,11 +769,11 @@ export async function generatePDF(query, financialSnapshot) {
     y = subHeader(doc, margin, y, "Vincolo Corsi d'Acqua — Art.142 c.1 lett. c) D.Lgs 42/2004 (fascia 150m)");
     if (!wfsAcqua) {
       doc.setFont("helvetica", "italic"); doc.setFontSize(8); doc.setTextColor(150, 100, 0);
-      doc.text("Eseguire Analisi WFS Liguria per ottenere i dati", margin + 2, y); y += 7;
+      doc.text(isPiemonte ? "Dati non disponibili — eseguire analisi WFS Piemonte" : "Dati non disponibili — eseguire analisi WFS Liguria", margin + 2, y); y += 7;
     } else if (!wfsAcqua.fonte_ok) {
       doc.setFillColor(255, 248, 230); doc.rect(margin, y - 4, 170, 7, "F");
       doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.setTextColor(150, 100, 0);
-      doc.text("fonte_ok=false — consultare Catasto Acque Regione Liguria", margin + 2, y);
+      doc.text(isPiemonte ? "fonte_ok=false — consultare ARPA Piemonte" : "fonte_ok=false — consultare Catasto Acque Regione Liguria", margin + 2, y);
       doc.setTextColor(50, 50, 50); y += 8;
     } else {
       const acquaTrovati = (wfsAcqua.dati || []).filter(d => d.trovato);
