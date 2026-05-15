@@ -35,6 +35,7 @@ export default function SearchPage() {
       foglio: formData.foglio,
       particella: formData.particella,
       sezione: formData.sezione_catastale || undefined,
+      indirizzo_immobile: formData.indirizzo_immobile || undefined,
       query_id: query.id,
     }).catch(() => {/* ignora errori — coordinate opzionali */});
 

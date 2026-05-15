@@ -201,7 +201,7 @@ Deno.serve(async (req) => {
     return Response.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
-  const { nome_comune, regione, foglio, particella, sezione, codice_belfiore: belfioreDiretto, query_id } = body;
+  const { nome_comune, regione, foglio, particella, sezione, codice_belfiore: belfioreDiretto, query_id, indirizzo_immobile } = body;
 
   if (!foglio || !particella) {
     return Response.json({ error: 'foglio e particella sono obbligatori' }, { status: 400 });
@@ -271,15 +271,103 @@ Deno.serve(async (req) => {
     }, { status: 404 });
   }
 
-  // Scegli sezione
-  let rigaScelta = sezioniTrovate[0];
+  // ── Scegli sezione ──
+  // sezione può essere INSPIRE (1 char: A, B, C) o codice SISTER/AdE (2+ chars: PL, RM, NA)
+  let rigaScelta = null;
+  let sezioneSisterNonTrovata = false;
+
   if (sezione) {
-    const filtered = sezioniTrovate.filter(r => r.sezione.toUpperCase() === sezione.toUpperCase());
-    if (filtered.length) rigaScelta = filtered[0];
+    const sezUpper = sezione.toUpperCase().trim();
+    if (sezUpper.length === 1) {
+      // Sezione INSPIRE diretta — cerca match esatto
+      const filtered = sezioniTrovate.filter(r => r.sezione.toUpperCase() === sezUpper);
+      rigaScelta = filtered[0] || sezioniTrovate[0];
+    } else {
+      // Codice SISTER/AdE (2+ chars) — non esiste nel parquet INSPIRE, restituiamo tutte le opzioni
+      const filtered = sezioniTrovate.filter(r => r.sezione.toUpperCase() === sezUpper);
+      if (filtered.length) {
+        rigaScelta = filtered[0];
+      } else {
+        // Non trovata esatta: segnala e restituisce tutte le opzioni per la scelta utente
+        sezioneSisterNonTrovata = true;
+      }
+    }
+  }
+
+  // Se non c'è sezione o se la sezione era a 1 char senza match, usa prima riga
+  if (!rigaScelta) rigaScelta = sezioniTrovate[0];
+
+  // Se abbiamo più sezioni e un indirizzo, tentiamo geocoding per trovare quella più vicina
+  if (sezioniTrovate.length > 1 && indirizzo_immobile && !sezioneSisterNonTrovata) {
+    try {
+      const geocodeQuery = encodeURIComponent(`${indirizzo_immobile}, ${nome_comune || queryRecord?.comune || ''}, Italy`);
+      const geocodeRes = await fetchWithTimeout(`https://nominatim.openstreetmap.org/search?q=${geocodeQuery}&format=json&limit=1`, {
+        headers: { 'User-Agent': 'URBICHECK/1.0' }
+      }, 8000);
+      if (geocodeRes.ok) {
+        const geocodeData = await geocodeRes.json();
+        if (geocodeData[0]) {
+          const gLat = parseFloat(geocodeData[0].lat);
+          const gLon = parseFloat(geocodeData[0].lon);
+          // Trova la sezione più vicina all'indirizzo geocodificato
+          let minDist = Infinity;
+          for (const r of sezioniTrovate) {
+            const d = Math.sqrt(Math.pow(r.lat - gLat, 2) + Math.pow(r.lon - gLon, 2));
+            if (d < minDist) { minDist = d; rigaScelta = r; }
+          }
+          console.log(`Geocoding address match: sezione=${rigaScelta.sezione} dist=${minDist}`);
+        }
+      }
+    } catch (geoErr) {
+      console.warn('Geocoding fallito:', geoErr.message);
+    }
+  }
+
+  // Se sezione SISTER non trovata e più opzioni disponibili: salva tutto e segnala all'utente
+  if (sezioneSisterNonTrovata && sezioniTrovate.length > 0) {
+    // Arricchisci le opzioni con reverse geocoding (best-effort)
+    const opzioniArricchite = await Promise.all(sezioniTrovate.map(async (r) => {
+      let zona = null;
+      try {
+        const revRes = await fetchWithTimeout(
+          `https://nominatim.openstreetmap.org/reverse?lat=${r.lat}&lon=${r.lon}&format=json`,
+          { headers: { 'User-Agent': 'URBICHECK/1.0' } }, 5000
+        );
+        if (revRes.ok) {
+          const revData = await revRes.json();
+          zona = revData.display_name?.split(',').slice(0, 2).join(',').trim() || null;
+        }
+      } catch (_e) {}
+      return { ...r, zona };
+    }));
+
+    const catastoDataMulti = {
+      sezioni_disponibili: opzioniArricchite,
+      sezione_sister_cercata: sezione,
+      selezione_richiesta: true,
+      fonte: 'ondata_only',
+      calcolato_il: new Date().toISOString(),
+    };
+
+    if (queryRecord) {
+      try {
+        await base44.entities.CadastralQuery.update(query_id, {
+          report_data: { ...(queryRecord.report_data || {}), catasto_data: catastoDataMulti },
+        });
+      } catch (_e) {}
+    }
+
+    return Response.json({
+      success: false,
+      sezione_sister_non_trovata: true,
+      sezione_cercata: sezione,
+      opzioni: opzioniArricchite,
+      messaggio: `Sezione "${sezione}" non trovata nel database INSPIRE. Trovate ${opzioniArricchite.length} posizioni per questa particella — l'utente deve selezionare quella corretta.`,
+    });
   }
 
   const { lat, lon } = rigaScelta;
-  console.log(`OnData OK: ${rigaScelta.id} lat=${lat} lon=${lon} (${sezioniTrovate.length} sezioni)`);
+  console.log(`OnData OK: ${rigaScelta.id} lat=${lat} lon=${lon} sezione=${rigaScelta.sezione} (${sezioniTrovate.length} sezioni)`);
 
   // ── STEP 2: WFS AdE ──
   const wfsResult = await searchWfsAde(lat, lon, codiceBelfiore, foglio, particella, rigaScelta.sezione);

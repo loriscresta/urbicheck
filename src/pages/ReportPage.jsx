@@ -286,14 +286,21 @@ export default function ReportPage() {
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
           className="mb-6 rounded-xl border-2 border-amber-400 bg-amber-50 p-5">
           <p className="font-bold text-amber-900 mb-2">
-            Trovata particella in {sezioniDisponibili.length} sezioni catastali — seleziona quella corretta
+            {r.catasto_data?.selezione_richiesta
+              ? `Sezione "${r.catasto_data.sezione_sister_cercata}" non trovata nel database INSPIRE — seleziona la posizione corretta`
+              : `Trovata particella in ${sezioniDisponibili.length} sezioni catastali — seleziona quella corretta`}
           </p>
-          <div className="flex flex-wrap gap-3">
+          <p className="text-sm text-amber-800 mb-3">
+            Abbiamo trovato la stessa particella in {sezioniDisponibili.length} posizioni geografiche diverse. Seleziona quella corretta in base al tuo indirizzo:
+          </p>
+          <div className="flex flex-col sm:flex-row flex-wrap gap-3">
             {sezioniDisponibili.map(s => (
               <Button key={s.sezione || 'principale'} variant="outline"
-                className="border-amber-400 text-amber-800 hover:bg-amber-100"
+                className="border-amber-400 text-amber-800 hover:bg-amber-100 text-left h-auto py-3 px-4 flex flex-col items-start gap-0.5"
                 onClick={() => handleSelezioneSezione(s.sezione)}>
-                {s.sezione ? `Sezione ${s.sezione}` : 'Principale'} — {s.lat?.toFixed(4)}, {s.lon?.toFixed(4)}
+                <span className="font-bold text-sm">{s.sezione ? `Sezione INSPIRE: ${s.sezione}` : 'Sezione principale'}</span>
+                <span className="text-xs font-mono">📍 {s.lat?.toFixed(5)}, {s.lon?.toFixed(5)}</span>
+                {s.zona && <span className="text-xs text-amber-700 mt-0.5">{s.zona}</span>}
               </Button>
             ))}
           </div>

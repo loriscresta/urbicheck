@@ -3,8 +3,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, ChevronDown, ChevronUp } from "lucide-react";
+import { Loader2, ChevronDown, ChevronUp, Info } from "lucide-react";
 import ComuneAutocomplete from "@/components/search/ComuneAutocomplete";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 const FINALITA = [
   { value: "acquisto_privato", label: "Acquisto privato" },
@@ -36,8 +37,8 @@ export default function CadastralSearchForm({ onSubmit, isLoading, submitLabel =
   const [foglio, setFoglio] = useState("");
   const [particella, setParticella] = useState("");
   const [subalterno, setSubalterno] = useState("");
-  const [sezione, setSezione] = useState("");
   const [sezoneCatastale, setSezoneCatastale] = useState("");
+  const [indirizzoImmobile, setIndirizzoImmobile] = useState("");
   const [finalita, setFinalita] = useState("");
   const [showFinancial, setShowFinancial] = useState(false);
 
@@ -76,7 +77,8 @@ export default function CadastralSearchForm({ onSubmit, isLoading, submitLabel =
       foglio,
       particella,
       subalterno,
-      sezione_catastale: sezoneCatastale || undefined,
+      sezione_catastale: sezoneCatastale.trim().toUpperCase() || undefined,
+      indirizzo_immobile: indirizzoImmobile.trim() || undefined,
       finalita,
       // financial fields
       prezzo_acquisto: prezzoAcquisto,
@@ -109,14 +111,46 @@ export default function CadastralSearchForm({ onSubmit, isLoading, submitLabel =
             <Input value={particella} onChange={(e) => setParticella(e.target.value)} placeholder="es. 342" />
           </div>
           <div className="space-y-1.5">
-            <Label>Sezione catastale</Label>
-            <Input value={sezoneCatastale} onChange={(e) => setSezoneCatastale(e.target.value.toUpperCase())} placeholder="es. A, B — solo se il tuo comune ha sezioni catastali" maxLength={1} />
+            <div className="flex items-center gap-1.5">
+              <Label>Sezione catastale</Label>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Info className="w-3.5 h-3.5 text-muted-foreground cursor-help" />
+                  </TooltipTrigger>
+                  <TooltipContent className="max-w-xs text-xs leading-relaxed">
+                    <p>La sezione catastale (A, B, C…) è visibile sulla tua visura catastale o planimetria.</p>
+                    <p className="mt-1">Nei comuni senza sezioni, lascia vuoto.</p>
+                    <p className="mt-1">In alcune visure AdE/SISTER compare un codice di 2 lettere (es. PL, RM) che corrisponde alla sezione nel sistema digitale — inseriscilo così com'è.</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </div>
+            <Input
+              value={sezoneCatastale}
+              onChange={(e) => setSezoneCatastale(e.target.value.toUpperCase())}
+              placeholder="es. A, B, PL — vedi la tua visura catastale"
+            />
           </div>
           <div className="space-y-1.5">
             <Label>Subalterno</Label>
             <Input value={subalterno} onChange={(e) => setSubalterno(e.target.value)} placeholder="opz." />
           </div>
         </div>
+      </div>
+
+      {/* Indirizzo immobile */}
+      <div className="space-y-1.5">
+        <div className="flex items-center gap-1.5">
+          <Label>Via / Indirizzo immobile</Label>
+          <span className="text-xs text-muted-foreground">(opzionale)</span>
+        </div>
+        <Input
+          value={indirizzoImmobile}
+          onChange={(e) => setIndirizzoImmobile(e.target.value)}
+          placeholder="es. Via della Libertà 1 — aiuta a identificare la sezione corretta"
+        />
+        <p className="text-xs text-muted-foreground">Se inserito, viene usato per trovare automaticamente la sezione catastale corretta.</p>
       </div>
 
       {/* Finalità */}

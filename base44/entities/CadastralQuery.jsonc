@@ -104,6 +104,10 @@
       "description": "Indirizzo risultante dalla visura catastale",
       "type": "string"
     },
+    "indirizzo_immobile": {
+      "description": "Via/indirizzo immobile inserito dall'utente \u2014 usato per geocoding e risoluzione automatica sezione catastale",
+      "type": "string"
+    },
     "intestatari": {
       "description": "Lista intestatari catastali (nome, quota)",
       "items": {
@@ -144,7 +148,7 @@
       "type": "string"
     },
     "sezione_catastale": {
-      "description": "Sezione catastale (es. A, B) \u2014 presente solo in comuni con pi\u00f9 sezioni",
+      "description": "Sezione catastale \u2014 pu\u00f2 essere lettera singola INSPIRE (A, B) o codice AdE/SISTER (es. PL, RM)",
       "type": "string"
     },
     "sigla_provincia": {
