@@ -36,6 +36,7 @@ export default function CadastralSearchForm({ onSubmit, isLoading, submitLabel =
   const [foglio, setFoglio] = useState("");
   const [particella, setParticella] = useState("");
   const [subalterno, setSubalterno] = useState("");
+  const [sezione, setSezione] = useState("");
   const [finalita, setFinalita] = useState("");
   const [showFinancial, setShowFinancial] = useState(false);
 
