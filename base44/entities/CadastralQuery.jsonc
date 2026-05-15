@@ -139,6 +139,10 @@
       "description": "Regione italiana (auto-popolata)",
       "type": "string"
     },
+    "rendita_catastale": {
+      "description": "Rendita catastale ufficiale in \u20ac (estratta dalla visura)",
+      "type": "number"
+    },
     "report_data": {
       "description": "JSON con tutti i dati del report (analisi AI, dati urbanistici, ecc.)",
       "type": "object"
@@ -174,6 +178,10 @@
       "description": "Superficie della particella in mq (calcolata dalla geometria o da visura)",
       "type": "number"
     },
+    "vani": {
+      "description": "Numero vani/consistenza estratto dalla visura catastale",
+      "type": "number"
+    },
     "visura_cost": {
       "default": 5,
       "description": "Costo upsell visura catastale ufficiale (Openapi.com /visura_catastale)",
@@ -202,6 +210,11 @@
         "failed"
       ],
       "type": "string"
+    },
+    "visura_uploaded": {
+      "default": false,
+      "description": "True se l'utente ha caricato una visura catastale per la pre-compilazione",
+      "type": "boolean"
     },
     "zona_censuaria": {
       "description": "Zona censuaria",

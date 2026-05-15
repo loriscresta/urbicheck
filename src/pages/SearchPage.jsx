@@ -17,8 +17,13 @@ export default function SearchPage() {
     // Fase 1 — anteprima gratuita: genera report e salva come "pending" (nessun addebito)
     const reportData = await generateReport(formData);
 
-    // Separa i dati finanziari (non catastali) dal payload principale
-    const { prezzo_acquisto, superficie, stato_conservativo, destinazione_obiettivo, spese_accessorie, ...cadastralData } = formData;
+    // Separa i dati finanziari e dati visura dal payload principale
+    const {
+      prezzo_acquisto, superficie, stato_conservativo, destinazione_obiettivo, spese_accessorie,
+      categoria_catastale, superficie_mq, rendita_catastale, vani, indirizzo_catastale,
+      visura_uploaded, intestatari_visura,
+      ...cadastralData
+    } = formData;
     const fin_data = { prezzo_acquisto, superficie, stato_conservativo, destinazione_obiettivo, spese_accessorie };
 
     const query = await base44.entities.CadastralQuery.create({
@@ -26,6 +31,15 @@ export default function SearchPage() {
       status: "pending",
       report_data: { ...reportData, fin_data },
       cost: 9.90,
+      // Dati estratti dalla visura (se caricata)
+      ...(visura_uploaded ? {
+        categoria_catastale,
+        superficie_mq,
+        rendita_catastale,
+        vani,
+        indirizzo_catastale,
+        visura_uploaded: true,
+      } : {}),
     });
 
     // Risolvi coordinate precise in background (non bloccante)

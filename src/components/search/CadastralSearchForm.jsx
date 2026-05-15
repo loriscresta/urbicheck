@@ -6,6 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Loader2, ChevronDown, ChevronUp, Info } from "lucide-react";
 import ComuneAutocomplete from "@/components/search/ComuneAutocomplete";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import VisuraUploader from "@/components/search/VisuraUploader";
 
 const FINALITA = [
   { value: "acquisto_privato", label: "Acquisto privato" },
@@ -40,6 +41,7 @@ export default function CadastralSearchForm({ onSubmit, isLoading, submitLabel =
   const [sezoneCatastale, setSezoneCatastale] = useState("");
   const [indirizzoImmobile, setIndirizzoImmobile] = useState("");
   const [finalita, setFinalita] = useState("");
+  const [visuraDati, setVisuraDati] = useState(null); // dati estratti dalla visura
   const [showFinancial, setShowFinancial] = useState(false);
 
   // Financial fields
@@ -61,6 +63,16 @@ export default function CadastralSearchForm({ onSubmit, isLoading, submitLabel =
         setShowFinancial(false);
       }
     } catch (_e) {}
+  };
+
+  const handleVisuraData = (dati) => {
+    setVisuraDati(Object.keys(dati).length ? dati : null);
+    // Pre-compila i campi se trovati
+    if (dati.foglio) setFoglio(dati.foglio);
+    if (dati.particella) setParticella(dati.particella);
+    if (dati.subalterno) setSubalterno(dati.subalterno);
+    if (dati.sezione_form) setSezoneCatastale(dati.sezione_form);
+    if (dati.indirizzo_catastale) setIndirizzoImmobile(dati.indirizzo_catastale);
   };
 
   const handleSubmit = (e) => {
@@ -86,11 +98,31 @@ export default function CadastralSearchForm({ onSubmit, isLoading, submitLabel =
       stato_conservativo: statoConservativo,
       destinazione_obiettivo: destinazioneObiettivo,
       spese_accessorie: speseAccessorie,
+      // visura data
+      ...(visuraDati ? {
+        categoria_catastale: visuraDati.categoria_catastale,
+        superficie_mq: visuraDati.superficie_mq,
+        rendita_catastale: visuraDati.rendita_catastale,
+        vani: visuraDati.vani,
+        indirizzo_catastale: visuraDati.indirizzo_catastale,
+        visura_uploaded: true,
+        intestatari_visura: visuraDati.intestatari,
+      } : {}),
     });
   };
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
+      {/* Visura uploader */}
+      <VisuraUploader onDataExtracted={handleVisuraData} />
+
+      {/* Separatore */}
+      <div className="flex items-center gap-3">
+        <div className="flex-1 h-px bg-border" />
+        <span className="text-xs text-muted-foreground uppercase tracking-wider">oppure inserisci manualmente</span>
+        <div className="flex-1 h-px bg-border" />
+      </div>
+
       {/* Comune */}
       <ComuneAutocomplete
         selectedComune={selectedComune}
