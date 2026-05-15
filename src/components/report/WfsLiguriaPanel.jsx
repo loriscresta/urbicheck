@@ -574,6 +574,16 @@ export default function WfsLiguriaPanel({ query, onComplete }) {
     }
   }, [query?.id]);
 
+  // FIX B — Auto-avvio analisi se non ancora presente
+  useEffect(() => {
+    const alreadyDone = query?.report_data?.wfs_liguria?.risultati?.zona_urbanistica?.disponibile === true
+      || query?.report_data?.wfs_liguria;
+    if (!alreadyDone && query?.id && !launching && !polling) {
+      handleAnalyze();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query?.id]);
+
   const stopPolling = () => {
     if (pollRef.current) {
       clearInterval(pollRef.current);
@@ -666,34 +676,34 @@ export default function WfsLiguriaPanel({ query, onComplete }) {
               <CheckCircle2 className="w-3 h-3 mr-1" /> Completata
             </Badge>
           )}
-          {polling && (
+          {isLoading && (
             <Badge className="bg-amber-500 text-white text-[10px] border-0">
-              <Loader2 className="w-3 h-3 mr-1 animate-spin" /> In corso…
+              <Loader2 className="w-3 h-3 mr-1 animate-spin" /> {launching ? 'Avvio…' : 'In corso…'}
             </Badge>
           )}
-          <button
-            onClick={handleAnalyze}
-            disabled={isLoading}
-            style={{
-              background: isLoading ? '#7A7268' : '#B33A2A',
-              color: '#fff',
-              fontFamily: "'IBM Plex Mono', monospace",
-              fontSize: '0.65rem',
-              fontWeight: 700,
-              letterSpacing: '1px',
-              textTransform: 'uppercase',
-              border: 'none',
-              height: '2.25rem',
-              padding: '0 1.25rem',
-              cursor: isLoading ? 'not-allowed' : 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.4rem',
-            }}
-          >
-            {launching && <Loader2 className="w-3 h-3 animate-spin" />}
-            {isLoading ? (launching ? 'Avvio…' : 'In corso…') : wfsData ? 'Riesegui →' : 'Avvia Analisi →'}
-          </button>
+          {wfsData && !isLoading && (
+            <button
+              onClick={handleAnalyze}
+              style={{
+                background: '#7A7268',
+                color: '#fff',
+                fontFamily: "'IBM Plex Mono', monospace",
+                fontSize: '0.6rem',
+                fontWeight: 700,
+                letterSpacing: '1px',
+                textTransform: 'uppercase',
+                border: 'none',
+                height: '1.8rem',
+                padding: '0 0.9rem',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.3rem',
+              }}
+            >
+              Riesegui →
+            </button>
+          )}
         </div>
       </div>
 

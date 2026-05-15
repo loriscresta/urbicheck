@@ -3,24 +3,9 @@
  * Mostra poligono GeoJSON (se disponibile) o tenta WFS AdE, poi fallback marker puntuale
  */
 import React, { useEffect, useRef, useState } from "react";
-import { base44 } from "@/api/base44Client";
-import { ExternalLink } from "lucide-react";
+import { fetchParcelGeometry } from "@/functions/fetchParcelGeometry";
 
 const ADE_GEOPORTALE_URL = "https://www.agenziaentrate.gov.it/portale/web/guest/schede/fabbricatiterreni/consultazione-cartografia-catastale/servizio-consultazione-cartografia";
-
-async function fetchParcellaWFS(lat, lon) {
-  try {
-    const delta = 0.001;
-    const url = `https://wfs.cartografia.agenziaentrate.gov.it/inspire/wfs/owfs01.php?SERVICE=WFS&VERSION=2.0.0&REQUEST=GetFeature&TYPENAMES=CP:CadastralParcel&CRS=EPSG:4326&BBOX=${lat-delta},${lon-delta},${lat+delta},${lon+delta}&outputFormat=application/json`;
-    const resp = await fetch(url, { signal: AbortSignal.timeout(6000) });
-    if (!resp.ok) return null;
-    const data = await resp.json();
-    if (data?.features?.length > 0) {
-      return data.features[0].geometry;
-    }
-  } catch (_e) { /* WFS non disponibile */ }
-  return null;
-}
 
 export default function ParcellaMap({ lat, lon, geojsonPolygon, queryId, foglio, particella, height = 280 }) {
   const mapRef = useRef(null);
@@ -28,25 +13,16 @@ export default function ParcellaMap({ lat, lon, geojsonPolygon, queryId, foglio,
   const [resolvedPolygon, setResolvedPolygon] = useState(geojsonPolygon || null);
   const [wfsAttempted, setWfsAttempted] = useState(false);
 
-  // Tenta WFS AdE se nessun poligono disponibile
+  // FIX C — Tenta fetch geometria lato backend (evita CORS del browser)
   useEffect(() => {
     if (resolvedPolygon || wfsAttempted || !lat || !lon) return;
     setWfsAttempted(true);
-    fetchParcellaWFS(lat, lon).then(async (geom) => {
-      if (geom) {
-        setResolvedPolygon(geom);
-        // Salva nel db se abbiamo un queryId
-        if (queryId) {
-          try {
-            const list = await base44.entities.CadastralQuery.filter({ id: queryId });
-            const q = list[0];
-            if (q && !q.geometry_geojson) {
-              await base44.entities.CadastralQuery.update(queryId, { geometry_geojson: geom });
-            }
-          } catch (_e) { /* non bloccante */ }
-        }
-      }
-    });
+    fetchParcelGeometry({ queryId, centroid_lat: lat, centroid_lng: lon })
+      .then((res) => {
+        const geom = res?.data?.geometry;
+        if (geom) setResolvedPolygon(geom);
+      })
+      .catch(() => { /* non bloccante */ });
   }, [lat, lon]);
 
   useEffect(() => {

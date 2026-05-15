@@ -22,6 +22,7 @@ import AttiRequestForm from "@/components/atti/AttiRequestForm";
 import WfsLiguriaPanel from "@/components/report/WfsLiguriaPanel";
 import ParcellaMap from "@/components/report/ParcellaMap";
 import PaymentGate from "@/components/report/PaymentGate";
+import IndiciEdiliziSection from "@/components/report/IndiciEdiliziSection";
 
 const FINALITA_LABELS = {
   acquisto_privato: "Acquisto privato",
@@ -287,7 +288,7 @@ export default function ReportPage() {
             <DataRow
               label="Classe"
               value={query.visura_uploaded
-                ? (query.classe_catastale || "Vedi visura caricata")
+                ? (query.classe_catastale || "Vedi PDF visura caricata")
                 : r.dati_catastali.classe}
             />
             <DataRow
@@ -299,16 +300,29 @@ export default function ReportPage() {
             <DataRow
               label="Zona Censuaria"
               value={query.visura_uploaded
-                ? (query.zona_censuaria || "Vedi visura caricata")
+                ? (query.zona_censuaria || "Vedi PDF visura caricata")
                 : r.dati_catastali.zona_censuaria}
             />
-            <DataRow label="Microzona" value={r.dati_catastali.microzona} />
-            <DataRow
-              label="Intestatari"
-              value={query.visura_uploaded
-                ? (query.intestatari?.length > 0 ? query.intestatari.join(", ") : "Vedi visura caricata")
-                : r.dati_catastali.intestatari}
-            />
+            {/* FIX D — Microzona: nascosto se valore placeholder */}
+            {r.dati_catastali.microzona && !/verificare su visura/i.test(r.dati_catastali.microzona) && (
+              <DataRow label="Microzona" value={r.dati_catastali.microzona} />
+            )}
+            {/* FIX D — Intestatari: messaggio specifico se array vuoto con visura caricata */}
+            {query.visura_uploaded ? (
+              query.intestatari?.length > 0
+                ? <DataRow label="Intestatari" value={query.intestatari.join(", ")} />
+                : (
+                  <div className="flex flex-col sm:flex-row sm:items-start gap-1 py-2 border-b border-border/50 last:border-0">
+                    <span className="text-sm text-muted-foreground min-w-[180px]">Intestatari</span>
+                    <div>
+                      <span className="text-sm font-medium">Dati presenti in PDF visura caricata</span>
+                      <p className="text-xs text-muted-foreground mt-0.5">I dati degli intestatari sono disponibili nel documento visura caricato.</p>
+                    </div>
+                  </div>
+                )
+            ) : (
+              <DataRow label="Intestatari" value={r.dati_catastali.intestatari} />
+            )}
             {query.visura_uploaded && query.superficie_mq && (
               <DataRow label="Superficie catastale" value={`${query.superficie_mq} mq`} />
             )}
@@ -341,7 +355,28 @@ export default function ReportPage() {
           <ReportSection icon={Shield} title="Vincoli Principali" delay={0.06}>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <VincoloCard label="Vincolo Sismico" presente={vincoloSismicoEffettivo.presente} dettagli={vincoloSismicoEffettivo.dettagli} extra={vincoloSismicoEffettivo.zona} />
-              <VincoloCard label="Vincolo Idraulico" presente={r.vincoli.vincolo_idraulico?.presente} dettagli={r.vincoli.vincolo_idraulico?.dettagli} extra={r.vincoli.vincolo_idraulico?.classe_rischio} />
+              {/* FIX E — Vincolo idrogeologico da AI: mostra nota informativa neutra, non allarme confermato */}
+              {r.vincoli.vincolo_idraulico?.presente && !r.wfs_liguria?.risultati?.pai_rischio_idrogeologico ? (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+                  <p className="text-xs font-semibold text-amber-800 mb-1">Vincolo Idrogeologico — Da verificare</p>
+                  <p className="text-xs text-amber-700 leading-relaxed">
+                    ⚠ Fonte: stima orientativa AI — non verificato su PAI ufficiale.{" "}
+                    Per comuni interni non alluvionali (es. centro storico) il rischio reale può essere assente.
+                  </p>
+                  <div className="mt-2 space-y-0.5">
+                    <a href="https://webgis.arpa.piemonte.it/" target="_blank" rel="noopener noreferrer"
+                      className="text-[11px] text-primary flex items-center gap-1 hover:underline">
+                      → Verifica su PAI ARPA Piemonte
+                    </a>
+                    <a href="https://www.comune.alessandria.it" target="_blank" rel="noopener noreferrer"
+                      className="text-[11px] text-primary flex items-center gap-1 hover:underline">
+                      → Ufficio Urbanistica Comune
+                    </a>
+                  </div>
+                </div>
+              ) : (
+                <VincoloCard label="Vincolo Idraulico" presente={r.vincoli.vincolo_idraulico?.presente} dettagli={r.vincoli.vincolo_idraulico?.dettagli} extra={r.vincoli.vincolo_idraulico?.classe_rischio} />
+              )}
               <VincoloCard label="Vincolo Paesaggistico" presente={r.vincoli.vincolo_paesaggistico?.presente} dettagli={r.vincoli.vincolo_paesaggistico?.dettagli} extra={r.vincoli.vincolo_paesaggistico?.tipo} />
               <VincoloCard label="Vincolo Archeologico" presente={r.vincoli.vincolo_archeologico?.presente} dettagli={r.vincoli.vincolo_archeologico?.dettagli} />
             </div>
@@ -359,25 +394,7 @@ export default function ReportPage() {
         {/* === SOLO SCHEDA COMPLETA === */}
 
         {/* Indici Edilizi */}
-        {r.indici_edilizi && (
-          <ReportSection icon={BarChart3} title="Indici Edilizi" delay={0.08}>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-              {[
-                { label: "Indice di Fabbricabilità (IF)", value: r.indici_edilizi.if_mc_mq },
-                { label: "Rapporto di Copertura (RC)", value: r.indici_edilizi.rc_percentuale },
-                { label: "Altezza Massima (H max)", value: r.indici_edilizi.h_max },
-                { label: "Distanza dai confini", value: r.indici_edilizi.distanza_confini },
-                { label: "Distanza tra fabbricati", value: r.indici_edilizi.distanza_fabbricati },
-                { label: "Distanza dalla strada", value: r.indici_edilizi.distanza_strada },
-              ].filter(d => d.value).map(d => (
-                <div key={d.label} className="bg-muted/40 rounded-lg p-3">
-                  <p className="text-xs text-muted-foreground mb-1">{d.label}</p>
-                  <p className="font-semibold text-sm">{d.value}</p>
-                </div>
-              ))}
-            </div>
-          </ReportSection>
-        )}
+        <IndiciEdiliziSection indici={r.indici_edilizi} comune={query.comune} delay={0.08} />
 
         {/* Quadro Urbanistico */}
         {r.quadro_urbanistico && (
