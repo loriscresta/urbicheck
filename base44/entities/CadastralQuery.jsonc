@@ -123,6 +123,11 @@
       "description": "Note interne o anomalie",
       "type": "string"
     },
+    "paid": {
+      "default": false,
+      "description": "True se la scheda completa \u00e8 stata pagata (\u20ac9,90 scalati dai crediti)",
+      "type": "boolean"
+    },
     "particella": {
       "description": "Numero particella (mappale)",
       "type": "string"

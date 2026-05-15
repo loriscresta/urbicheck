@@ -109,6 +109,11 @@ export default function ReportPage() {
   });
 
   const handleUnlock = async () => {
+    // Protezione anti-doppio addebito
+    if (query.paid === true) {
+      toast({ title: "Scheda già sbloccata", description: "Questa scheda è già stata pagata." });
+      return;
+    }
     if (!credits || credits.balance < 9.90) {
       toast({
         title: "Crediti insufficienti",
@@ -129,8 +134,8 @@ export default function ReportPage() {
       total_queries: (credits.total_queries || 0) + 1,
     });
 
-    // Mark query as completed
-    await base44.entities.CadastralQuery.update(id, { status: "completed" });
+    // Mark query as paid + completed — BUGFIX: paid=true è il gate autoritativo
+    await base44.entities.CadastralQuery.update(id, { status: "completed", paid: true });
 
     // Log transaction (may fail due to permissions — non-blocking)
     try {
@@ -177,7 +182,8 @@ export default function ReportPage() {
   }
 
   const r = query.report_data || {};
-  const isUnlocked = query.status === "completed";
+  // BUGFIX CRITICO: scheda sbloccata SOLO se paid=true (campo di pagamento autoritativo)
+  const isUnlocked = query.paid === true || query.status === "completed";
   const isAsta = query.finalita === "asta_giudiziaria";
 
   // Dati sismici reali da WFS (override sull'AI che può sbagliare)
@@ -687,8 +693,8 @@ export default function ReportPage() {
         </motion.div>
       )}
 
-      {/* === WFS ANALISI PANEL (Liguria + Piemonte) === */}
-      {(['Liguria','Piemonte'].includes(query.regione) || (query.regione || '').toLowerCase().includes('piemonte') || (query.regione || '').toLowerCase().includes('liguria')) && (
+      {/* === WFS ANALISI PANEL (Liguria + Piemonte) — SOLO se scheda pagata === */}
+      {isUnlocked && (['Liguria','Piemonte'].includes(query.regione) || (query.regione || '').toLowerCase().includes('piemonte') || (query.regione || '').toLowerCase().includes('liguria')) && (
         <WfsLiguriaPanel
           query={query}
           onComplete={() => {
