@@ -47,6 +47,21 @@ function ZonaBadge({ colore }) {
   );
 }
 
+function PRGStatusBadge({ status }) {
+  const cfg = {
+    found:        { color: "#22c55e", bg: "#f0fdf4", label: "🟢 PRG open disponibile" },
+    partial:      { color: "#f59e0b", bg: "#fffbeb", label: "🟡 Dato parziale" },
+    catasto_only: { color: "#B33A2A", bg: "#fef2f2", label: "🔴 PRG non open" },
+    missing:      { color: "#B33A2A", bg: "#fef2f2", label: "🔴 Comune non trovato" },
+  }[status] || { color: "#6b7280", bg: "#f9fafb", label: "— Dato PRG non verificato" };
+  return (
+    <span className="inline-flex items-center text-xs font-semibold px-2 py-1 rounded"
+      style={{ background: cfg.bg, color: cfg.color }}>
+      {cfg.label}
+    </span>
+  );
+}
+
 function FattibilitaBadge({ value }) {
   if (value === "fattibile") return (
     <span className="flex items-center gap-1 text-emerald-700 text-xs font-semibold">
@@ -272,6 +287,11 @@ export default function ReportPage() {
             </div>
             <DataRow label="Categoria generale" value={r.zonizzazione.destinazione_prevalente} />
             <DataRow label="Zona" value={r.zonizzazione.zona_codice} />
+            {r.prg_lookup_status && (
+              <div className="mt-2">
+                <PRGStatusBadge status={r.prg_lookup_status} />
+              </div>
+            )}
             {r.zonizzazione.descrizione && (
               <div className="mt-3 p-3 bg-muted/50 rounded-lg">
                 <p className="text-sm text-muted-foreground">{r.zonizzazione.descrizione}</p>
