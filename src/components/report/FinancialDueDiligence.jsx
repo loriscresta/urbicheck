@@ -1,15 +1,16 @@
 import React, { useState, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
-import { Loader2, TrendingUp, Home, BarChart3, AlertTriangle, CheckCircle2, XCircle, Info } from "lucide-react";
+import { Loader2, TrendingUp, Home, BarChart3, AlertTriangle, CheckCircle2, ExternalLink, Info } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { motion } from "framer-motion";
+import { getOMIData, calcolaTariffaNotteOMI } from "@/lib/omiData";
 
 // ── Costi ristrutturazione 2025 ─────────────────────────────────────────────
 const RISTR_COSTS = {
-  ottimo:          { min: 0,   mid: 65,  max: 150  },
-  buono:           { min: 200, mid: 275, max: 350  },
-  da_ristrutturare:{ min: 500, mid: 650, max: 800  },
-  fatiscente:      { min: 900, mid: 1150,max: 1400 },
+  ottimo:           { min: 0,   mid: 65,   max: 150  },
+  buono:            { min: 200, mid: 275,  max: 350  },
+  da_ristrutturare: { min: 500, mid: 650,  max: 800  },
+  fatiscente:       { min: 900, mid: 1150, max: 1400 },
 };
 
 function fmtEur(n) {
@@ -19,7 +20,7 @@ function fmtEur(n) {
 
 function ScoreCircle({ score }) {
   const color = score >= 7 ? "text-emerald-600" : score >= 5 ? "text-amber-500" : "text-red-500";
-  const ring = score >= 7 ? "border-emerald-400" : score >= 5 ? "border-amber-400" : "border-red-400";
+  const ring  = score >= 7 ? "border-emerald-400" : score >= 5 ? "border-amber-400" : "border-red-400";
   const label = score >= 7 ? "Interessante" : score >= 5 ? "Valutare con cura" : "Rischio elevato";
   return (
     <div className="flex flex-col items-center gap-2">
@@ -32,260 +33,258 @@ function ScoreCircle({ score }) {
 }
 
 export default function FinancialDueDiligence({ query, finData, onSnapshotReady }) {
-  const [omiData, setOmiData] = useState(null);
   const [scoreData, setScoreData] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [loaded, setLoaded] = useState(false);
+  const [loadingScore, setLoadingScore] = useState(false);
 
-  const r = query.report_data || {};
-  const fd = finData || {};
-  // BUG2: usa superficie reale dall'entità (visura/catasto), poi form, poi default 80
+  const r   = query.report_data || {};
+  const fd  = finData || {};
+
+  // ── Superficie: usa sempre il valore reale, mai fallback numerico ──────────
   const mqRaw = query.superficie_mq || parseFloat(fd.superficie) || null;
-  const mq = mqRaw ? parseFloat(mqRaw) : 80;
-  const mqNote = !mqRaw ? " (superficie non disponibile — valore default 80 mq)" : "";
-  const prezzoAcquisto = parseFloat(fd.prezzo_acquisto) || 0;
-  const spesePerc = parseFloat(fd.spese_accessorie) || 10;
-  const statoKey = (fd.stato_conservativo || "buono").replace(/\s.*/, "").toLowerCase();
-  const costs = RISTR_COSTS[statoKey] || RISTR_COSTS.buono;
+  const mq    = mqRaw ? parseFloat(mqRaw) : null;
 
-  const spese = prezzoAcquisto * (spesePerc / 100);
-  const ristrMin = costs.min * mq;
-  const ristrMid = costs.mid * mq;
-  const ristrMax = costs.max * mq;
-  const totMin = prezzoAcquisto + ristrMin + spese;
-  const totMid = prezzoAcquisto + ristrMid + spese;
-  const totMax = prezzoAcquisto + ristrMax + spese;
+  const prezzoAcquisto     = parseFloat(fd.prezzo_acquisto) || 0;
+  const spesePerc          = parseFloat(fd.spese_accessorie) || 10;
+  const statoKey           = (fd.stato_conservativo || "buono").replace(/\s.*/, "").toLowerCase();
+  const costs              = RISTR_COSTS[statoKey] || RISTR_COSTS.buono;
 
-  const isFlipping = fd.destinazione_obiettivo === "flipping";
+  const isFlipping     = fd.destinazione_obiettivo === "flipping";
   const isAffittoLungo = fd.destinazione_obiettivo === "affitto_lungo";
   const isAffittoBreve = fd.destinazione_obiettivo === "affitto_breve";
 
+  // ── Dati OMI reali (statici, nessuna chiamata AI) ─────────────────────────
+  const codiceBelfiore  = query.codice_comune_catasto || null;
+  const isZonaCentrale  = false; // default: fascia B/C periferica
+  const omi = getOMIData(codiceBelfiore, query.categoria_catastale, isZonaCentrale);
+
+  // ── Calcoli investimento (solo se superficie disponibile) ─────────────────
+  const spese     = mq ? prezzoAcquisto * (spesePerc / 100) : null;
+  const ristrMin  = mq ? costs.min * mq : null;
+  const ristrMid  = mq ? costs.mid * mq : null;
+  const ristrMax  = mq ? costs.max * mq : null;
+  const totMin    = mq && prezzoAcquisto > 0 ? prezzoAcquisto + ristrMin + spese : null;
+  const totMid    = mq && prezzoAcquisto > 0 ? prezzoAcquisto + ristrMid + spese : null;
+  const totMax    = mq && prezzoAcquisto > 0 ? prezzoAcquisto + ristrMax + spese : null;
+
+  const valoreMercatoMin    = mq ? omi.omi_min_mq * mq : null;
+  const valoreMercatoMax    = mq ? omi.omi_max_mq * mq : null;
+  const valorePostRistrMin  = mq ? omi.omi_post_ristr_min * mq : null;
+  const valorePostRistrMax  = mq ? omi.omi_post_ristr_max * mq : null;
+
+  // Proxy prezzo se non inserito
+  const prezzoEffettivo   = prezzoAcquisto > 0
+    ? prezzoAcquisto
+    : (mq ? omi.omi_medio_mq * mq : 0);
+  const usandoProxyPrezzo = prezzoAcquisto === 0 && prezzoEffettivo > 0;
+
+  // Flipping
+  const valoreFlip        = valorePostRistrMax || 0;
+  const margineLordo      = totMid ? valoreFlip - totMid : null;
+  const tassePlusvalenza  = margineLordo > 0 ? margineLordo * 0.26 : 0;
+  const margineNetto      = margineLordo != null ? margineLordo - tassePlusvalenza : null;
+  const roiFlip           = totMid > 0 && margineLordo != null ? (margineLordo / totMid) * 100 : null;
+  const breakEvenMq       = totMid > 0 && mq > 0 ? totMid / mq : null;
+
+  // Affitto lungo
+  const canoneAnnuo       = mq
+    ? ((omi.canone_locazione_min + omi.canone_locazione_max) / 2) * mq * 12
+    : null;
+  const canoneMin         = mq ? omi.canone_locazione_min * mq : null;
+  const canoneMax         = mq ? omi.canone_locazione_max * mq : null;
+  const rendimentoLordo   = canoneAnnuo && prezzoEffettivo > 0
+    ? (canoneAnnuo / prezzoEffettivo) * 100
+    : null;
+  const rendimentoNetto   = rendimentoLordo ? rendimentoLordo * 0.79 : null;
+  const payback           = canoneAnnuo && rendimentoNetto
+    ? prezzoEffettivo / (canoneAnnuo * 0.79)
+    : null;
+
+  // Affitto breve (formula OMI-based, non AI)
+  const tariffaNotte      = mq
+    ? calcolaTariffaNotteOMI(omi.canone_locazione_min, omi.canone_locazione_max, mq, omi.is_costiero)
+    : null;
+  const nottiAnno         = 219; // 60% occupancy
+  const revenueBreveMin   = tariffaNotte ? tariffaNotte.notte_min * nottiAnno : null;
+  const revenueBreveMax   = tariffaNotte ? tariffaNotte.notte_max * nottiAnno : null;
+  const revenueBreve      = revenueBreveMin && revenueBreveMax ? (revenueBreveMin + revenueBreveMax) / 2 : null;
+  const revenueNettaBreve = revenueBreve ? revenueBreve * 0.72 : null;
+  const rendimentoBreve   = revenueBreve && totMid > 0 ? (revenueBreve / totMid) * 100 : null;
+
+  // ── Scorecard AI (rimane AI, solo per valutazione qualitativa) ─────────────
   useEffect(() => {
-    if (loaded) return;
-
-    // Se i dati OMI sono già salvati nell'entità, usali direttamente (evita doppia chiamata LLM e garantisce coerenza PDF/dashboard)
-    const savedOmi = r.fin_data?.omi_snapshot;
     const savedScore = r.fin_data?.score_snapshot;
-    if (savedOmi) {
-      setOmiData(savedOmi);
-      setScoreData(savedScore || null);
-      setLoaded(true);
-      if (onSnapshotReady) onSnapshotReady({ omi: savedOmi, score: savedScore });
-      return;
-    }
+    if (savedScore) { setScoreData(savedScore); return; }
 
-    setLoading(true);
-    const zona = r.zonizzazione?.destinazione_prevalente || r.quadro_urbanistico?.zona_urbanistica || "residenziale";
-    const isPiemonte = (query.regione || '').toLowerCase().includes('piemonte');
-    const wfsSismicaZona = query.report_data?.wfs_liguria?.risultati?.sismica?.zona;
+    setLoadingScore(true);
+    const zona        = r.zonizzazione?.destinazione_prevalente || "residenziale";
+    const isPiemonte  = (query.regione || '').toLowerCase().includes('piemonte');
     const sismicaInfo = isPiemonte
-      ? `Zona sismica 3 (DGR 6-887/2019 — media sismicità). ${wfsSismicaZona === '3S' ? 'Zona 3S — alta sismicità.' : ''}`
+      ? "Zona sismica 3 (DGR 6-887/2019)"
       : `vincolo_sismico=${r.vincoli?.vincolo_sismico?.presente}`;
 
-    Promise.all([
-      base44.integrations.Core.InvokeLLM({
-        prompt: `Sei un esperto di valutazioni immobiliari italiane con accesso ai dati OMI (Osservatorio del Mercato Immobiliare dell'Agenzia delle Entrate). Per l'immobile in ${query.comune}, ${query.regione}, categoria urbanistica: ${zona}, superficie ${mq} mq, stato conservativo: ${fd.stato_conservativo || "buono"}, fornisci stime realistiche aggiornate al 2025. Il valore post-ristrutturazione deve essere superiore al valore attuale (applicare fattore +30/40% per interventi completi su zona residenziale).`,
-        response_json_schema: {
-          type: "object",
-          properties: {
-            omi_min_mq: { type: "number" },
-            omi_max_mq: { type: "number" },
-            omi_medio_mq: { type: "number" },
-            omi_post_ristr_min: { type: "number" },
-            omi_post_ristr_max: { type: "number" },
-            canone_locazione_min: { type: "number" },
-            canone_locazione_max: { type: "number" },
-            canone_breve_notte: { type: "number" },
-            semestre_riferimento: { type: "string" },
-            fascia_omi: { type: "string" },
-            note_mercato: { type: "string" },
-          }
-        },
-        add_context_from_internet: true,
-      }),
-      base44.integrations.Core.InvokeLLM({
-        prompt: `Sei un analista di investimenti immobiliari italiani. Valuta questo investimento su scala 1-10:
+    base44.integrations.Core.InvokeLLM({
+      prompt: `Sei un analista di investimenti immobiliari italiani. Valuta questo investimento su scala 1-10:
 - Comune: ${query.comune}, ${query.regione}
 - Zona urbanistica: ${zona}
 - Finalità: ${query.finalita}
 - Prezzo acquisto: €${prezzoAcquisto}
-- Superficie: ${mq} mq
+- Superficie: ${mq || "non specificata"} mq
 - Stato: ${fd.stato_conservativo || "buono"}
 - Destinazione obiettivo: ${fd.destinazione_obiettivo || "non specificato"}
-- Vincoli presenti: ${sismicaInfo}, idraulico=${r.vincoli?.vincolo_idraulico?.presente}, paesaggistico=${r.vincoli?.vincolo_paesaggistico?.presente}
-${isPiemonte ? 'NOTA: Per Piemonte il vincolo sismico Zona 3 è sempre presente per legge (DGR 6-887/2019) — non indicare mai "assenza di vincoli sismici".' : ''}
-Fornisci un punteggio complessivo e analisi sintetica.`,
-        response_json_schema: {
-          type: "object",
-          properties: {
-            score: { type: "number", description: "Punteggio 1-10" },
-            punti_forza: { type: "array", items: { type: "string" } },
-            rischi: { type: "array", items: { type: "string" } },
-          }
+- Vincoli: ${sismicaInfo}, idraulico=${r.vincoli?.vincolo_idraulico?.presente}, paesaggistico=${r.vincoli?.vincolo_paesaggistico?.presente}
+${isPiemonte ? "NOTA: Vincolo sismico Zona 3 sempre presente per legge (DGR 6-887/2019)." : ""}
+Fornisci punteggio e analisi sintetica.`,
+      response_json_schema: {
+        type: "object",
+        properties: {
+          score: { type: "number" },
+          punti_forza: { type: "array", items: { type: "string" } },
+          rischi: { type: "array", items: { type: "string" } },
         }
-      })
-    ]).then(async ([omi, score]) => {
-      setOmiData(omi);
+      }
+    }).then(async (score) => {
       setScoreData(score);
-      setLoaded(true);
-      setLoading(false);
+      setLoadingScore(false);
       if (onSnapshotReady) onSnapshotReady({ omi, score });
-      // Salva snapshot nell'entità per garantire coerenza PDF/dashboard nelle chiamate successive
+      // Salva snapshot
       try {
         const currentData = await base44.entities.CadastralQuery.filter({ id: query.id });
         const current = currentData[0];
         if (current) {
-          const updatedFinData = { ...(current.report_data?.fin_data || {}), omi_snapshot: omi, score_snapshot: score };
+          const updatedFinData = { ...(current.report_data?.fin_data || {}), score_snapshot: score };
           await base44.entities.CadastralQuery.update(query.id, {
             report_data: { ...current.report_data, fin_data: updatedFinData }
           });
         }
-      } catch (_saveErr) { /* non bloccante */ }
-    }).catch(() => setLoading(false));
+      } catch (_e) { /* non bloccante */ }
+    }).catch(() => setLoadingScore(false));
   }, []);
 
-  if (loading) {
+  // Notifica snapshot immediatamente con dati OMI statici
+  useEffect(() => {
+    if (onSnapshotReady && !r.fin_data?.score_snapshot) {
+      onSnapshotReady({ omi, score: null });
+    }
+  }, []);
+
+  // ── Blocco "superficie mancante" ──────────────────────────────────────────
+  if (!mq) {
     return (
-      <div className="flex items-center justify-center py-12 gap-3">
-        <Loader2 className="w-5 h-5 animate-spin text-primary" />
-        <span className="text-sm text-muted-foreground">Analisi finanziaria in corso (dati OMI + AI)…</span>
+      <div className="rounded-xl border-2 border-amber-400 bg-amber-50 p-6">
+        <div className="flex items-start gap-3">
+          <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+          <div>
+            <p className="font-bold text-amber-900 mb-1">Superficie mancante — calcoli non disponibili</p>
+            <p className="text-sm text-amber-800">
+              Per visualizzare l'analisi finanziaria è necessario conoscere la superficie dell'immobile.
+              Inserisci la superficie nel form di ricerca (campo "Superficie stimata") oppure carica la visura catastale per l'estrazione automatica.
+            </p>
+          </div>
+        </div>
       </div>
     );
   }
 
-  const valoreMercatoMin = omiData ? omiData.omi_min_mq * mq : null;
-  const valoreMercatoMax = omiData ? omiData.omi_max_mq * mq : null;
-  const valorePostRistrMin = omiData ? omiData.omi_post_ristr_min * mq : null;
-  const valorePostRistrMax = omiData ? omiData.omi_post_ristr_max * mq : null;
-
-  // Flipping calcs
-  const valoreFlip = valorePostRistrMax || 0;
-  const margineLordo = valoreFlip - totMid;
-  const tassePlusvalenza = margineLordo > 0 ? margineLordo * 0.26 : 0;
-  const margineNetto = margineLordo - tassePlusvalenza;
-  const roiFlip = totMid > 0 ? (margineLordo / totMid) * 100 : 0;
-  const breakEvenMq = totMid > 0 && mq > 0 ? totMid / mq : 0;
-
-  // BUG3: usa valore OMI come proxy se prezzo non inserito
-  const prezzoEffettivo = prezzoAcquisto > 0
-    ? prezzoAcquisto
-    : (omiData ? (omiData.omi_min_mq + omiData.omi_max_mq) / 2 * mq : 0);
-  const usandoProxyPrezzo = prezzoAcquisto === 0 && prezzoEffettivo > 0;
-
-  // Affitto calcs
-  const canoneAnnuo = omiData ? ((omiData.canone_locazione_min + omiData.canone_locazione_max) / 2) * mq : null;
-  const rendimentoLordo = canoneAnnuo && prezzoEffettivo > 0 ? (canoneAnnuo / prezzoEffettivo) * 100 : null;
-  const rendimentoNetto = rendimentoLordo ? rendimentoLordo * 0.79 : null;
-  const payback = canoneAnnuo && rendimentoNetto ? prezzoEffettivo / (canoneAnnuo * 0.79) : null;
-
-  // Affitto breve
-  const nottiAnno = 219;
-  const revenueBreve = omiData ? omiData.canone_breve_notte * nottiAnno : null;
-  const revenueNettaBreve = revenueBreve ? revenueBreve * 0.72 : null;
-  const rendimentoBreve = revenueBreve && totMid > 0 ? (revenueBreve / totMid) * 100 : null;
-
   return (
     <div className="space-y-6">
-      {/* Avviso superficie non disponibile */}
-      {!mqRaw && (
+      {/* Avviso proxy prezzo */}
+      {usandoProxyPrezzo && (
         <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-800">
-          <span className="shrink-0">⚠</span>
-          <span>Superficie non inserita — calcoli basati su 80 mq di default. Inserisci la superficie reale nel form per risultati precisi.</span>
-        </div>
-      )}
-      {/* Avviso prezzo proxy */}
-      {usandoProxyPrezzo && omiData && (
-        <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-800">
-          <span className="shrink-0">⚠</span>
-          <span>Prezzo d'acquisto non inserito — rendimento calcolato su valore OMI stimato ({fmtEur(prezzoEffettivo)}). Per un'analisi reale inserisci il prezzo richiesto nel form.</span>
+          <AlertTriangle className="w-3 h-3 shrink-0 mt-0.5" />
+          <span>Prezzo d'acquisto non inserito — rendimento calcolato su valore OMI stimato ({fmtEur(prezzoEffettivo)}). Inserisci il prezzo richiesto per un'analisi reale.</span>
         </div>
       )}
 
-      {/* BLOCCO 1 — OMI */}
-      {omiData && (
-        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
-          className="rounded-xl border border-border bg-card overflow-hidden">
-          <div className="flex items-center gap-2 px-5 py-3 border-b border-border bg-muted/30">
-            <BarChart3 className="w-4 h-4 text-primary" />
-            <h4 className="font-semibold text-sm">Valori OMI — Osservatorio Mercato Immobiliare</h4>
-          </div>
-          <div className="p-5">
-            <div className="flex flex-wrap gap-2 mb-4">
-              <Badge className="bg-blue-100 text-blue-800 border-blue-200">{omiData.fascia_omi}</Badge>
-              <Badge variant="outline" className="text-xs">{omiData.semestre_riferimento}</Badge>
+      {/* BLOCCO 1 — OMI ufficiali */}
+      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+        className="rounded-xl border border-border bg-card overflow-hidden">
+        <div className="flex items-center gap-2 px-5 py-3 border-b border-border bg-muted/30">
+          <BarChart3 className="w-4 h-4 text-primary" />
+          <h4 className="font-semibold text-sm">Valori OMI — Osservatorio Mercato Immobiliare AdE</h4>
+        </div>
+        <div className="p-5">
+          <div className="flex flex-wrap gap-2 mb-4">
+            <Badge className="bg-blue-100 text-blue-800 border-blue-200">{omi.fascia_omi}</Badge>
+            <Badge variant="outline" className="text-xs">{omi.semestre_riferimento}</Badge>
+            {omi.is_default ? (
               <Badge className="bg-amber-100 text-amber-800 border-amber-200 text-xs">
-                ⚠ Valori stimati tramite AI su base dati OMI — verifica su agenziaentrate.gov.it/omi
+                ⚠ Comune non nel DB OMI — medie provinciali
               </Badge>
-            </div>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-              {[
-                { label: "Valore mercato attuale /mq", value: `${fmtEur(omiData.omi_min_mq)} – ${fmtEur(omiData.omi_max_mq)}` },
-                { label: `Valore stimato OGGI (${mq} mq${mqNote})`, value: `${fmtEur(valoreMercatoMin)} – ${fmtEur(valoreMercatoMax)}` },
-                { label: "Post-ristrutturazione /mq", value: `${fmtEur(omiData.omi_post_ristr_min)} – ${fmtEur(omiData.omi_post_ristr_max)}` },
-                { label: `Valore POST-RISTR (${mq} mq)`, value: `${fmtEur(valorePostRistrMin)} – ${fmtEur(valorePostRistrMax)}` },
-              ].map(d => (
-                <div key={d.label} className="bg-muted/40 rounded-lg p-3">
-                  <p className="text-xs text-muted-foreground mb-1">{d.label}</p>
-                  <p className="font-semibold text-sm">{d.value}</p>
-                </div>
-              ))}
-            </div>
-            {omiData.note_mercato && (
-              <p className="text-xs text-muted-foreground italic border-t border-border pt-3">
-                <Info className="w-3 h-3 inline mr-1" />
-                {omiData.note_mercato}
-              </p>
+            ) : (
+              <Badge className="bg-emerald-100 text-emerald-800 border-emerald-200 text-xs">
+                ✓ Dati OMI ufficiali AdE
+              </Badge>
             )}
-            <p className="text-xs text-muted-foreground mt-2">
-              Fonte: Osservatorio Mercato Immobiliare — Agenzia delle Entrate, {omiData.semestre_riferimento}
-            </p>
           </div>
-        </motion.div>
-      )}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+            {[
+              { label: "Valore mercato attuale /mq", value: `${fmtEur(omi.omi_min_mq)} – ${fmtEur(omi.omi_max_mq)}` },
+              { label: `Valore stimato OGGI (${mq} mq)`, value: `${fmtEur(valoreMercatoMin)} – ${fmtEur(valoreMercatoMax)}` },
+              { label: "Post-ristrutturazione /mq", value: `${fmtEur(omi.omi_post_ristr_min)} – ${fmtEur(omi.omi_post_ristr_max)}` },
+              { label: `Valore POST-RISTR (${mq} mq)`, value: `${fmtEur(valorePostRistrMin)} – ${fmtEur(valorePostRistrMax)}` },
+            ].map(d => (
+              <div key={d.label} className="bg-muted/40 rounded-lg p-3">
+                <p className="text-xs text-muted-foreground mb-1">{d.label}</p>
+                <p className="font-semibold text-sm">{d.value}</p>
+              </div>
+            ))}
+          </div>
+          <p className="text-xs text-muted-foreground italic">
+            <Info className="w-3 h-3 inline mr-1" />
+            {omi.note_mercato}
+          </p>
+          <a href={omi.fonte_url} target="_blank" rel="noopener noreferrer"
+            className="mt-1 text-xs text-primary flex items-center gap-1 hover:underline">
+            <ExternalLink className="w-3 h-3" /> Banca Dati OMI — Agenzia delle Entrate
+          </a>
+        </div>
+      </motion.div>
 
       {/* BLOCCO 2 — Costi ristrutturazione */}
-      {prezzoAcquisto > 0 && (
-        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}
-          className="rounded-xl border border-border bg-card overflow-hidden">
-          <div className="flex items-center gap-2 px-5 py-3 border-b border-border bg-muted/30">
-            <Home className="w-4 h-4 text-primary" />
-            <h4 className="font-semibold text-sm">Stima Costi Ristrutturazione — 3 Scenari</h4>
-          </div>
-          <div className="p-5 overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border">
-                  <th className="text-left py-2 pr-4 text-muted-foreground font-medium">Voce</th>
-                  <th className="text-right py-2 pr-4 text-emerald-700 font-medium">Scenario Base</th>
-                  <th className="text-right py-2 pr-4 text-amber-700 font-medium">Scenario Medio</th>
-                  <th className="text-right py-2 text-red-700 font-medium">Scenario Premium</th>
+      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}
+        className="rounded-xl border border-border bg-card overflow-hidden">
+        <div className="flex items-center gap-2 px-5 py-3 border-b border-border bg-muted/30">
+          <Home className="w-4 h-4 text-primary" />
+          <h4 className="font-semibold text-sm">Stima Costi Ristrutturazione — 3 Scenari</h4>
+        </div>
+        <div className="p-5 overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-border">
+                <th className="text-left py-2 pr-4 text-muted-foreground font-medium">Voce</th>
+                <th className="text-right py-2 pr-4 text-emerald-700 font-medium">Scenario Base</th>
+                <th className="text-right py-2 pr-4 text-amber-700 font-medium">Scenario Medio</th>
+                <th className="text-right py-2 text-red-700 font-medium">Scenario Premium</th>
+              </tr>
+            </thead>
+            <tbody>
+              {[
+                ["Superficie", `${mq} mq`, `${mq} mq`, `${mq} mq`],
+                ["Costo ristr. (€/mq)", `€${costs.min}`, `€${costs.mid}`, `€${costs.max}`],
+                ["Totale ristrutturazione", fmtEur(ristrMin), fmtEur(ristrMid), fmtEur(ristrMax)],
+                prezzoAcquisto > 0 ? [`Prezzo acquisto`, fmtEur(prezzoAcquisto), fmtEur(prezzoAcquisto), fmtEur(prezzoAcquisto)] : null,
+                prezzoAcquisto > 0 ? [`Spese accessorie (${spesePerc}%)`, fmtEur(spese), fmtEur(spese), fmtEur(spese)] : null,
+              ].filter(Boolean).map(([label, ...vals], i) => (
+                <tr key={i} className="border-b border-border/50">
+                  <td className="py-2 pr-4 text-muted-foreground">{label}</td>
+                  {vals.map((v, j) => <td key={j} className="py-2 pr-4 text-right">{v}</td>)}
                 </tr>
-              </thead>
-              <tbody>
-                {[
-                  ["Costo ristr. (€/mq)", `${costs.min}`, `${costs.mid}`, `${costs.max}`],
-                  ["Totale ristrutturazione", fmtEur(ristrMin), fmtEur(ristrMid), fmtEur(ristrMax)],
-                  [`Spese accessorie (${spesePerc}%)`, fmtEur(spese), fmtEur(spese), fmtEur(spese)],
-                ].map(([label, ...vals], i) => (
-                  <tr key={i} className="border-b border-border/50">
-                    <td className="py-2 pr-4 text-muted-foreground">{label}</td>
-                    {vals.map((v, j) => <td key={j} className="py-2 pr-4 text-right">{v}</td>)}
-                  </tr>
-                ))}
+              ))}
+              {prezzoAcquisto > 0 && (
                 <tr className="bg-primary/5 font-bold">
                   <td className="py-3 pr-4">INVESTIMENTO TOTALE</td>
                   <td className="py-3 pr-4 text-right text-emerald-700">{fmtEur(totMin)}</td>
                   <td className="py-3 pr-4 text-right text-amber-700">{fmtEur(totMid)}</td>
                   <td className="py-3 text-right text-red-700">{fmtEur(totMax)}</td>
                 </tr>
-              </tbody>
-            </table>
-          </div>
-        </motion.div>
-      )}
+              )}
+            </tbody>
+          </table>
+        </div>
+      </motion.div>
 
       {/* BLOCCO 3 — Flipping */}
-      {isFlipping && prezzoAcquisto > 0 && omiData && (
+      {isFlipping && prezzoAcquisto > 0 && totMid && (
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
           className={`rounded-xl border-2 overflow-hidden ${roiFlip >= 15 ? "border-emerald-400 bg-emerald-50" : roiFlip >= 5 ? "border-amber-400 bg-amber-50" : "border-red-400 bg-red-50"}`}>
           <div className="flex items-center gap-2 px-5 py-3 border-b border-inherit">
@@ -316,7 +315,7 @@ Fornisci un punteggio complessivo e analisi sintetica.`,
             <div className="flex flex-wrap gap-4 text-sm">
               <div className="bg-white/50 rounded-lg px-4 py-2">
                 <span className="text-muted-foreground">ROI FLIP: </span>
-                <span className={`font-bold ${roiFlip >= 15 ? "text-emerald-700" : roiFlip >= 5 ? "text-amber-700" : "text-red-700"}`}>{roiFlip.toFixed(1)}%</span>
+                <span className={`font-bold ${roiFlip >= 15 ? "text-emerald-700" : roiFlip >= 5 ? "text-amber-700" : "text-red-700"}`}>{roiFlip?.toFixed(1)}%</span>
               </div>
               <div className="bg-white/50 rounded-lg px-4 py-2">
                 <span className="text-muted-foreground">Plusvalenza fiscale (26%): </span>
@@ -327,15 +326,17 @@ Fornisci un punteggio complessivo e analisi sintetica.`,
                 <span className={`font-bold ${margineNetto >= 0 ? "text-emerald-700" : "text-red-700"}`}>{fmtEur(margineNetto)}</span>
               </div>
             </div>
-            <p className="text-xs text-muted-foreground mt-3">
-              Break-even: devi vendere almeno a <strong>{fmtEur(breakEvenMq)}/mq</strong> per andare in pareggio.
-            </p>
+            {breakEvenMq && (
+              <p className="text-xs text-muted-foreground mt-3">
+                Break-even: devi vendere almeno a <strong>{fmtEur(breakEvenMq)}/mq</strong> per andare in pareggio.
+              </p>
+            )}
           </div>
         </motion.div>
       )}
 
       {/* BLOCCO 4 — Affitto lungo */}
-      {isAffittoLungo && prezzoAcquisto > 0 && omiData && (
+      {isAffittoLungo && (
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
           className="rounded-xl border border-border bg-card overflow-hidden">
           <div className="flex items-center gap-2 px-5 py-3 border-b border-border bg-muted/30">
@@ -345,27 +346,33 @@ Fornisci un punteggio complessivo e analisi sintetica.`,
           <div className="p-5">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               {[
-                { label: "Canone annuo stimato", value: fmtEur(canoneAnnuo) },
-                { label: "Rendimento lordo", value: `${rendimentoLordo?.toFixed(2)}%` },
-                { label: "Rendimento netto (ced. sec. 21%)", value: `${rendimentoNetto?.toFixed(2)}%` },
-                { label: "Pay-back period", value: `${payback?.toFixed(1)} anni` },
-              ].map(d => (
+                { label: "Canone mensile stimato (OMI)", value: `${fmtEur(canoneMin)} – ${fmtEur(canoneMax)}` },
+                { label: "Canone annuo", value: fmtEur(canoneAnnuo) },
+                rendimentoLordo ? { label: "Rendimento lordo", value: `${rendimentoLordo.toFixed(2)}%` } : null,
+                rendimentoNetto ? { label: "Rendimento netto (ced. sec. 21%)", value: `${rendimentoNetto.toFixed(2)}%` } : null,
+                payback ? { label: "Pay-back period", value: `${payback.toFixed(1)} anni` } : null,
+              ].filter(Boolean).map(d => (
                 <div key={d.label} className="bg-muted/40 rounded-lg p-3">
                   <p className="text-xs text-muted-foreground mb-1">{d.label}</p>
                   <p className="font-semibold text-sm">{d.value}</p>
                 </div>
               ))}
             </div>
-            <p className="text-xs text-muted-foreground mt-3 italic">
-              Confronto: media nazionale affitti residenziali 4–5% lordo.{" "}
-              {rendimentoLordo >= 5 ? "✓ Rendimento in linea o superiore alla media." : "⚠ Rendimento sotto la media nazionale."}
-            </p>
+            {rendimentoLordo && (
+              <p className="text-xs text-muted-foreground mt-3 italic">
+                Media nazionale affitti residenziali: 4–5% lordo.{" "}
+                {rendimentoLordo >= 5 ? "✓ Rendimento in linea o superiore alla media." : "⚠ Rendimento sotto la media nazionale."}
+              </p>
+            )}
+            {!prezzoAcquisto && (
+              <p className="text-xs text-amber-700 mt-2">⚠ Rendimento calcolato su valore OMI stimato — inserisci il prezzo d'acquisto per un dato preciso.</p>
+            )}
           </div>
         </motion.div>
       )}
 
       {/* BLOCCO 4b — Affitto breve */}
-      {isAffittoBreve && prezzoAcquisto > 0 && omiData && (
+      {isAffittoBreve && tariffaNotte && (
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
           className="rounded-xl border border-border bg-card overflow-hidden">
           <div className="flex items-center gap-2 px-5 py-3 border-b border-border bg-muted/30">
@@ -375,9 +382,9 @@ Fornisci un punteggio complessivo e analisi sintetica.`,
           <div className="p-5">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               {[
-                { label: "Tariffa/notte stimata", value: fmtEur(omiData.canone_breve_notte) },
+                { label: `Tariffa/notte stimata${omi.is_costiero ? " (+50% stagionalità)" : ""}`, value: `${fmtEur(tariffaNotte.notte_min)} – ${fmtEur(tariffaNotte.notte_max)}` },
                 { label: "Notti/anno (60% occ.)", value: `${nottiAnno} notti` },
-                { label: "Revenue annua lorda", value: fmtEur(revenueBreve) },
+                { label: "Revenue annua lorda (media)", value: fmtEur(revenueBreve) },
                 { label: "Revenue netta (–28%)", value: fmtEur(revenueNettaBreve) },
               ].map(d => (
                 <div key={d.label} className="bg-muted/40 rounded-lg p-3">
@@ -386,14 +393,25 @@ Fornisci un punteggio complessivo e analisi sintetica.`,
                 </div>
               ))}
             </div>
-            <div className="mt-3 p-3 bg-amber-50 rounded-lg text-xs text-amber-800">
-              <strong>Nota:</strong> Rendimento lordo stimato: {rendimentoBreve?.toFixed(1)}%. Dedurre gestione, pulizie e platform fee (~25–30%). Verificare normativa locale sugli affitti brevi (L. 191/2023).
-            </div>
+            {rendimentoBreve && (
+              <div className="mt-3 p-3 bg-amber-50 rounded-lg text-xs text-amber-800">
+                <strong>Nota:</strong> Rendimento lordo stimato: {rendimentoBreve.toFixed(1)}%. Dedurre gestione, pulizie e platform fee (~25–30%). Verificare normativa locale sugli affitti brevi (L. 191/2023).
+              </div>
+            )}
+            <p className="text-xs text-muted-foreground mt-2 italic">
+              Tariffa calcolata su valori OMI reali (canone locazione × premium breve termine{omi.is_costiero ? " × 1.5 stagionalità costiera" : ""}).
+            </p>
           </div>
         </motion.div>
       )}
 
-      {/* BLOCCO 5 — Scorecard */}
+      {/* BLOCCO 5 — Scorecard AI */}
+      {loadingScore && (
+        <div className="flex items-center justify-center py-8 gap-3">
+          <Loader2 className="w-4 h-4 animate-spin text-primary" />
+          <span className="text-xs text-muted-foreground">Calcolo scorecard investimento…</span>
+        </div>
+      )}
       {scoreData && (
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}
           className="rounded-xl border border-border bg-card overflow-hidden">
@@ -413,7 +431,6 @@ Fornisci un punteggio complessivo e analisi sintetica.`,
                   </p>
                   <ul className="space-y-1">
                     {scoreData.punti_forza
-                      // BUG3: filtra punti forza che menzionano prezzo €0
                       .filter(p => !(prezzoAcquisto === 0 && /prezzo|acquisto|€0|0€/i.test(p)))
                       .slice(0, 3).map((p, i) => (
                       <li key={i} className="text-sm text-muted-foreground">• {p}</li>
@@ -427,8 +444,8 @@ Fornisci un punteggio complessivo e analisi sintetica.`,
                     <AlertTriangle className="w-4 h-4" /> Rischi da considerare
                   </p>
                   <ul className="space-y-1">
-                    {scoreData.rischi.slice(0, 2).map((r, i) => (
-                      <li key={i} className="text-sm text-muted-foreground">• {r}</li>
+                    {scoreData.rischi.slice(0, 2).map((r2, i) => (
+                      <li key={i} className="text-sm text-muted-foreground">• {r2}</li>
                     ))}
                   </ul>
                 </div>
@@ -437,7 +454,10 @@ Fornisci un punteggio complessivo e analisi sintetica.`,
           </div>
           <div className="px-5 pb-4">
             <p className="text-[10px] text-muted-foreground italic">
-              I valori OMI sono stime basate su dati storici dell'Osservatorio del Mercato Immobiliare. Per valutazioni ufficiali consultare agenziaentrate.gov.it/omi o richiedere perizia a tecnico abilitato.
+              Valori di mercato da Banca Dati OMI — Agenzia delle Entrate (dati ufficiali, open data CC BY).
+              Per valutazioni ufficiali consultare{" "}
+              <a href="https://www.agenziaentrate.gov.it/portale/schede/fabbricatiterreni/omi/banche-dati/quotazioni-immobiliari"
+                target="_blank" rel="noopener noreferrer" className="underline">agenziaentrate.gov.it/omi</a>.
             </p>
           </div>
         </motion.div>
