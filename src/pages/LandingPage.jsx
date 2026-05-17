@@ -2,6 +2,7 @@ import React from "react";
 import { base44 } from "@/api/base44Client";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
+import { Mail } from "lucide-react";
 
 const UrbiCheckLogo = ({ light = false }) => (
   <div className="flex items-center gap-2">
@@ -44,6 +45,10 @@ export default function LandingPage() {
               style={{ color: '#F4EFE6', fontFamily: "'IBM Plex Mono', monospace" }}>
               Prezzi
             </a>
+            <Link to="/waitlist" className="text-xs uppercase tracking-[2px] transition-opacity hover:opacity-70"
+              style={{ color: '#F4EFE6', fontFamily: "'IBM Plex Mono', monospace" }}>
+              Lista d'attesa
+            </Link>
           </div>
           <button
             onClick={handleLogin}
@@ -266,7 +271,11 @@ export default function LandingPage() {
               Fenice Management — P.IVA IT02696760101
             </p>
           </div>
-          <div className="flex items-center gap-6">
+          <div className="flex items-center gap-6 flex-wrap">
+            <Link to="/waitlist" className="text-[10px] uppercase tracking-[2px] transition-opacity hover:opacity-70"
+              style={{ color: '#7A7268', fontFamily: "'IBM Plex Mono', monospace" }}>
+              Lista d'attesa
+            </Link>
             <a href="#" className="text-[10px] uppercase tracking-[2px] transition-opacity hover:opacity-70"
               style={{ color: '#7A7268', fontFamily: "'IBM Plex Mono', monospace" }}>
               Privacy Policy
@@ -274,6 +283,10 @@ export default function LandingPage() {
             <a href="#" className="text-[10px] uppercase tracking-[2px] transition-opacity hover:opacity-70"
               style={{ color: '#7A7268', fontFamily: "'IBM Plex Mono', monospace" }}>
               Termini di servizio
+            </a>
+            <a href="mailto:loris.cresta@gmail.com" className="text-[10px] flex items-center gap-1 transition-opacity hover:opacity-70"
+              style={{ color: '#7A7268', fontFamily: "'IBM Plex Mono', monospace" }}>
+              <Mail className="w-3 h-3" /> loris.cresta@gmail.com
             </a>
           </div>
         </div>

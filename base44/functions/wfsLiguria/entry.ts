@@ -507,6 +507,8 @@ Deno.serve(async (req) => {
   }
 
   let comune, provincia, indirizzo, regione, query_id, existingReportData;
+  let prefill_lat = null, prefill_lon = null;
+
   if (body.query_id) {
     query_id = body.query_id;
     let q;
@@ -517,7 +519,8 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'Errore lettura query' }, { status: 500 });
     }
     if (!q) return Response.json({ error: 'Query non trovata' }, { status: 404 });
-    if (q.created_by !== user.email && user.role !== 'admin') {
+    // Allow service-role calls (automations) — skip ownership check if no user email
+    if (user && user.email && q.created_by !== user.email && user.role !== 'admin') {
       return Response.json({ error: 'Forbidden' }, { status: 403 });
     }
     const regioneLower = (q.regione || '').toLowerCase();
@@ -526,9 +529,14 @@ Deno.serve(async (req) => {
     }
     comune = q.comune;
     provincia = q.provincia || q.sigla_provincia || '';
-    indirizzo = null;
+    indirizzo = q.indirizzo_immobile || null;
     regione = q.regione;
     existingReportData = q.report_data || {};
+    // Use stored centroid coordinates to skip geocoding
+    if (q.centroid_lat && q.centroid_lng) {
+      prefill_lat = q.centroid_lat;
+      prefill_lon = q.centroid_lng;
+    }
     try { await base44.entities.CadastralQuery.update(query_id, { status: 'processing' }); } catch (_e) {}
   } else {
     comune = body.comune;

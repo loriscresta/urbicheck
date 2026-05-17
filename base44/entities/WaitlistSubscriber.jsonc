@@ -18,6 +18,10 @@
         "altro"
       ],
       "description": "Ruolo dell'iscritto"
+    },
+    "regione_interesse": {
+      "type": "string",
+      "description": "Regione italiana di interesse (opzionale)"
     }
   },
   "required": [
