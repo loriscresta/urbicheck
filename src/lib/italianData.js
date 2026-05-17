@@ -29,7 +29,31 @@ export const PROVINCE_BY_REGIONE = {
 };
 
 export const CREDIT_PACKAGES = [
-  { id: "single", name: "1 Query", queries: 1, price: 9.90, popular: false },
-  { id: "pack3", name: "3 Query", queries: 3, price: 29.70, popular: true, savings: "-10%" },
-  { id: "pro", name: "Piano Pro", queries: 10, price: 49.00, popular: false, savings: "-50%" },
+  {
+    id: "starter",
+    price_id: "price_1TYBwfRUwkdZTXPk1lJgONVo",
+    name: "Starter",
+    queries: 5,
+    price: 49.50,
+    popular: false,
+    savings: null,
+  },
+  {
+    id: "professional",
+    price_id: "price_1TYBwfRUwkdZTXPkqXMDedsx",
+    name: "Professional",
+    queries: 15,
+    price: 133.50,
+    popular: true,
+    savings: "-10%",
+  },
+  {
+    id: "agency",
+    price_id: "price_1TYBwfRUwkdZTXPkIqVkBof8",
+    name: "Agency",
+    queries: 50,
+    price: 395.00,
+    popular: false,
+    savings: "-20%",
+  },
 ];

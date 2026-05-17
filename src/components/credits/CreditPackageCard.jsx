@@ -1,9 +1,8 @@
 import React from "react";
-import { Badge } from "@/components/ui/badge";
-import { Check } from "lucide-react";
+import { Check, Loader2 } from "lucide-react";
 import { motion } from "framer-motion";
 
-export default function CreditPackageCard({ pkg, onPurchase, delay = 0 }) {
+export default function CreditPackageCard({ pkg, onPurchase, delay = 0, loading = false }) {
   const pricePerQuery = (pkg.price / pkg.queries).toFixed(2);
 
   return (
@@ -54,15 +53,16 @@ export default function CreditPackageCard({ pkg, onPurchase, delay = 0 }) {
       </ul>
 
       <button
-        onClick={() => onPurchase(pkg)}
-        className="w-full h-11 text-xs font-bold uppercase tracking-[2px] text-white transition-opacity hover:opacity-90"
+        onClick={() => !loading && onPurchase(pkg)}
+        disabled={loading}
+        className="w-full h-11 text-xs font-bold uppercase tracking-[2px] text-white transition-opacity hover:opacity-90 flex items-center justify-center gap-2 disabled:opacity-60"
         style={{
           background: '#1A3A6B',
           borderBottom: '3px solid #B33A2A',
           fontFamily: "'IBM Plex Mono', monospace",
         }}
       >
-        Acquista
+        {loading ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Reindirizzamento...</> : 'Acquista'}
       </button>
     </motion.div>
   );

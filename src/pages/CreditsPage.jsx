@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/components/ui/use-toast";
@@ -6,14 +6,13 @@ import { CREDIT_PACKAGES } from "@/lib/italianData";
 import CreditPackageCard from "@/components/credits/CreditPackageCard";
 import { format } from "date-fns";
 import { it } from "date-fns/locale";
-import { Badge } from "@/components/ui/badge";
 import { CreditCard, ArrowUpRight, ArrowDownRight, Loader2 } from "lucide-react";
 import { motion } from "framer-motion";
-import { sendCreditsPurchasedEmail } from "@/functions/sendCreditsPurchasedEmail";
+import { stripeCheckout } from "@/functions/stripeCheckout";
 
 export default function CreditsPage() {
   const { toast } = useToast();
-  const queryClient = useQueryClient();
+  const [loadingPkg, setLoadingPkg] = useState(null);
 
   const { data: credits, isLoading: creditsLoading } = useQuery({
     queryKey: ["userCredits"],
@@ -33,56 +32,46 @@ export default function CreditsPage() {
   });
 
   const handlePurchase = async (pkg) => {
+    // Block checkout inside iframe (preview/builder)
+    if (window.self !== window.top) {
+      alert("Il pagamento funziona solo dall'app pubblicata. Apri l'app nel browser per acquistare.");
+      return;
+    }
+
+    setLoadingPkg(pkg.id);
     try {
-      const user = await base44.auth.me();
-
-      if (credits) {
-        await base44.entities.UserCredits.update(credits.id, {
-          balance: (credits.balance || 0) + pkg.price,
-        });
-      } else {
-        await base44.entities.UserCredits.create({
-          user_email: user.email,
-          balance: pkg.price,
-          total_spent: 0,
-          total_queries: 0,
-        });
-      }
-
-      try {
-        await base44.entities.CreditTransaction.create({
-          user_email: user.email,
-          type: "purchase",
-          amount: pkg.price,
-          description: `Acquisto ${pkg.name}`,
-        });
-      } catch (_txErr) {
-        // Transaction log may fail due to permissions — credits still updated
-      }
-
-      queryClient.invalidateQueries({ queryKey: ["userCredits"] });
-      queryClient.invalidateQueries({ queryKey: ["transactions"] });
-
-      const newBalance = (credits?.balance || 0) + pkg.price;
-      sendCreditsPurchasedEmail({
-        user_email: user.email,
-        user_name: user.full_name || '',
-        amount_purchased: pkg.price,
-        new_balance: newBalance,
-      }).catch(() => {});
-
-      toast({
-        title: "Crediti aggiunti!",
-        description: `€${pkg.price.toFixed(2)} aggiunti al tuo saldo.`,
+      const res = await stripeCheckout({
+        price_id: pkg.price_id,
+        success_url: `${window.location.origin}/credits?success=1`,
+        cancel_url: `${window.location.origin}/credits?cancelled=1`,
       });
+      if (res?.data?.url) {
+        window.location.href = res.data.url;
+      } else {
+        throw new Error("URL checkout non ricevuto");
+      }
     } catch (err) {
       toast({
-        title: "Errore acquisto",
+        title: "Errore avvio pagamento",
         description: err.message || "Contatta il supporto.",
         variant: "destructive",
       });
+    } finally {
+      setLoadingPkg(null);
     }
   };
+
+  // Show success/cancel toasts from redirect params
+  React.useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('success') === '1') {
+      toast({ title: "Pagamento completato! ✓", description: "I crediti verranno accreditati entro pochi secondi." });
+      window.history.replaceState({}, '', '/credits');
+    } else if (params.get('cancelled') === '1') {
+      toast({ title: "Pagamento annullato", variant: "destructive" });
+      window.history.replaceState({}, '', '/credits');
+    }
+  }, []);
 
   return (
     <div className="p-6 lg:p-10 max-w-5xl mx-auto">
@@ -118,7 +107,7 @@ export default function CreditsPage() {
       <p className="text-[10px] font-semibold uppercase tracking-[2px] mb-4" style={{ color: '#B33A2A', fontFamily: "'IBM Plex Mono', monospace" }}>Pacchetti Disponibili</p>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-10">
         {CREDIT_PACKAGES.map((pkg, i) => (
-          <CreditPackageCard key={pkg.id} pkg={pkg} onPurchase={handlePurchase} delay={i * 0.05} />
+          <CreditPackageCard key={pkg.id} pkg={pkg} onPurchase={handlePurchase} delay={i * 0.05} loading={loadingPkg === pkg.id} />
         ))}
       </div>
 
