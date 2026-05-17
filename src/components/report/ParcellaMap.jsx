@@ -7,11 +7,29 @@ import { fetchParcelGeometry } from "@/functions/fetchParcelGeometry";
 
 const ADE_GEOPORTALE_URL = "https://www.agenziaentrate.gov.it/portale/web/guest/schede/fabbricatiterreni/consultazione-cartografia-catastale/servizio-consultazione-cartografia";
 
+// Calcola baricentro di un poligono GeoJSON (media aritmetica vertici)
+function calcCentroid(geojson) {
+  const geom = geojson?.type === 'Feature' ? geojson.geometry : geojson;
+  if (!geom || geom.type !== 'Polygon' || !geom.coordinates?.[0]?.length) return null;
+  const ring = geom.coordinates[0];
+  let sumLon = 0, sumLat = 0;
+  for (const [lo, la] of ring) { sumLon += lo; sumLat += la; }
+  return { lat: sumLat / ring.length, lon: sumLon / ring.length };
+}
+
 export default function ParcellaMap({ lat, lon, geojsonPolygon, queryId, foglio, particella, height = 280 }) {
   const mapRef = useRef(null);
   const leafletMapRef = useRef(null);
   const [resolvedPolygon, setResolvedPolygon] = useState(geojsonPolygon || null);
   const [wfsAttempted, setWfsAttempted] = useState(false);
+
+  // Se il poligono è disponibile, usa SEMPRE il baricentro calcolato al volo
+  const polyGeom = resolvedPolygon?.type === 'Feature' ? resolvedPolygon.geometry : resolvedPolygon;
+  const hasPolygon = polyGeom?.type === 'Polygon' || polyGeom?.type === 'MultiPolygon';
+  const centroid = hasPolygon ? calcCentroid(resolvedPolygon) : null;
+  const displayLat = centroid?.lat ?? lat;
+  const displayLon = centroid?.lon ?? lon;
+  const fonteLabel = hasPolygon ? 'WFS AdE — Agenzia delle Entrate' : 'OnData CC BY 4.0';
 
   // FIX C — Tenta fetch geometria lato backend (evita CORS del browser)
   useEffect(() => {
@@ -38,12 +56,22 @@ export default function ParcellaMap({ lat, lon, geojsonPolygon, queryId, foglio,
       const layer = L.geoJSON(geom, {
         style: { color: '#FF6B35', weight: 2, opacity: 1, fillColor: '#FF6B35', fillOpacity: 0.25 },
       }).addTo(map);
+      // Aggiorna marker al centroide calcolato dal poligono
+      const c = calcCentroid(resolvedPolygon);
+      if (c) {
+        const icon = L.divIcon({
+          className: '',
+          html: `<div style="width:10px;height:10px;background:#FF6B35;border:2px solid white;border-radius:50%;box-shadow:0 1px 4px rgba(0,0,0,0.5);"></div>`,
+          iconSize: [10, 10], iconAnchor: [5, 5],
+        });
+        L.marker([c.lat, c.lon], { icon }).addTo(map).bindPopup(`📍 Baricentro WFS AdE`);
+      }
       try { map.fitBounds(layer.getBounds(), { padding: [30, 30] }); } catch (_e) {}
     }
   }, [resolvedPolygon]);
 
   useEffect(() => {
-    if (!lat || !lon || !mapRef.current) return;
+    if (!displayLat || !displayLon || !mapRef.current) return;
     if (leafletMapRef.current) return; // already initialized
 
     // Load Leaflet CSS + JS from CDN
@@ -70,7 +98,7 @@ export default function ParcellaMap({ lat, lon, geojsonPolygon, queryId, foglio,
       if (!mapRef.current || leafletMapRef.current) return;
 
       const map = L.map(mapRef.current, {
-        center: [lat, lon],
+        center: [displayLat, displayLon],
         zoom: 17,
         zoomControl: true,
         scrollWheelZoom: false,
@@ -95,13 +123,13 @@ export default function ParcellaMap({ lat, lon, geojsonPolygon, queryId, foglio,
           style: { color: '#FF6B35', weight: 2, opacity: 1, fillColor: '#FF6B35', fillOpacity: 0.25 },
         }).addTo(map);
 
-        // Marker centroide
+        // Marker baricentro calcolato dal poligono
         const icon = L.divIcon({
           className: '',
           html: `<div style="width:10px;height:10px;background:#FF6B35;border:2px solid white;border-radius:50%;box-shadow:0 1px 4px rgba(0,0,0,0.5);"></div>`,
           iconSize: [10, 10], iconAnchor: [5, 5],
         });
-        L.marker([lat, lon], { icon }).addTo(map).bindPopup(`📍 Centroide`);
+        L.marker([displayLat, displayLon], { icon }).addTo(map).bindPopup(`📍 Baricentro WFS AdE`);
 
         try {
           map.fitBounds(layer.getBounds(), { padding: [30, 30] });
@@ -116,10 +144,10 @@ export default function ParcellaMap({ lat, lon, geojsonPolygon, queryId, foglio,
           iconSize: [16, 16],
           iconAnchor: [8, 8],
         });
-        L.marker([lat, lon], { icon })
+        L.marker([displayLat, displayLon], { icon })
           .addTo(map)
-          .bindPopup(`📍 Lat: ${lat.toFixed(5)}, Lon: ${lon.toFixed(5)}`);
-        map.setView([lat, lon], 17);
+          .bindPopup(`📍 Lat: ${displayLat.toFixed(5)}, Lon: ${displayLon.toFixed(5)}`);
+        map.setView([displayLat, displayLon], 17);
       }
     });
 
@@ -129,12 +157,9 @@ export default function ParcellaMap({ lat, lon, geojsonPolygon, queryId, foglio,
         leafletMapRef.current = null;
       }
     };
-  }, [lat, lon, resolvedPolygon]);
+  }, [displayLat, displayLon, resolvedPolygon]);
 
-  if (!lat || !lon) return null;
-
-  const geomToDisplay = resolvedPolygon?.type === 'Feature' ? resolvedPolygon.geometry : resolvedPolygon;
-  const hasPolygonDisplay = geomToDisplay?.type === 'Polygon' || geomToDisplay?.type === 'MultiPolygon';
+  if (!displayLat || !displayLon) return null;
 
   return (
     <div style={{ position: 'relative', border: '1px solid #C4BAA8', overflow: 'hidden' }}>
@@ -149,8 +174,8 @@ export default function ParcellaMap({ lat, lon, geojsonPolygon, queryId, foglio,
         color: '#7A7268',
         maxWidth: '90%',
       }}>
-        {hasPolygonDisplay
-          ? `✅ Particella Foglio ${foglio}, N. ${particella} — Fonte: WFS AdE`
+        {hasPolygon
+          ? `✅ Foglio ${foglio}, N. ${particella} — ${fonteLabel} — Baricentro: ${displayLat.toFixed(5)}, ${displayLon.toFixed(5)}`
           : (
             <span className="flex items-center gap-1 flex-wrap">
               <span>📍 {foglio && particella ? `Foglio ${foglio}, Part. ${particella} — ` : ''}Poligono non disponibile</span>

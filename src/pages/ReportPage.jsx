@@ -522,24 +522,39 @@ export default function ReportPage() {
         )}
 
         {/* === MAPPA CATASTALE — da catasto_resolver (OnData + AdE WFS) === */}
-        {(query.centroid_lat || r.catasto_data?.lat) && (
-          <ReportSection icon={MapPin} title="Mappa Particella Catastale" delay={0.05}>
-            <div className="mb-2 flex flex-wrap gap-4 text-xs text-muted-foreground">
-              <span>📍 WGS84: {(r.catasto_data?.lat || query.centroid_lat)?.toFixed(5)}, {(r.catasto_data?.lon || query.centroid_lng)?.toFixed(5)}</span>
-              {r.catasto_data?.inspire_id && <span>INSPIRE ID: {r.catasto_data.inspire_id}</span>}
-              {r.catasto_data?.fonte && <span className="italic">{r.catasto_data.fonte}</span>}
-            </div>
-            <ParcellaMap
-              lat={r.catasto_data?.lat || query.centroid_lat}
-              lon={r.catasto_data?.lon || query.centroid_lng}
-              geojsonPolygon={query.geometry_geojson || r.catasto_data?.geojson_polygon}
-              queryId={query.id}
-              foglio={query.foglio}
-              particella={query.particella}
-              height={320}
-            />
-          </ReportSection>
-        )}
+        {(query.centroid_lat || r.catasto_data?.lat) && (() => {
+          // Calcola baricentro dal poligono al volo — fonte autoritativa
+          const poly = query.geometry_geojson || r.catasto_data?.geojson_polygon;
+          let mapLat = r.catasto_data?.lat || query.centroid_lat;
+          let mapLon = r.catasto_data?.lon || query.centroid_lng;
+          let mapFonte = r.catasto_data?.fonte || 'ondata_only';
+          if (poly?.type === 'Polygon' && poly.coordinates?.[0]?.length) {
+            const ring = poly.coordinates[0];
+            let sLon = 0, sLat = 0;
+            for (const [lo, la] of ring) { sLon += lo; sLat += la; }
+            mapLat = sLat / ring.length;
+            mapLon = sLon / ring.length;
+            mapFonte = 'WFS AdE — Agenzia delle Entrate';
+          }
+          return (
+            <ReportSection icon={MapPin} title="Mappa Particella Catastale" delay={0.05}>
+              <div className="mb-2 flex flex-wrap gap-4 text-xs text-muted-foreground">
+                <span>📍 WGS84: {mapLat?.toFixed(5)}, {mapLon?.toFixed(5)}</span>
+                {r.catasto_data?.inspire_id && <span>INSPIRE ID: {r.catasto_data.inspire_id}</span>}
+                <span className="italic">{mapFonte}</span>
+              </div>
+              <ParcellaMap
+                lat={mapLat}
+                lon={mapLon}
+                geojsonPolygon={poly}
+                queryId={query.id}
+                foglio={query.foglio}
+                particella={query.particella}
+                height={320}
+              />
+            </ReportSection>
+          );
+        })()}
 
         {/* Valutazione Sintetica */}
         {r.valutazione_sintetica && (
