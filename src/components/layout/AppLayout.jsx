@@ -165,6 +165,13 @@ export default function AppLayout() {
                 </Link>
               );
             })}
+            {currentUser?.role === "admin" && (
+              <Link to="/admin" onClick={() => setMobileOpen(false)}
+                className="flex items-center gap-3 px-4 py-3 text-xs font-semibold tracking-widest uppercase transition-all"
+                style={{ color: 'rgba(244,239,230,0.4)', fontFamily: "'IBM Plex Mono', monospace" }}>
+                <ShieldCheck className="w-4 h-4" /> Admin
+              </Link>
+            )}
             <button
               onClick={handleLogout}
               className="w-full flex items-center gap-2 px-4 py-3 text-xs uppercase tracking-widest mt-1"
