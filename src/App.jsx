@@ -1,5 +1,4 @@
 import { Toaster } from "@/components/ui/toaster"
-import { Toaster as SonnerToaster } from "@/components/ui/sonner"
 import { QueryClientProvider } from '@tanstack/react-query'
 import { queryClientInstance } from '@/lib/query-client'
 import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
@@ -16,6 +15,7 @@ import CreditsPage from '@/pages/CreditsPage';
 import AppLayout from '@/components/layout/AppLayout';
 import WaitlistPage from '@/pages/WaitlistPage';
 import DevPanel from '@/pages/DevPanel';
+import AdminPanel from '@/pages/AdminPanel';
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, isAuthenticated, navigateToLogin } = useAuth();

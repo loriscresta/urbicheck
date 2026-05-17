@@ -1,15 +1,13 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import { useQuery } from "@tanstack/react-query";
+import { sendUrbiCheckEmail } from "@/functions/sendUrbiCheckEmail";
 import { Search, CreditCard, FileCheck, TrendingUp, FolderOpen } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import StatsCard from "@/components/dashboard/StatsCard";
 import RecentQueries from "@/components/dashboard/RecentQueries";
-import LowBalanceAlert from "@/components/dashboard/LowBalanceAlert";
-import DashboardEmptyState from "@/components/dashboard/DashboardEmptyState";
-import OnboardingModal from "@/components/onboarding/OnboardingModal";
-import { useQueryStatusNotifier } from "@/hooks/useQueryStatusNotifier";
 import { motion } from "framer-motion";
 import { format } from "date-fns";
 import { it } from "date-fns/locale";
@@ -22,12 +20,7 @@ const attiStatusMap = {
   completata: { label: "Completata", className: "bg-emerald-50 text-emerald-700 border-emerald-200" },
 };
 
-// Persist onboarding dismissal in localStorage
-const ONBOARDING_KEY = "urbicheck_onboarding_done";
-
 export default function Dashboard() {
-  const [showOnboarding, setShowOnboarding] = useState(false);
-
   const { data: user } = useQuery({
     queryKey: ["currentUser"],
     queryFn: () => base44.auth.me(),
@@ -42,7 +35,7 @@ export default function Dashboard() {
     },
   });
 
-  const { data: recentQueries = [], isLoading: queriesLoading } = useQuery({
+  const { data: recentQueries = [] } = useQuery({
     queryKey: ["recentQueries"],
     queryFn: async () => {
       const u = await base44.auth.me();
@@ -58,38 +51,27 @@ export default function Dashboard() {
     },
   });
 
-  // Show onboarding if first visit and no queries
+  const welcomeEmailSentRef = useRef(false);
+
+  // Invia email di benvenuto al primo accesso (nessuna query mai creata)
   useEffect(() => {
-    const done = localStorage.getItem(ONBOARDING_KEY);
-    if (!done && !queriesLoading && recentQueries.length === 0) {
-      setShowOnboarding(true);
+    if (welcomeEmailSentRef.current) return;
+    if (!user || recentQueries === undefined) return;
+    const isFirstAccess = recentQueries.length === 0;
+    const key = `welcome_email_sent_${user.email}`;
+    if (isFirstAccess && !localStorage.getItem(key)) {
+      welcomeEmailSentRef.current = true;
+      localStorage.setItem(key, '1');
+      sendUrbiCheckEmail({ type: 'welcome', user_name: user.full_name, user_email: user.email }).catch(() => {});
     }
-  }, [queriesLoading, recentQueries.length]);
-
-  // Real-time status notifier
-  useQueryStatusNotifier(user?.email);
-
-  const handleCloseOnboarding = () => {
-    localStorage.setItem(ONBOARDING_KEY, "1");
-    setShowOnboarding(false);
-  };
+  }, [user, recentQueries]);
 
   const firstName = user?.full_name?.split(" ")[0] || "Utente";
-  const balance = credits?.balance || 0;
 
   return (
     <div className="p-6 lg:p-10 max-w-6xl mx-auto">
-      {/* Onboarding Modal */}
-      {showOnboarding && (
-        <OnboardingModal
-          onClose={handleCloseOnboarding}
-          hasCredits={balance >= 9.9}
-          balance={balance}
-        />
-      )}
-
       {/* Header */}
-      <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="mb-6">
+      <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="mb-10">
         <h1 className="text-3xl lg:text-4xl font-bold tracking-tight" style={{ color: '#1A3A6B', fontFamily: "'Libre Baskerville', serif", fontStyle: 'italic' }}>
           Benvenuto, {firstName}
         </h1>
@@ -98,12 +80,9 @@ export default function Dashboard() {
         </p>
       </motion.div>
 
-      {/* Low balance alert */}
-      <LowBalanceAlert balance={balance} />
-
       {/* Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-10">
-        <StatsCard icon={CreditCard} label="SALDO CREDITI" value={`€${balance.toFixed(2)}`} highlight />
+        <StatsCard icon={CreditCard} label="SALDO CREDITI" value={`€${(credits?.balance || 0).toFixed(2)}`} highlight />
         <StatsCard icon={Search} label="ANALISI EFFETTUATE" value={credits?.total_queries || 0} />
         <StatsCard icon={TrendingUp} label="CREDITI UTILIZZATI" value={`€${(credits?.total_spent || 0).toFixed(2)}`} />
         <StatsCard icon={FileCheck} label="REPORT DISPONIBILI" value={recentQueries.filter(q => q.status === "completed").length} />
@@ -148,21 +127,6 @@ export default function Dashboard() {
                 Storico Completo
               </button>
             </Link>
-
-            {/* Crediti insufficienti — ricarica rapida */}
-            {balance < 9.9 && (
-              <div className="mt-2 pt-3" style={{ borderTop: '1px solid #C4BAA8' }}>
-                <p className="text-[10px] mb-2" style={{ color: '#B33A2A', fontFamily: "'IBM Plex Mono', monospace" }}>
-                  ⚠ Saldo insufficiente per un report
-                </p>
-                <Link to="/credits">
-                  <button className="w-full h-9 text-[10px] font-bold uppercase tracking-widest text-white"
-                    style={{ background: '#B33A2A', fontFamily: "'IBM Plex Mono', monospace" }}>
-                    Ricarica ora →
-                  </button>
-                </Link>
-              </div>
-            )}
           </div>
         </motion.div>
 
@@ -180,10 +144,7 @@ export default function Dashboard() {
               Vedi tutte →
             </Link>
           </div>
-          {recentQueries.length === 0 && !queriesLoading
-            ? <DashboardEmptyState />
-            : <RecentQueries queries={recentQueries} />
-          }
+          <RecentQueries queries={recentQueries} />
         </motion.div>
       </div>
 

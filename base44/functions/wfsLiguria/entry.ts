@@ -561,10 +561,10 @@ Deno.serve(async (req) => {
   let isPiemonte = false;
   if (regioneLower.includes('piemonte')) {
     isPiemonte = true;
-    analisi = await runAnalisiPiemonte({ comune, provincia, indirizzo, comuneLower });
+    analisi = await runAnalisiPiemonte({ comune, provincia, indirizzo, comuneLower, prefill_lat, prefill_lon });
   } else {
     // Default: Liguria
-    analisi = await runAnalisiLiguria({ comune, provincia, indirizzo, comuneLower });
+    analisi = await runAnalisiLiguria({ comune, provincia, indirizzo, comuneLower, prefill_lat, prefill_lon });
   }
 
   const report = {
