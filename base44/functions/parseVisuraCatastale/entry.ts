@@ -55,6 +55,8 @@ Deno.serve(async (req) => {
             rendita_catastale: { type: "number" },
             vani: { type: "number" },
             indirizzo_catastale: { type: "string" },
+            classe_catastale: { type: "string", description: "Classe catastale (es. 1, 2, 3, 4, 5, 6, 7)" },
+            zona_censuaria: { type: "string", description: "Zona Censuaria (es. 1, 2A, 3B)" },
             intestatari: {
               type: "array",
               items: {
@@ -85,6 +87,8 @@ Deno.serve(async (req) => {
         if (!dati.vani && aiResult.vani) dati.vani = aiResult.vani;
         if (!dati.indirizzo_catastale && aiResult.indirizzo_catastale) dati.indirizzo_catastale = aiResult.indirizzo_catastale;
         if (!dati.intestatari && aiResult.intestatari) dati.intestatari = aiResult.intestatari;
+        if (!dati.classe_catastale && aiResult.classe_catastale) dati.classe_catastale = aiResult.classe_catastale;
+        if (!dati.zona_censuaria && aiResult.zona_censuaria) dati.zona_censuaria = aiResult.zona_censuaria;
       }
     } catch (aiErr) {
       console.warn('AI parsing error:', aiErr.message);
@@ -144,6 +148,16 @@ function parseRegex(testo) {
   const surfM = surfRe.exec(testo);
   if (surfM) dati.superficie_mq = parseInt(surfM[1], 10);
 
+  // Classe catastale
+  const classeRe = /Classe\s+(\d+)/i;
+  const classeM = classeRe.exec(testo);
+  if (classeM) dati.classe_catastale = classeM[1];
+
+  // Zona censuaria
+  const zonaRe = /Zona\s+Censuaria\s+([\dA-Za-z]+)/i;
+  const zonaM = zonaRe.exec(testo);
+  if (zonaM) dati.zona_censuaria = zonaM[1];
+
   // Vani
   const vaniRe = /(?:Vani|Consistenza)\s+([\d.,]+)\s*(?:vani)?/i;
   const vaniM = vaniRe.exec(testo);
@@ -168,8 +182,10 @@ ISTRUZIONI CRITICHE:
 2. La "Sezione" principale della visura (es. "PL", "RM", "A") va in sezione_visura.
 3. Estrai il comune dal campo "COMUNE" o dall'intestazione della visura.
 4. La rendita catastale è in Euro (€) — estrai solo il numero.
-5. Per la superficie cerca "mq" o "Consistenza".
-6. Se non trovi un campo, non inventarlo — lascialo null.
+ 5. Per la superficie cerca "mq" o "Consistenza".
+ 6. La "Classe" catastale è un numero (1-7) accanto alla Categoria — mettila in classe_catastale.
+ 7. La "Zona Censuaria" è un codice alfanumerico (es. 1, 2A, 3B) — mettila in zona_censuaria.
+ 8. Se non trovi un campo, non inventarlo — lascialo null.
 
 Restituisci JSON con tutti i campi richiesti.`;
 }

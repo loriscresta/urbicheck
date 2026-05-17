@@ -176,6 +176,16 @@ async function searchWfsAde(lat, lon, codiceBelfiore, foglio, particella, sezion
   }
 }
 
+// ── Calcola centroide come baricentro del poligono GeoJSON ──
+function calculatePolygonCentroid(geojson) {
+  if (!geojson || geojson.type !== 'Polygon' || !geojson.coordinates?.[0]) return null;
+  const ring = geojson.coordinates[0];
+  if (!ring.length) return null;
+  let sumLon = 0, sumLat = 0;
+  for (const [lon, lat] of ring) { sumLon += lon; sumLat += lat; }
+  return { lat: sumLat / ring.length, lon: sumLon / ring.length };
+}
+
 function extractPolygon(featureContent) {
   const m = featureContent.match(/<gml:posList[^>]*>([\s\S]*?)<\/gml:posList>/);
   if (!m) return null;
@@ -383,11 +393,18 @@ Deno.serve(async (req) => {
   };
 
   // ── STEP 3: Salva ──
+  // Ricalcola centroide dal poligono WFS se disponibile (più accurato del geocoding OnData)
+  let finalLat = lat, finalLon = lon;
+  if (wfsResult?.geojson_polygon) {
+    const centroid = calculatePolygonCentroid(wfsResult.geojson_polygon);
+    if (centroid) { finalLat = centroid.lat; finalLon = centroid.lon; }
+  }
+
   if (queryRecord) {
     try {
       await base44.entities.CadastralQuery.update(query_id, {
-        centroid_lat: lat,
-        centroid_lng: lon,
+        centroid_lat: finalLat,
+        centroid_lng: finalLon,
         geometry_geojson: wfsResult?.geojson_polygon || undefined,
         codice_comune_catasto: codiceBelfiore,
         fonte_dati_catastali: 'catastomappe',

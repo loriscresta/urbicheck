@@ -101,6 +101,8 @@ export default function CadastralSearchForm({ onSubmit, isLoading, submitLabel =
       // visura data
       ...(visuraDati ? {
         categoria_catastale: visuraDati.categoria_catastale,
+        classe_catastale: visuraDati.classe_catastale,
+        zona_censuaria: visuraDati.zona_censuaria,
         superficie_mq: visuraDati.superficie_mq,
         rendita_catastale: visuraDati.rendita_catastale,
         vani: visuraDati.vani,
