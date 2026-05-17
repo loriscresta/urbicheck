@@ -2,8 +2,8 @@ import React, { useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import { useQuery } from "@tanstack/react-query";
-import { sendUrbiCheckEmail } from "@/functions/sendUrbiCheckEmail";
 import { Search, CreditCard, FileCheck, TrendingUp, FolderOpen } from "lucide-react";
+import { sendWelcomeEmail } from "@/functions/sendWelcomeEmail";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import StatsCard from "@/components/dashboard/StatsCard";
@@ -51,22 +51,22 @@ export default function Dashboard() {
     },
   });
 
-  const welcomeEmailSentRef = useRef(false);
+  const firstName = user?.full_name?.split(" ")[0] || "Utente";
 
-  // Invia email di benvenuto al primo accesso (nessuna query mai creata)
+  // Send welcome email once on first visit (no queries yet)
+  const welcomeSentRef = useRef(false);
   useEffect(() => {
-    if (welcomeEmailSentRef.current) return;
-    if (!user || recentQueries === undefined) return;
-    const isFirstAccess = recentQueries.length === 0;
-    const key = `welcome_email_sent_${user.email}`;
-    if (isFirstAccess && !localStorage.getItem(key)) {
-      welcomeEmailSentRef.current = true;
-      localStorage.setItem(key, '1');
-      sendUrbiCheckEmail({ type: 'welcome', user_name: user.full_name, user_email: user.email }).catch(() => {});
+    if (welcomeSentRef.current) return;
+    if (!user?.email || recentQueries === undefined) return;
+    if (recentQueries.length === 0) {
+      const key = `urbicheck_welcome_sent_${user.email}`;
+      if (!localStorage.getItem(key)) {
+        welcomeSentRef.current = true;
+        localStorage.setItem(key, '1');
+        sendWelcomeEmail({ user_email: user.email, user_name: user.full_name || '' }).catch(() => {});
+      }
     }
   }, [user, recentQueries]);
-
-  const firstName = user?.full_name?.split(" ")[0] || "Utente";
 
   return (
     <div className="p-6 lg:p-10 max-w-6xl mx-auto">

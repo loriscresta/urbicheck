@@ -388,9 +388,9 @@ export default function ReportPage() {
         {/* Indici Edilizi */}
         <IndiciEdiliziSection indici={r.indici_edilizi} comune={query.comune} delay={0.08} />
 
-        {/* === VINCOLI E RISCHI — PIEMONTE (solo se regione Piemonte) === */}
-        {isPiemonte && query.centroid_lat && query.centroid_lng && (
-          <VincoliRischiPiemonte query={query} comuneRecord={comuneRecord} />
+        {/* === VINCOLI E RISCHI — PIEMONTE (solo se regione Piemonte, dati da wfs_liguria) === */}
+        {isPiemonte && query.report_data?.wfs_liguria && (
+          <VincoliRischiPiemonte query={query} />
         )}
 
         {/* Quadro Urbanistico */}

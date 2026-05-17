@@ -1,105 +1,92 @@
 /**
- * VincoliRischiPiemonte — sezione "Vincoli e Rischi" specifica per Piemonte
- * Layer 1: Zona sismica (da ComuneItalia.zona_sismica)
- * Layer 2: Frane SIFraP ARPA Piemonte (ArcGIS REST)
- * Layer 3: Vincolo lacustre art.142 (Overpass API)
- * Layer 2 e 3 si caricano in parallelo con skeleton loader.
+ * VincoliRischiPiemonte — legge i dati geospaziali già calcolati server-side
+ * da wfsLiguria (salvati in report_data.wfs_liguria).
+ * NON fa chiamate esterne dal browser (niente CORS).
+ *
+ * Dati visualizzati:
+ * - Zona sismica (da report_data.wfs_liguria.risultati.sismica)
+ * - PAI Frane ARPA Piemonte (risultati.pai_rischio_idrogeologico)
+ * - Vincolo lacustre art.142 (risultati.vincoli_paesaggistici_ope_legis.vincolo_lacustre)
+ * - Corsi d'acqua (risultati.vincolo_corsi_acqua)
+ * - Ferrovia (risultati.vincolo_ferroviario)
  */
-import React, { useEffect, useState } from "react";
+import React from "react";
 import { motion } from "framer-motion";
-import { AlertTriangle, CheckCircle2, Loader2, Activity, Droplets, Waves, ExternalLink } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Activity, Droplets, Waves, Train, ExternalLink, Info } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-
-// ── Skeleton loader ──
-function SkeletonCard() {
-  return (
-    <div className="rounded border border-border bg-muted/30 p-4 animate-pulse">
-      <div className="h-3 w-32 bg-muted rounded mb-2" />
-      <div className="h-4 w-48 bg-muted rounded" />
-    </div>
-  );
-}
 
 // ── Zona Sismica ──
 const ZONA_CONFIG = {
-  "1":  { label: "Zona 1 — rischio sismico molto alto",    badge: "bg-red-100 text-red-800 border-red-300" },
-  "2":  { label: "Zona 2 — rischio sismico alto",          badge: "bg-orange-100 text-orange-800 border-orange-300" },
-  "3S": { label: "Zona 3S — rischio sismico moderato-alto",badge: "bg-orange-100 text-orange-800 border-orange-300" },
-  "3":  { label: "Zona 3 — rischio sismico moderato",      badge: "bg-amber-100 text-amber-800 border-amber-300" },
-  "4":  { label: "Zona 4 — rischio sismico basso",         badge: "bg-emerald-100 text-emerald-800 border-emerald-300" },
+  "1":  { label: "Zona 1 — rischio molto alto",    cls: "bg-red-100 text-red-800 border-red-300" },
+  "2":  { label: "Zona 2 — rischio alto",          cls: "bg-orange-100 text-orange-800 border-orange-300" },
+  "3S": { label: "Zona 3S — rischio moderato-alto",cls: "bg-orange-100 text-orange-800 border-orange-300" },
+  "3":  { label: "Zona 3 — rischio moderato",      cls: "bg-amber-100 text-amber-800 border-amber-300" },
+  "4":  { label: "Zona 4 — rischio basso",         cls: "bg-emerald-100 text-emerald-800 border-emerald-300" },
 };
 
-function ZonaSismicaCard({ zona }) {
-  const cfg = ZONA_CONFIG[zona] || { label: `Zona ${zona}`, badge: "bg-muted text-muted-foreground border-border" };
+function SismicaCard({ data }) {
+  if (!data) return null;
+  const zona = String(data.zona);
+  const cfg = ZONA_CONFIG[zona] || { label: `Zona ${zona}`, cls: "bg-muted text-muted-foreground border-border" };
   return (
     <div className="rounded border border-border bg-card p-4 flex items-start gap-3">
       <div className="w-8 h-8 bg-primary/10 rounded flex items-center justify-center shrink-0">
         <Activity className="w-4 h-4 text-primary" />
       </div>
       <div>
-        <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground mb-1">Classificazione Sismica</p>
-        <Badge className={`text-xs border ${cfg.badge}`}>{cfg.label}</Badge>
-        <p className="text-[11px] text-muted-foreground mt-1">Fonte: DGR Piemonte n. 6-887 del 30.12.2019 — NTC 2018</p>
+        <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Classificazione Sismica</p>
+        <Badge className={`text-xs border ${cfg.cls}`}>{cfg.label}</Badge>
+        <p className="text-[11px] text-muted-foreground mt-1">{data.descrizione}</p>
+        <p className="text-[10px] text-muted-foreground italic mt-0.5">{data.riferimento_normativo}</p>
       </div>
     </div>
   );
 }
 
-// ── Frane SIFraP ──
-function FraneCard({ data, error }) {
-  if (error) {
-    return (
-      <div className="rounded border border-border bg-muted/30 p-4 flex items-start gap-3">
-        <Droplets className="w-4 h-4 text-muted-foreground shrink-0 mt-0.5" />
-        <div>
-          <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground mb-1">Frane SIFraP ARPA Piemonte</p>
-          <p className="text-xs text-muted-foreground italic">Dati SIFraP non disponibili al momento</p>
-        </div>
-      </div>
-    );
-  }
-  const hasFrane = data?.features?.length > 0;
+// ── PAI Frane (Piemonte) ──
+function PaiFraneCard({ data }) {
+  if (!data) return null;
+  const totali = data.features_totali || 0;
+  const fonteOk = data.fonte_ok;
+  const hasFrane = totali > 0;
+
+  const border = !fonteOk ? "border-amber-300 bg-amber-50" : hasFrane ? "border-red-300 bg-red-50" : "border-emerald-300 bg-emerald-50";
+  const iconColor = !fonteOk ? "text-amber-600" : hasFrane ? "text-red-600" : "text-emerald-600";
+  const iconBg = !fonteOk ? "bg-amber-100" : hasFrane ? "bg-red-100" : "bg-emerald-100";
+
   return (
-    <div className={`rounded border p-4 flex items-start gap-3 ${hasFrane ? "border-red-300 bg-red-50" : "border-emerald-300 bg-emerald-50"}`}>
-      <div className={`w-8 h-8 rounded flex items-center justify-center shrink-0 ${hasFrane ? "bg-red-100" : "bg-emerald-100"}`}>
-        <Droplets className={`w-4 h-4 ${hasFrane ? "text-red-600" : "text-emerald-600"}`} />
+    <div className={`rounded border p-4 flex items-start gap-3 ${border}`}>
+      <div className={`w-8 h-8 rounded flex items-center justify-center shrink-0 ${iconBg}`}>
+        <Droplets className={`w-4 h-4 ${iconColor}`} />
       </div>
       <div className="flex-1">
-        <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground mb-1">Frane SIFraP ARPA Piemonte</p>
-        {hasFrane ? (
+        <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">PAI Frane — ARPA Piemonte</p>
+        {!fonteOk ? (
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+            <span className="text-xs text-amber-800">WFS ARPA non raggiungibile — verifica manuale consigliata</span>
+          </div>
+        ) : hasFrane ? (
           <>
-            <div className="flex items-center gap-2 mb-2">
+            <div className="flex items-center gap-2 mb-1">
               <AlertTriangle className="w-4 h-4 text-red-600 shrink-0" />
-              <span className="text-sm font-semibold text-red-800">
-                ⚠️ {data.features.length} frana/e censite nel perimetro (SIFraP ARPA Piemonte)
-              </span>
+              <span className="text-sm font-semibold text-red-800">⚠️ {totali} geometrie frana nel perimetro</span>
             </div>
-            <div className="space-y-1">
-              {data.features.slice(0, 3).map((f, i) => {
-                const p = f.attributes || {};
-                const tipo = p.TIPO_FRANA || p.tipo_frana || p.TIPO || null;
-                const stato = p.STATO_ATTIVITA || p.stato_attivita || p.STATO || null;
-                return (
-                  <div key={i} className="text-xs text-red-700 font-mono bg-red-100 rounded px-2 py-1">
-                    {tipo && <span>Tipo: {tipo}</span>}
-                    {tipo && stato && <span> · </span>}
-                    {stato && <span>Stato: {stato}</span>}
-                    {!tipo && !stato && <span>Frana censita #{i + 1}</span>}
-                  </div>
-                );
-              })}
-            </div>
+            {(data.dati || []).map((d, i) => d.trovato && (
+              <div key={i} className="text-xs text-red-700 font-mono bg-red-100 rounded px-2 py-0.5 mt-1">
+                {d.layer}: {d.features_count} geometrie
+              </div>
+            ))}
           </>
         ) : (
           <div className="flex items-center gap-2">
             <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-            <span className="text-sm font-medium text-emerald-800">✅ Nessuna frana censita nel perimetro (SIFraP ARPA Piemonte)</span>
+            <span className="text-sm font-medium text-emerald-800">✅ Nessuna frana censita nel perimetro</span>
           </div>
         )}
-        <a href="https://webgis.arpa.piemonte.it/ags/rest/services/rischi_naturali/SIFraP_SI_Frane_Piemonte/MapServer" 
-          target="_blank" rel="noopener noreferrer"
+        <a href="https://webgis.arpa.piemonte.it" target="_blank" rel="noopener noreferrer"
           className="text-[11px] text-primary flex items-center gap-1 mt-2 hover:underline">
-          <ExternalLink className="w-3 h-3" /> SIFraP — webgis.arpa.piemonte.it
+          <ExternalLink className="w-3 h-3" /> webgis.arpa.piemonte.it
         </a>
       </div>
     </div>
@@ -107,127 +94,153 @@ function FraneCard({ data, error }) {
 }
 
 // ── Vincolo Lacustre ──
-function LagoCard({ data, error }) {
-  if (error) {
-    return (
-      <div className="rounded border border-border bg-muted/30 p-4 flex items-start gap-3">
-        <Waves className="w-4 h-4 text-muted-foreground shrink-0 mt-0.5" />
-        <div>
-          <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground mb-1">Vincolo Lacustre art.142</p>
-          <p className="text-xs text-muted-foreground italic">Dati Overpass non disponibili al momento</p>
-        </div>
-      </div>
-    );
-  }
-  const elements = data?.elements || [];
-  const hasLago = elements.length > 0;
-  const lagoNome = elements[0]?.tags?.name || null;
+function LagoCard({ data }) {
+  if (!data) return null;
+  const presente = data.presente;
 
-  return (
-    <div className={`rounded border p-4 flex items-start gap-3 ${hasLago ? "border-amber-300 bg-amber-50" : "border-emerald-300 bg-emerald-50"}`}>
-      <div className={`w-8 h-8 rounded flex items-center justify-center shrink-0 ${hasLago ? "bg-amber-100" : "bg-emerald-100"}`}>
-        <Waves className={`w-4 h-4 ${hasLago ? "text-amber-600" : "text-emerald-600"}`} />
+  if (presente === false) return (
+    <div className="rounded border border-emerald-300 bg-emerald-50 p-4 flex items-start gap-3">
+      <div className="w-8 h-8 bg-emerald-100 rounded flex items-center justify-center shrink-0">
+        <Waves className="w-4 h-4 text-emerald-600" />
       </div>
       <div>
-        <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground mb-1">
-          Vincolo Paesaggistico Lacustre — art.142 D.Lgs. 42/2004
-        </p>
-        {hasLago ? (
-          <>
-            <div className="flex items-center gap-2 mb-1">
-              <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
-              <span className="text-sm font-semibold text-amber-800">
-                ⚠️ Vincolo lacustre rilevato — fascia 300m
-                {lagoNome ? ` (${lagoNome})` : ""}
-              </span>
+        <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Vincolo Lacustre — art.142 D.Lgs 42/2004</p>
+        <div className="flex items-center gap-2">
+          <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+          <span className="text-sm font-medium text-emerald-800">✅ Nessun lago entro 300m</span>
+        </div>
+        <p className="text-[11px] text-muted-foreground italic mt-1">{data.nota}</p>
+      </div>
+    </div>
+  );
+
+  if (presente === true) return (
+    <div className="rounded border border-red-300 bg-red-50 p-4 flex items-start gap-3">
+      <div className="w-8 h-8 bg-red-100 rounded flex items-center justify-center shrink-0">
+        <Waves className="w-4 h-4 text-red-600" />
+      </div>
+      <div>
+        <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Vincolo Lacustre — art.142 D.Lgs 42/2004</p>
+        <div className="flex items-center gap-2 mb-1">
+          <AlertTriangle className="w-4 h-4 text-red-600 shrink-0" />
+          <span className="text-sm font-semibold text-red-800">⚠️ Vincolo lacustre — fascia 300m{data.lago ? ` (${data.lago})` : ""}</span>
+        </div>
+        {data.descrizione && <p className="text-xs text-red-700 mt-1 leading-relaxed">{data.descrizione}</p>}
+      </div>
+    </div>
+  );
+
+  // presente === null
+  return (
+    <div className="rounded border border-amber-300 bg-amber-50 p-4 flex items-start gap-3">
+      <div className="w-8 h-8 bg-amber-100 rounded flex items-center justify-center shrink-0">
+        <Waves className="w-4 h-4 text-amber-600" />
+      </div>
+      <div>
+        <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Vincolo Lacustre — art.142 D.Lgs 42/2004</p>
+        <div className="flex items-center gap-2">
+          <Info className="w-4 h-4 text-amber-600 shrink-0" />
+          <span className="text-xs text-amber-800">{data.nota || "Verifica manuale consigliata"}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Corsi d'acqua ──
+function CorsiAcquaCard({ data }) {
+  if (!data) return null;
+  const dati = data.dati || [];
+  const trovati = dati.filter(d => d.trovato);
+  const hasWater = trovati.length > 0;
+  return (
+    <div className={`rounded border p-4 flex items-start gap-3 ${hasWater ? "border-amber-300 bg-amber-50" : "border-emerald-300 bg-emerald-50"}`}>
+      <div className={`w-8 h-8 rounded flex items-center justify-center shrink-0 ${hasWater ? "bg-amber-100" : "bg-emerald-100"}`}>
+        <Waves className={`w-4 h-4 ${hasWater ? "text-amber-600" : "text-emerald-600"}`} />
+      </div>
+      <div>
+        <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Vincolo Corsi d'Acqua — art.142 lett.c</p>
+        {hasWater ? (
+          trovati.map((w, i) => (
+            <div key={i} className="mb-1">
+              <span className="text-xs font-semibold text-amber-800">{w.nome}</span>
+              {w.fascia_tutela && <span className="text-xs text-amber-700 ml-2">{w.fascia_tutela}</span>}
             </div>
-            <p className="text-xs text-amber-700">Art.142 c.1 lett. b) D.Lgs 42/2004 — fascia di 300m dalla sponda</p>
-          </>
+          ))
         ) : (
           <div className="flex items-center gap-2">
             <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-            <span className="text-sm font-medium text-emerald-800">✅ Nessun vincolo lacustre rilevato (Overpass OSM — fascia 300m)</span>
+            <span className="text-sm font-medium text-emerald-800">✅ Nessun corso d'acqua entro 250m</span>
           </div>
         )}
-        <p className="text-[11px] text-muted-foreground mt-1 italic">
-          Verifica da confermare con il piano paesaggistico regionale (PPR Piemonte).
+        <p className="text-[11px] text-muted-foreground italic mt-1">
+          {data.fonte_ok ? "Fonte: OpenStreetMap / Overpass API (server-side)" : "Fonte non raggiungibile"}
         </p>
       </div>
     </div>
   );
 }
 
-// ── Main Component ──
-export default function VincoliRischiPiemonte({ query, comuneRecord }) {
-  const [loading, setLoading] = useState(true);
-  const [franeData, setFraneData] = useState(null);
-  const [franeError, setFraneError] = useState(false);
-  const [lagoData, setLagoData] = useState(null);
-  const [lagoError, setLagoError] = useState(false);
+// ── Ferrovia ──
+function FerroviaCard({ data }) {
+  if (!data) return null;
+  const dati = data.dati || [];
+  const trovati = dati.filter(d => d.trovato);
+  const hasFerr = trovati.length > 0;
+  return (
+    <div className={`rounded border p-4 flex items-start gap-3 ${hasFerr ? "border-amber-300 bg-amber-50" : "border-emerald-300 bg-emerald-50"}`}>
+      <div className={`w-8 h-8 rounded flex items-center justify-center shrink-0 ${hasFerr ? "bg-amber-100" : "bg-emerald-100"}`}>
+        <Train className={`w-4 h-4 ${hasFerr ? "text-amber-600" : "text-emerald-600"}`} />
+      </div>
+      <div>
+        <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Vincolo Ferroviario — DPR 753/1980</p>
+        {hasFerr ? (
+          trovati.map((f, i) => (
+            <div key={i} className="mb-1">
+              <span className="text-xs font-semibold text-amber-800">{f.nome}</span>
+              {f.fascia_rispetto && <span className="text-xs text-amber-700 ml-2">{f.fascia_rispetto}</span>}
+            </div>
+          ))
+        ) : (
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+            <span className="text-sm font-medium text-emerald-800">✅ Nessuna ferrovia entro 250m</span>
+          </div>
+        )}
+        <p className="text-[11px] text-muted-foreground italic mt-1">
+          {data.fonte_ok ? "Fonte: OpenStreetMap / Overpass API (server-side)" : "Fonte non raggiungibile"}
+        </p>
+      </div>
+    </div>
+  );
+}
 
-  const lat = query?.centroid_lat;
-  const lon = query?.centroid_lng;
-  const zonaSismica = comuneRecord?.zona_sismica || null;
+// ── Main ──
+export default function VincoliRischiPiemonte({ query }) {
+  // Legge i dati già calcolati server-side da wfsLiguria
+  const wfsData = query?.report_data?.wfs_liguria;
+  const risultati = wfsData?.risultati;
 
-  useEffect(() => {
-    if (!lat || !lon) { setLoading(false); return; }
+  if (!risultati) {
+    // Dati non ancora disponibili — il WfsLiguriaPanel sotto mostrerà il loader
+    return null;
+  }
 
-    const fetchFrane = async () => {
-      const url = `https://webgis.arpa.piemonte.it/ags/rest/services/rischi_naturali/SIFraP_SI_Frane_Piemonte/MapServer/0/query?geometry=${lon},${lat}&geometryType=esriGeometryPoint&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=false&f=json`;
-      const res = await fetch(url, { signal: AbortSignal.timeout(10000) });
-      if (!res.ok) throw new Error("HTTP " + res.status);
-      return res.json();
-    };
-
-    const fetchLago = async () => {
-      const q = `[out:json][timeout:10];\n(\n  way["natural"="water"]["water"="lake"](around:300,${lat},${lon});\n  relation["natural"="water"]["water"="lake"](around:300,${lat},${lon});\n  way["natural"="water"]["water"="reservoir"](around:300,${lat},${lon});\n  relation["natural"="water"]["water"="reservoir"](around:300,${lat},${lon});\n);\nout tags center;`;
-      const res = await fetch("https://overpass-api.de/api/interpreter", {
-        method: "POST",
-        body: "data=" + encodeURIComponent(q),
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        signal: AbortSignal.timeout(12000),
-      });
-      if (!res.ok) throw new Error("HTTP " + res.status);
-      return res.json();
-    };
-
-    Promise.all([
-      fetchFrane().then(setFraneData).catch(() => setFraneError(true)),
-      fetchLago().then(setLagoData).catch(() => setLagoError(true)),
-    ]).finally(() => setLoading(false));
-  }, [lat, lon]);
+  const vincolo_lacustre = risultati?.vincoli_paesaggistici_ope_legis?.vincolo_lacustre;
 
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
       className="rounded-xl border-2 border-primary overflow-hidden">
       <div className="bg-primary px-5 py-3">
         <p className="text-white font-bold text-xs uppercase tracking-widest">Vincoli e Rischi — Piemonte</p>
-        <p className="text-white/60 text-[11px] mt-0.5">DGR 6-887/2019 · SIFraP ARPA · Overpass OSM</p>
+        <p className="text-white/60 text-[11px] mt-0.5">DGR 6-887/2019 · SIFraP ARPA · Overpass OSM (elaborazione server-side)</p>
       </div>
-      <div className="p-4 space-y-3 bg-card">
-        {/* Layer 1 — Zona sismica (sincrona) */}
-        {zonaSismica
-          ? <ZonaSismicaCard zona={zonaSismica} />
-          : (
-            <div className="rounded border border-border bg-muted/30 p-4 flex items-center gap-3">
-              <Activity className="w-4 h-4 text-muted-foreground" />
-              <p className="text-xs text-muted-foreground">Zona sismica non disponibile nel database ComuneItalia.</p>
-            </div>
-          )
-        }
-
-        {/* Layer 2+3 — Async con skeleton */}
-        {loading ? (
-          <>
-            <SkeletonCard />
-            <SkeletonCard />
-          </>
-        ) : (
-          <>
-            <FraneCard data={franeData} error={franeError} />
-            <LagoCard data={lagoData} error={lagoError} />
-          </>
-        )}
+      <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-3 bg-card">
+        <SismicaCard data={risultati?.sismica} />
+        <PaiFraneCard data={risultati?.pai_rischio_idrogeologico} />
+        {vincolo_lacustre && <LagoCard data={vincolo_lacustre} />}
+        <CorsiAcquaCard data={risultati?.vincolo_corsi_acqua} />
+        <FerroviaCard data={risultati?.vincolo_ferroviario} />
       </div>
     </motion.div>
   );

@@ -1,7 +1,6 @@
 import React from "react";
 import { base44 } from "@/api/base44Client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { sendUrbiCheckEmail } from "@/functions/sendUrbiCheckEmail";
 import { useToast } from "@/components/ui/use-toast";
 import { CREDIT_PACKAGES } from "@/lib/italianData";
 import CreditPackageCard from "@/components/credits/CreditPackageCard";
@@ -10,6 +9,7 @@ import { it } from "date-fns/locale";
 import { Badge } from "@/components/ui/badge";
 import { CreditCard, ArrowUpRight, ArrowDownRight, Loader2 } from "lucide-react";
 import { motion } from "framer-motion";
+import { sendCreditsPurchasedEmail } from "@/functions/sendCreditsPurchasedEmail";
 
 export default function CreditsPage() {
   const { toast } = useToast();
@@ -64,12 +64,11 @@ export default function CreditsPage() {
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
 
       const newBalance = (credits?.balance || 0) + pkg.price;
-      sendUrbiCheckEmail({
-        type: 'credits_purchased',
-        amount: pkg.price,
-        new_balance: newBalance,
-        user_name: user.full_name,
+      sendCreditsPurchasedEmail({
         user_email: user.email,
+        user_name: user.full_name || '',
+        amount_purchased: pkg.price,
+        new_balance: newBalance,
       }).catch(() => {});
 
       toast({

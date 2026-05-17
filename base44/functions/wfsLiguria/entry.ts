@@ -494,13 +494,12 @@ async function runAnalisiPiemonte({ comune, provincia, indirizzo, comuneLower, p
 Deno.serve(async (req) => {
   const base44 = createClientFromRequest(req);
 
-  let user;
+  let user = null;
   try {
     user = await base44.auth.me();
   } catch (_e) {
-    return Response.json({ error: 'Unauthorized' }, { status: 401 });
+    // Chiamata da automazione server-side (service role) — user può essere null
   }
-  if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
   let body;
   try {

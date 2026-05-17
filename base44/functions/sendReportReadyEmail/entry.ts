@@ -149,7 +149,6 @@ Deno.serve(async (req) => {
     }
     if (!query) return Response.json({ error: 'Query not found' }, { status: 404 });
 
-    // Get user info from created_by email
     const userEmail = query.created_by;
     if (!userEmail) return Response.json({ error: 'No user email' }, { status: 400 });
 
