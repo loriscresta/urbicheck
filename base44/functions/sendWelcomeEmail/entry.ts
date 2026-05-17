@@ -5,8 +5,15 @@ const APP_URL = 'https://app.urbicheck.it';
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
-    const payload = await req.json();
-    const { user_email, user_name } = payload;
+
+    // ── AUTH CHECK: solo utenti autenticati ──
+    let user;
+    try { user = await base44.auth.me(); } catch (_e) {}
+    if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
+
+    // ── Usa l'email dell'utente autenticato, non del body ──
+    const user_email = user.email;
+    const user_name = user.name || user.full_name || '';
 
     if (!user_email) return Response.json({ error: 'user_email required' }, { status: 400 });
 
@@ -49,36 +56,48 @@ Deno.serve(async (req) => {
 
             <!-- 3 key points -->
             <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e5e7eb;margin-bottom:32px;">
-              ${[
-                ['🔍', 'Analisi in 3 minuti', 'Inserisci comune, foglio e particella. Il report è pronto in pochi minuti.'],
-                ['📊', 'Dati GIS ufficiali', 'PAI, vincoli paesaggistici, sismica, zona urbanistica — da fonti regionali certificate.'],
-                ['€9,90', 'Pay per report', 'Nessun abbonamento. Paghi solo quello che usi.'],
-              ].map(([icon, title, desc]) => `
               <tr>
                 <td style="padding:16px 20px;border-bottom:1px solid #e5e7eb;">
-                  <table cellpadding="0" cellspacing="0">
-                    <tr>
-                      <td style="width:40px;vertical-align:top;font-size:20px;">${icon}</td>
-                      <td style="vertical-align:top;padding-left:12px;">
-                        <p style="margin:0 0 4px;font-family:'Courier New',monospace;font-size:13px;font-weight:700;color:#1e3a5f;">${title}</p>
-                        <p style="margin:0;font-family:Georgia,serif;font-size:13px;color:#64748b;line-height:1.5;">${desc}</p>
-                      </td>
-                    </tr>
-                  </table>
+                  <table cellpadding="0" cellspacing="0"><tr>
+                    <td style="width:40px;vertical-align:top;font-size:20px;">🔍</td>
+                    <td style="vertical-align:top;padding-left:12px;">
+                      <p style="margin:0 0 4px;font-family:'Courier New',monospace;font-size:13px;font-weight:700;color:#1e3a5f;">Analisi in 3 minuti</p>
+                      <p style="margin:0;font-family:Georgia,serif;font-size:13px;color:#64748b;line-height:1.5;">Inserisci comune, foglio e particella. Il report è pronto in pochi minuti.</p>
+                    </td>
+                  </tr></table>
                 </td>
               </tr>
-              `).join('')}
+              <tr>
+                <td style="padding:16px 20px;border-bottom:1px solid #e5e7eb;">
+                  <table cellpadding="0" cellspacing="0"><tr>
+                    <td style="width:40px;vertical-align:top;font-size:20px;">📊</td>
+                    <td style="vertical-align:top;padding-left:12px;">
+                      <p style="margin:0 0 4px;font-family:'Courier New',monospace;font-size:13px;font-weight:700;color:#1e3a5f;">Dati GIS ufficiali</p>
+                      <p style="margin:0;font-family:Georgia,serif;font-size:13px;color:#64748b;line-height:1.5;">PAI, vincoli paesaggistici, sismica, zona urbanistica — da fonti regionali certificate.</p>
+                    </td>
+                  </tr></table>
+                </td>
+              </tr>
+              <tr>
+                <td style="padding:16px 20px;">
+                  <table cellpadding="0" cellspacing="0"><tr>
+                    <td style="width:40px;vertical-align:top;font-size:20px;">💳</td>
+                    <td style="vertical-align:top;padding-left:12px;">
+                      <p style="margin:0 0 4px;font-family:'Courier New',monospace;font-size:13px;font-weight:700;color:#1e3a5f;">€9,90 — Pay per report</p>
+                      <p style="margin:0;font-family:Georgia,serif;font-size:13px;color:#64748b;line-height:1.5;">Nessun abbonamento. Paghi solo quello che usi.</p>
+                    </td>
+                  </tr></table>
+                </td>
+              </tr>
             </table>
 
             <!-- CTA -->
             <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:16px;">
-              <tr>
-                <td align="center">
-                  <a href="${searchUrl}" style="display:inline-block;background:#1e3a5f;color:#ffffff;font-family:'Courier New',monospace;font-size:13px;font-weight:700;letter-spacing:2px;text-transform:uppercase;padding:16px 40px;text-decoration:none;border-bottom:4px solid #10b981;">
-                    CREA IL TUO PRIMO REPORT →
-                  </a>
-                </td>
-              </tr>
+              <tr><td align="center">
+                <a href="${searchUrl}" style="display:inline-block;background:#1e3a5f;color:#ffffff;font-family:'Courier New',monospace;font-size:13px;font-weight:700;letter-spacing:2px;text-transform:uppercase;padding:16px 40px;text-decoration:none;border-bottom:4px solid #10b981;">
+                  CREA IL TUO PRIMO REPORT →
+                </a>
+              </td></tr>
             </table>
             <p style="margin:0 0 8px;text-align:center;font-family:'Courier New',monospace;font-size:12px;color:#94a3b8;">
               Hai bisogno di crediti prima?
