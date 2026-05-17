@@ -23,6 +23,7 @@ import WfsLiguriaPanel from "@/components/report/WfsLiguriaPanel";
 import ParcellaMap from "@/components/report/ParcellaMap";
 import PaymentGate from "@/components/report/PaymentGate";
 import IndiciEdiliziSection from "@/components/report/IndiciEdiliziSection";
+import VincoliRischiPiemonte from "@/components/report/VincoliRischiPiemonte";
 
 const FINALITA_LABELS = {
   acquisto_privato: "Acquisto privato",
@@ -89,12 +90,20 @@ export default function ReportPage() {
   const [showAttiForm, setShowAttiForm] = useState(false);
   const [comunePrefill, setComunePrefill] = useState(null);
   const [financialSnapshot, setFinancialSnapshot] = useState(null);
+  const [comuneRecord, setComuneRecord] = useState(null);
 
   const { data: query, isLoading, refetch } = useQuery({
     queryKey: ["query", id],
     queryFn: async () => {
       const queries = await base44.entities.CadastralQuery.filter({ id });
-      return queries[0];
+      const q = queries[0];
+      // Carica ComuneItalia per zona sismica (Piemonte)
+      if (q?.comune_id) {
+        base44.entities.ComuneItalia.filter({ id: q.comune_id })
+          .then(res => { if (res[0]) setComuneRecord(res[0]); })
+          .catch(() => {});
+      }
+      return q;
     },
   });
 
@@ -378,6 +387,11 @@ export default function ReportPage() {
 
         {/* Indici Edilizi */}
         <IndiciEdiliziSection indici={r.indici_edilizi} comune={query.comune} delay={0.08} />
+
+        {/* === VINCOLI E RISCHI — PIEMONTE (solo se regione Piemonte) === */}
+        {isPiemonte && query.centroid_lat && query.centroid_lng && (
+          <VincoliRischiPiemonte query={query} comuneRecord={comuneRecord} />
+        )}
 
         {/* Quadro Urbanistico */}
         {r.quadro_urbanistico && (
