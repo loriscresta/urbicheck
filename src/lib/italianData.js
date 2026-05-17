@@ -30,6 +30,15 @@ export const PROVINCE_BY_REGIONE = {
 
 export const CREDIT_PACKAGES = [
   {
+    id: "single",
+    price_id: "price_1TYC48RUwkdZTXPkT1qWFty7",
+    name: "Single Query",
+    queries: 1,
+    price: 9.90,
+    popular: false,
+    savings: null,
+  },
+  {
     id: "starter",
     price_id: "price_1TYBwfRUwkdZTXPk1lJgONVo",
     name: "Starter",
