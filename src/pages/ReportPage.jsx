@@ -287,42 +287,25 @@ export default function ReportPage() {
             />
             <DataRow
               label="Classe"
-              value={query.visura_uploaded
-                ? (query.classe_catastale || "Vedi PDF visura caricata")
-                : r.dati_catastali.classe}
+              value={query.classe_catastale || r.dati_catastali.classe}
             />
             <DataRow
               label="Rendita Catastale"
-              value={query.visura_uploaded && query.rendita_catastale != null
+              value={query.rendita_catastale != null
                 ? `€${Number(query.rendita_catastale).toFixed(2)}`
                 : r.dati_catastali.rendita_catastale}
             />
             <DataRow
               label="Zona Censuaria"
-              value={query.visura_uploaded
-                ? (query.zona_censuaria || "Vedi PDF visura caricata")
-                : r.dati_catastali.zona_censuaria}
+              value={query.zona_censuaria || r.dati_catastali.zona_censuaria}
             />
-            {/* FIX D — Microzona: nascosto se valore placeholder */}
             {r.dati_catastali.microzona && !/verificare su visura/i.test(r.dati_catastali.microzona) && (
               <DataRow label="Microzona" value={r.dati_catastali.microzona} />
             )}
-            {/* FIX D — Intestatari: messaggio specifico se array vuoto con visura caricata */}
-            {query.visura_uploaded ? (
-              query.intestatari?.length > 0
-                ? <DataRow label="Intestatari" value={query.intestatari.join(", ")} />
-                : (
-                  <div className="flex flex-col sm:flex-row sm:items-start gap-1 py-2 border-b border-border/50 last:border-0">
-                    <span className="text-sm text-muted-foreground min-w-[180px]">Intestatari</span>
-                    <div>
-                      <span className="text-sm font-medium">Dati presenti in PDF visura caricata</span>
-                      <p className="text-xs text-muted-foreground mt-0.5">I dati degli intestatari sono disponibili nel documento visura caricato.</p>
-                    </div>
-                  </div>
-                )
-            ) : (
-              <DataRow label="Intestatari" value={r.dati_catastali.intestatari} />
-            )}
+            {query.intestatari?.length > 0
+              ? <DataRow label="Intestatari" value={query.intestatari.join(" — ")} />
+              : <DataRow label="Intestatari" value={r.dati_catastali.intestatari} />
+            }
             {query.visura_uploaded && query.superficie_mq && (
               <DataRow label="Superficie catastale" value={`${query.superficie_mq} mq`} />
             )}

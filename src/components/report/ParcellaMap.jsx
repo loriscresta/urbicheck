@@ -25,6 +25,23 @@ export default function ParcellaMap({ lat, lon, geojsonPolygon, queryId, foglio,
       .catch(() => { /* non bloccante */ });
   }, [lat, lon]);
 
+  // Re-render map when polygon resolves after initial mount
+  const prevPolygonRef = useRef(null);
+  useEffect(() => {
+    if (!resolvedPolygon || !leafletMapRef.current || prevPolygonRef.current === resolvedPolygon) return;
+    prevPolygonRef.current = resolvedPolygon;
+    const L = window.L;
+    if (!L) return;
+    const map = leafletMapRef.current;
+    const geom = resolvedPolygon?.type === 'Feature' ? resolvedPolygon.geometry : resolvedPolygon;
+    if (geom && (geom.type === 'Polygon' || geom.type === 'MultiPolygon')) {
+      const layer = L.geoJSON(geom, {
+        style: { color: '#FF6B35', weight: 2, opacity: 1, fillColor: '#FF6B35', fillOpacity: 0.25 },
+      }).addTo(map);
+      try { map.fitBounds(layer.getBounds(), { padding: [30, 30] }); } catch (_e) {}
+    }
+  }, [resolvedPolygon]);
+
   useEffect(() => {
     if (!lat || !lon || !mapRef.current) return;
     if (leafletMapRef.current) return; // already initialized
@@ -73,26 +90,18 @@ export default function ParcellaMap({ lat, lon, geojsonPolygon, queryId, foglio,
         : resolvedPolygon;
 
       if (geomToCheck && (geomToCheck.type === 'Polygon' || geomToCheck.type === 'MultiPolygon')) {
-        // Disegna poligono con stile ufficiale AdE
+        // Disegna poligono
         const layer = L.geoJSON(geomToCheck, {
-          style: {
-            color: '#C0392B',
-            weight: 2,
-            fillColor: '#F5A623',
-            fillOpacity: 0.3,
-          },
+          style: { color: '#FF6B35', weight: 2, opacity: 1, fillColor: '#FF6B35', fillOpacity: 0.25 },
         }).addTo(map);
 
-        // Aggiunge anche il marker centroide
+        // Marker centroide
         const icon = L.divIcon({
           className: '',
-          html: `<div style="width:10px;height:10px;background:#C0392B;border:2px solid white;border-radius:50%;box-shadow:0 1px 4px rgba(0,0,0,0.5);"></div>`,
-          iconSize: [10, 10],
-          iconAnchor: [5, 5],
+          html: `<div style="width:10px;height:10px;background:#FF6B35;border:2px solid white;border-radius:50%;box-shadow:0 1px 4px rgba(0,0,0,0.5);"></div>`,
+          iconSize: [10, 10], iconAnchor: [5, 5],
         });
-        L.marker([lat, lon], { icon })
-          .addTo(map)
-          .bindPopup(`📍 Centroide — AdE WFS`);
+        L.marker([lat, lon], { icon }).addTo(map).bindPopup(`📍 Centroide`);
 
         try {
           map.fitBounds(layer.getBounds(), { padding: [30, 30] });
@@ -141,7 +150,7 @@ export default function ParcellaMap({ lat, lon, geojsonPolygon, queryId, foglio,
         maxWidth: '90%',
       }}>
         {hasPolygon
-          ? '🟧 Poligono particella — AdE WFS CC-BY 4.0'
+          ? `✅ Particella Foglio ${foglio}, N. ${particella} — Fonte: WFS AdE`
           : (
             <span className="flex items-center gap-1 flex-wrap">
               <span>📍 {foglio && particella ? `Foglio ${foglio}, Part. ${particella} — ` : ''}Poligono non disponibile</span>

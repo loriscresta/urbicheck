@@ -406,13 +406,49 @@ async function runAnalisiPiemonte({ comune, provincia, indirizzo, comuneLower })
   const paiFraneTotali = paiResult.reduce((acc, r) => acc + (r.features_count || 0), 0);
   const paiFraneOk = paiResult.some(r => r.fonte_ok);
 
-  const zona_urbanistica = {
+  // ── WFS PRGC Geoportale Piemonte (CQL_FILTER per nome comune) ──
+  let zona_urbanistica = {
     disponibile: false,
     messaggio: 'La zonizzazione urbanistica non è disponibile tramite WFS regionale. Ogni Comune gestisce il proprio PRG/PRGC.',
     link_geoportale: `https://www.geoportale.piemonte.it/geonetwork/srv/ita/catalog.search#/search?any=${encodeURIComponent(comune)}`,
     link_comune: `https://www.google.com/search?q=PRG+PRGC+${encodeURIComponent(comune)}+${encodeURIComponent(provincia)}+pianificazione+urbanistica`,
     azione_consigliata: 'Richiedere il Certificato di Destinazione Urbanistica (CDU) presso il Comune.',
   };
+
+  if (lat !== null) {
+    const comuneUpper = comune.toUpperCase();
+    const prgcFilters = [
+      `NOME_COM='${comuneUpper}'`,
+      `COMUNE='${comuneUpper}'`,
+      `nome_com='${comuneUpper}'`,
+    ];
+    const prgcBase = `https://www.geoportale.piemonte.it/geoserver/wfs?SERVICE=WFS&VERSION=2.0.0&REQUEST=GetFeature&TYPENAMES=PRGC:PRGC_VIGENTE&outputFormat=application%2Fjson&COUNT=50`;
+    for (const filter of prgcFilters) {
+      try {
+        const prgcUrl = `${prgcBase}&CQL_FILTER=${encodeURIComponent(filter)}`;
+        const prgcRes = await fetchWithTimeout(prgcUrl, {}, 12000);
+        if (!prgcRes.ok) continue;
+        const prgcJson = await prgcRes.json();
+        if (prgcJson.features && prgcJson.features.length > 0) {
+          const feat = prgcJson.features[0].properties || {};
+          const zonaCodice = feat.ZONA_URB || feat.DESTZONA || feat.zona_urb || feat.COD_ZONA || null;
+          const destinazione = feat.DESTZONA || feat.DESCR_ZONA || feat.destinazione || feat.USO || null;
+          zona_urbanistica = {
+            disponibile: true,
+            zona_codice: zonaCodice || 'Vedi PRG',
+            destinazione_uso: destinazione || 'Verificare su PRG comunale',
+            features_totali: prgcJson.features.length,
+            messaggio: `Dati PRGC Piemonte recuperati (${prgcJson.features.length} zone per il comune).`,
+            link_geoportale: `https://www.geoportale.piemonte.it/geonetwork/srv/ita/catalog.search#/search?any=PRGC+${encodeURIComponent(comune)}`,
+            fonte: 'WFS Geoportale Piemonte — PRGC_VIGENTE',
+          };
+          break;
+        }
+      } catch (_e) {
+        // prova filtro successivo
+      }
+    }
+  }
 
   return {
     coordinate: lat !== null ? { lat, lon } : null,
