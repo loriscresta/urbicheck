@@ -229,8 +229,8 @@ out skel qt;`;
 // ============================================================
 // ANALISI LIGURIA
 // ============================================================
-async function runAnalisiLiguria({ comune, provincia, indirizzo, comuneLower }) {
-  let lat = null, lon = null, x3003 = null, y3003 = null, geocodingError = null;
+async function runAnalisiLiguria({ comune, provincia, indirizzo, comuneLower, prefill_lat, prefill_lon }) {
+  let lat = prefill_lat || null, lon = prefill_lon || null, x3003 = null, y3003 = null, geocodingError = null;
   let pai = [{ layer: 'Rischio idrogeologico', trovato: false, errore: 'Non eseguito' }, { layer: 'Rischio idraulico', trovato: false, errore: 'Non eseguito' }];
   let overpassResult = { railways: [], waterways: [], lakes: [], overpass_ok: false };
 
