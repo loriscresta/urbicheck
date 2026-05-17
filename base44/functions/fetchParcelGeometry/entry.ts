@@ -22,6 +22,15 @@ function extractPolygon(xml) {
   return { type: 'Polygon', coordinates: [coordinates] };
 }
 
+// ── FIX 1: Calcola baricentro del poligono (media aritmetica di tutti i vertici) ──
+function calcPolygonCentroid(polygon) {
+  const ring = polygon?.coordinates?.[0];
+  if (!ring || ring.length < 3) return null;
+  let sumLon = 0, sumLat = 0;
+  for (const [lo, la] of ring) { sumLon += lo; sumLat += la; }
+  return { lat: sumLat / ring.length, lon: sumLon / ring.length };
+}
+
 async function searchWfs(lat, lon, delta = 0.002) {
   const bbox = `${lat - delta},${lon - delta},${lat + delta},${lon + delta}`;
   const url = `${WFS_ADE_BASE}?language=ita&SERVICE=WFS&VERSION=2.0.0&TYPENAMES=CP:CadastralParcel&SRSNAME=urn:ogc:def:crs:EPSG::6706&BBOX=${bbox}&REQUEST=GetFeature&COUNT=10`;
@@ -66,7 +75,7 @@ Deno.serve(async (req) => {
       if (qr && qr.created_by !== user.email && user.role !== 'admin') {
         return Response.json({ error: 'Forbidden' }, { status: 403 });
       }
-      // Se già ha geometry, restituisci subito
+      // Se già ha geometry, restituisci subito (con centroid se già aggiornato)
       if (qr?.geometry_geojson) {
         return Response.json({ success: true, geometry: qr.geometry_geojson, cached: true });
       }
@@ -81,14 +90,23 @@ Deno.serve(async (req) => {
     return Response.json({ success: false, reason: 'WFS AdE non ha restituito geometria per questa area' });
   }
 
-  // Salva sulla query
+  // ── FIX 1: Calcola baricentro dal poligono WFS AdE ──
+  const centroid = calcPolygonCentroid(geometry);
+
+  // Salva sulla query: geometry_geojson + centroid_lat/lng aggiornati al baricentro WFS AdE
   if (queryId) {
     try {
-      await base44.asServiceRole.entities.CadastralQuery.update(queryId, { geometry_geojson: geometry });
+      await base44.asServiceRole.entities.CadastralQuery.update(queryId, {
+        geometry_geojson: geometry,
+        ...(centroid ? {
+          centroid_lat: centroid.lat,
+          centroid_lng: centroid.lon,
+        } : {}),
+      });
     } catch (e) {
       console.warn('Save geometry error:', e.message);
     }
   }
 
-  return Response.json({ success: true, geometry });
+  return Response.json({ success: true, geometry, centroid });
 });
