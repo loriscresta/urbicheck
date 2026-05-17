@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useParams, Link } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -88,6 +88,12 @@ export default function ReportPage() {
   const queryClient = useQueryClient();
   const [isDownloadingPDF, setIsDownloadingPDF] = useState(false);
   const [showAttiForm, setShowAttiForm] = useState(false);
+  const [currentUser, setCurrentUser] = useState(null);
+
+  // Fetch current user for role check
+  useEffect(() => {
+    base44.auth.me().then(u => setCurrentUser(u)).catch(() => {});
+  }, []);
   const [comunePrefill, setComunePrefill] = useState(null);
   const [financialSnapshot, setFinancialSnapshot] = useState(null);
   const [comuneRecord, setComuneRecord] = useState(null);
@@ -593,10 +599,16 @@ export default function ReportPage() {
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}
         className="mt-8 p-6 rounded-xl border border-border bg-card">
           <div className="flex flex-col sm:flex-row gap-3 mb-6">
-            <Button variant="outline" className="gap-2" onClick={handleDownloadPDF} disabled={isDownloadingPDF}>
-              {isDownloadingPDF ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-              Scarica PDF completo
-            </Button>
+            {currentUser?.role === 'admin' ? (
+              <Button variant="outline" className="gap-2" onClick={handleDownloadPDF} disabled={isDownloadingPDF}>
+                {isDownloadingPDF ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                Scarica PDF completo
+              </Button>
+            ) : (
+              <div className="flex items-center gap-2 px-4 py-2 text-sm" style={{ border: '1px solid #C4BAA8', color: '#7A7268', fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.72rem' }}>
+                📄 PDF disponibile — funzionalità in arrivo
+              </div>
+            )}
           </div>
           <h3 className="font-semibold mb-1">Servizi Aggiuntivi (opzionali)</h3>
           <p className="text-sm text-muted-foreground mb-4">Servizi extra a pagamento separato, non inclusi nella scheda base.</p>
