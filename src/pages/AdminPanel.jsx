@@ -30,7 +30,8 @@ const statusMap = {
   failed: { label: "Errore", className: "bg-red-50 text-red-700 border-red-200" },
 };
 
-function KpiCard({ icon: Icon, label, value, sub, highlight }) {
+function KpiCard({ icon: IconComp, label, value, sub, highlight }) {
+  const Icon = IconComp;
   return (
     <div className="bg-white p-5" style={{ border: `1px solid ${highlight ? '#B33A2A' : '#C4BAA8'}`, borderTop: highlight ? '3px solid #B33A2A' : '1px solid #C4BAA8' }}>
       <div className="flex items-center justify-between mb-3">

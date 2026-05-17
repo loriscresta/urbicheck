@@ -1,6 +1,7 @@
 import React from "react";
 import { base44 } from "@/api/base44Client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { sendUrbiCheckEmail } from "@/functions/sendUrbiCheckEmail";
 import { useToast } from "@/components/ui/use-toast";
 import { CREDIT_PACKAGES } from "@/lib/italianData";
 import CreditPackageCard from "@/components/credits/CreditPackageCard";
@@ -61,6 +62,15 @@ export default function CreditsPage() {
 
       queryClient.invalidateQueries({ queryKey: ["userCredits"] });
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
+
+      const newBalance = (credits?.balance || 0) + pkg.price;
+      sendUrbiCheckEmail({
+        type: 'credits_purchased',
+        amount: pkg.price,
+        new_balance: newBalance,
+        user_name: user.full_name,
+        user_email: user.email,
+      }).catch(() => {});
 
       toast({
         title: "Crediti aggiunti!",

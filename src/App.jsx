@@ -71,6 +71,7 @@ const AuthenticatedApp = () => {
         <Route path="/history" element={<ErrorBoundary><HistoryPage /></ErrorBoundary>} />
         <Route path="/credits" element={<ErrorBoundary><CreditsPage /></ErrorBoundary>} />
           <Route path="/dev" element={<ErrorBoundary><DevPanel /></ErrorBoundary>} />
+          <Route path="/admin" element={<ErrorBoundary><AdminPanel /></ErrorBoundary>} />
       </Route>
       <Route path="*" element={<PageNotFound />} />
     </Routes>

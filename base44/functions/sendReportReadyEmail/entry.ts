@@ -134,14 +134,21 @@ Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
     const payload = await req.json();
-    const { query_id } = payload;
+    // Support both direct call (query_id) and entity automation payload (event.entity_id)
+    const query_id = payload.query_id || payload.event?.entity_id || payload.data?.id;
 
     if (!query_id) {
       return Response.json({ error: 'query_id required' }, { status: 400 });
     }
 
-    // Get query
-    const queries = await base44.asServiceRole.entities.CadastralQuery.filter({ id: query_id });
+    // Get query — prefer data from payload if already included
+    let query = payload.data?.status === 'completed' ? payload.data : null;
+    if (!query) {
+      const queries = await base44.asServiceRole.entities.CadastralQuery.filter({ id: query_id });
+      query = queries[0];
+    }
+    // Re-alias for legacy code below
+    const queries = query ? [query] : [];
     const query = queries[0];
     if (!query) return Response.json({ error: 'Query not found' }, { status: 404 });
 

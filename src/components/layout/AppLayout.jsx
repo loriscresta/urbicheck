@@ -43,6 +43,11 @@ export default function AppLayout() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const location = useLocation();
 
+  const { data: currentUser } = useQuery({
+    queryKey: ["currentUser"],
+    queryFn: () => base44.auth.me(),
+  });
+
   const { data: credits } = useQuery({
     queryKey: ["userCredits"],
     queryFn: async () => {
@@ -85,6 +90,21 @@ export default function AppLayout() {
               </Link>
             );
           })}
+          {currentUser?.role === "admin" && (
+            <Link
+              to="/admin"
+              className="flex items-center gap-3 px-4 py-3 text-xs font-semibold tracking-widest uppercase transition-all duration-150"
+              style={{
+                background: location.pathname === '/admin' ? 'rgba(179,58,42,0.15)' : 'transparent',
+                color: location.pathname === '/admin' ? '#B33A2A' : 'rgba(244,239,230,0.4)',
+                borderLeft: location.pathname === '/admin' ? '3px solid #B33A2A' : '3px solid transparent',
+                fontFamily: "'IBM Plex Mono', monospace",
+              }}
+            >
+              <ShieldCheck className="w-4 h-4 shrink-0" />
+              Admin
+            </Link>
+          )}
         </nav>
 
         <div className="p-4" style={{ borderTop: '1px solid rgba(255,255,255,0.1)' }}>
