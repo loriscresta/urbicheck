@@ -177,15 +177,31 @@ function buildAIPrompt(testo) {
 ${testo ? `TESTO VISURA:\n${testo.slice(0, 8000)}` : 'Analizza il file allegato (immagine/PDF).'}
 
 ISTRUZIONI CRITICHE:
-1. Cerca il campo "Mappali Terreni Correlati" che contiene righe tipo: "[CODICE] - Sezione [LETTERA] - Foglio [N] - Particella [N]"
-   La LETTERA della Sezione da questo campo è la Sezione INSPIRE (1 carattere: A, B, C...) — mettila in sezione_inspire.
-2. La "Sezione" principale della visura (es. "PL", "RM", "A") va in sezione_visura.
-3. Estrai il comune dal campo "COMUNE" o dall'intestazione della visura.
-4. La rendita catastale è in Euro (€) — estrai solo il numero.
- 5. Per la superficie cerca "mq" o "Consistenza".
- 6. La "Classe" catastale è un numero (1-7) accanto alla Categoria — mettila in classe_catastale.
- 7. La "Zona Censuaria" è un codice alfanumerico (es. 1, 2A, 3B) — mettila in zona_censuaria.
- 8. Se non trovi un campo, non inventarlo — lascialo null.
+
+La visura AdE ha una sezione "DATI IDENTIFICATIVI DELL'UNITA' IMMOBILIARE" con una tabella che contiene queste colonne:
+Foglio | Particella | Subalterno | Categoria | Classe | Consistenza | Superficie | Zona Censuaria | Microzona
+
+Devi estrarre TUTTI questi campi dalla tabella:
+- foglio: numero del foglio catastale (es. "268")
+- particella: numero della particella (es. "5206")  
+- subalterno: numero subalterno (es. "3"), null se assente
+- categoria_catastale: es. "A/3", "C/6", "D/1"
+- classe_catastale: il valore nella colonna "Classe" — OBBLIGATORIO estrarlo. È tipicamente un numero intero ("1","2","3") o può essere "//" o una lettera. Mettilo come stringa.
+- zona_censuaria: il valore nella colonna "Zona Censuaria" — OBBLIGATORIO estrarlo. È tipicamente un numero ("1","2","3") o codice alfanumerico ("2A","3B"). Mettilo come stringa.
+- superficie_mq: numero in mq dalla colonna Superficie, null se assente
+- rendita_catastale: importo in € (solo il numero, senza simbolo), null se assente
+- vani: numero di vani dalla colonna Consistenza, null se assente
+- indirizzo_catastale: indirizzo dell'immobile riportato nella visura
+
+Campi aggiuntivi:
+1. sezione_inspire: dalla sezione "Mappali Terreni Correlati" — righe tipo "[CODICE] - Sezione [LETTERA] - Foglio [N] - Particella [N]". La LETTERA è la sezione INSPIRE (1 char: A, B, C...).
+2. sezione_visura: la sezione principale della visura (es. "PL", "RM", "A").
+3. comune: nome del comune dall'intestazione.
+4. provincia: sigla provincia.
+5. intestatari: lista oggetti {nome, quota, data_inizio} dalla sezione intestatari.
+
+IMPORTANTE: classe_catastale e zona_censuaria sono campi PRIORITARI — devono essere estratti dalla tabella dati identificativi. Non lasciarli null se sono visibili nel documento.
+Se un campo non è presente nella visura, lascia null (non inventare valori).
 
 Restituisci JSON con tutti i campi richiesti.`;
 }

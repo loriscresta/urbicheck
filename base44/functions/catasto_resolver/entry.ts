@@ -382,23 +382,30 @@ Deno.serve(async (req) => {
   // ── STEP 2: WFS AdE ──
   const wfsResult = await searchWfsAde(lat, lon, codiceBelfiore, foglio, particella, rigaScelta.sezione);
 
+  // ── STEP 3: Salva ──
+  // Centroide SEMPRE dal poligono WFS (baricentro) se disponibile — sovrascrive OnData
+  let finalLat = lat, finalLon = lon;
+  let centroideFonte = 'ondata_only';
+  if (wfsResult?.geojson_polygon) {
+    const centroid = calculatePolygonCentroid(wfsResult.geojson_polygon);
+    if (centroid) {
+      finalLat = centroid.lat;
+      finalLon = centroid.lon;
+      centroideFonte = 'ade_wfs_baricentro';
+    }
+  }
+
   const catasto_data = {
-    lat,
-    lon,
+    lat: finalLat,
+    lon: finalLon,
+    lat_ondata: lat,
+    lon_ondata: lon,
     geojson_polygon: wfsResult?.geojson_polygon || null,
     inspire_id: wfsResult?.inspire_id || rigaScelta.id,
     sezioni_disponibili: sezioniTrovate.map(r => ({ sezione: r.sezione, id: r.id, lat: r.lat, lon: r.lon })),
-    fonte: wfsResult ? 'ondata+ade_wfs' : 'ondata_only',
+    fonte: centroideFonte,
     calcolato_il: new Date().toISOString(),
   };
-
-  // ── STEP 3: Salva ──
-  // Ricalcola centroide dal poligono WFS se disponibile (più accurato del geocoding OnData)
-  let finalLat = lat, finalLon = lon;
-  if (wfsResult?.geojson_polygon) {
-    const centroid = calculatePolygonCentroid(wfsResult.geojson_polygon);
-    if (centroid) { finalLat = centroid.lat; finalLon = centroid.lon; }
-  }
 
   if (queryRecord) {
     try {

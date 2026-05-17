@@ -134,7 +134,7 @@ export default function ParcellaMap({ lat, lon, geojsonPolygon, queryId, foglio,
   if (!lat || !lon) return null;
 
   const geomToDisplay = resolvedPolygon?.type === 'Feature' ? resolvedPolygon.geometry : resolvedPolygon;
-  const hasPolygon = geomToDisplay?.type === 'Polygon' || geomToDisplay?.type === 'MultiPolygon';
+  const hasPolygonDisplay = geomToDisplay?.type === 'Polygon' || geomToDisplay?.type === 'MultiPolygon';
 
   return (
     <div style={{ position: 'relative', border: '1px solid #C4BAA8', overflow: 'hidden' }}>
@@ -149,7 +149,7 @@ export default function ParcellaMap({ lat, lon, geojsonPolygon, queryId, foglio,
         color: '#7A7268',
         maxWidth: '90%',
       }}>
-        {hasPolygon
+        {hasPolygonDisplay
           ? `✅ Particella Foglio ${foglio}, N. ${particella} — Fonte: WFS AdE`
           : (
             <span className="flex items-center gap-1 flex-wrap">
