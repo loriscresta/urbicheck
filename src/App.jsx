@@ -15,7 +15,7 @@ import CreditsPage from '@/pages/CreditsPage';
 import AppLayout from '@/components/layout/AppLayout';
 import WaitlistPage from '@/pages/WaitlistPage';
 import DevPanel from '@/pages/DevPanel';
-import AdminPanel from '@/pages/AdminPanel';
+import AdminPage from '@/pages/AdminPage';
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, isAuthenticated, navigateToLogin } = useAuth();
@@ -71,7 +71,7 @@ const AuthenticatedApp = () => {
         <Route path="/history" element={<ErrorBoundary><HistoryPage /></ErrorBoundary>} />
         <Route path="/credits" element={<ErrorBoundary><CreditsPage /></ErrorBoundary>} />
           <Route path="/dev" element={<ErrorBoundary><DevPanel /></ErrorBoundary>} />
-          <Route path="/admin" element={<ErrorBoundary><AdminPanel /></ErrorBoundary>} />
+          <Route path="/admin" element={<ErrorBoundary><AdminPage /></ErrorBoundary>} />
       </Route>
       <Route path="*" element={<PageNotFound />} />
     </Routes>

@@ -142,14 +142,11 @@ Deno.serve(async (req) => {
     }
 
     // Get query — prefer data from payload if already included
-    let query = payload.data?.status === 'completed' ? payload.data : null;
+    let query = (payload.data?.status === 'completed') ? payload.data : null;
     if (!query) {
-      const queries = await base44.asServiceRole.entities.CadastralQuery.filter({ id: query_id });
-      query = queries[0];
+      const rows = await base44.asServiceRole.entities.CadastralQuery.filter({ id: query_id });
+      query = rows[0];
     }
-    // Re-alias for legacy code below
-    const queries = query ? [query] : [];
-    const query = queries[0];
     if (!query) return Response.json({ error: 'Query not found' }, { status: 404 });
 
     // Get user info from created_by email
