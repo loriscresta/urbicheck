@@ -1,7 +1,33 @@
 import React, { useState } from "react";
-import { Link } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
-import { CheckCircle2, ArrowLeft, Loader2 } from "lucide-react";
+import { Link } from "react-router-dom";
+import { motion } from "framer-motion";
+import { CheckCircle2 } from "lucide-react";
+
+const N = "#0f172a";
+const G = "#10b981";
+const SD = "#1e293b";
+const SL = "#94a3b8";
+const W = "#ffffff";
+const MONO = "'IBM Plex Mono', monospace";
+const SERIF = "'Libre Baskerville', serif";
+
+const Logo = () => (
+  <div className="flex items-center gap-2">
+    <svg width="26" height="26" viewBox="0 0 28 28" fill="none">
+      <rect x="1" y="1" width="26" height="26" stroke={W} strokeWidth="1.5" fill="none"/>
+      <line x1="10" y1="1" x2="10" y2="27" stroke={W} strokeWidth="0.75" strokeOpacity="0.4"/>
+      <line x1="18" y1="1" x2="18" y2="27" stroke={W} strokeWidth="0.75" strokeOpacity="0.4"/>
+      <line x1="1" y1="10" x2="27" y2="10" stroke={W} strokeWidth="0.75" strokeOpacity="0.4"/>
+      <line x1="1" y1="18" x2="27" y2="18" stroke={W} strokeWidth="0.75" strokeOpacity="0.4"/>
+      <polyline points="20,21 23,24 27,19" stroke={G} strokeWidth="2.5" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+    <span style={{ fontFamily: MONO, fontWeight: 700, fontSize: "1.05rem", letterSpacing: "0.04em" }}>
+      <span style={{ color: W }}>URBI</span>
+      <span style={{ color: G }}>CHECK</span>
+    </span>
+  </div>
+);
 
 const RUOLO_LABELS = {
   acquirente_privato: "Acquirente privato",
@@ -14,215 +40,202 @@ const RUOLO_LABELS = {
 };
 
 export default function WaitlistPage() {
-  const [form, setForm] = useState({ email: "", ruolo: "", regione_interesse: "" });
+  const [email, setEmail] = useState("");
+  const [ruolo, setRuolo] = useState("");
+  const [regioneInteresse, setRegioneInteresse] = useState("");
+  const [submitted, setSubmitted] = useState(false);
+  const [duplicate, setDuplicate] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [status, setStatus] = useState(null); // "success" | "duplicate" | "error"
+  const [error, setError] = useState("");
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!email) { setError("Inserisci la tua email."); return; }
     setLoading(true);
-    try {
-      // Check for duplicate
-      const existing = await base44.entities.WaitlistSubscriber.filter({ email: form.email });
-      if (existing.length > 0) {
-        setStatus("duplicate");
-        setLoading(false);
-        return;
-      }
-      const payload = { email: form.email };
-      if (form.ruolo) payload.ruolo = form.ruolo;
-      if (form.regione_interesse.trim()) payload.regione_interesse = form.regione_interesse.trim();
-      await base44.entities.WaitlistSubscriber.create(payload);
-      setStatus("success");
-    } catch (_e) {
-      setStatus("error");
+    setError("");
+
+    // Check for duplicate
+    const existing = await base44.entities.WaitlistSubscriber.filter({ email });
+    if (existing && existing.length > 0) {
+      setDuplicate(true);
+      setSubmitted(true);
+      setLoading(false);
+      return;
     }
+
+    await base44.entities.WaitlistSubscriber.create({
+      email,
+      ruolo: ruolo || "altro",
+      regione_interesse: regioneInteresse || undefined,
+    });
+
+    setSubmitted(true);
     setLoading(false);
   };
 
-  const mono = "'IBM Plex Mono', monospace";
+  const inputStyle = {
+    width: "100%",
+    height: "3rem",
+    padding: "0 1rem",
+    border: `1px solid #2d3748`,
+    fontFamily: MONO,
+    fontSize: "0.85rem",
+    color: W,
+    background: SD,
+    outline: "none",
+    boxSizing: "border-box",
+  };
 
   return (
-    <div className="min-h-screen flex flex-col" style={{ background: "#0f172a", fontFamily: mono }}>
+    <div style={{ background: N, fontFamily: MONO, minHeight: "100vh" }}>
 
-      {/* Nav */}
-      <nav style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }} className="px-6 h-14 flex items-center justify-between">
-        <Link to="/" className="flex items-center gap-2 group">
-          <svg width="24" height="24" viewBox="0 0 28 28" fill="none">
-            <rect x="1" y="1" width="26" height="26" stroke="#f1f5f9" strokeWidth="1.5" fill="none" />
-            <line x1="10" y1="1" x2="10" y2="27" stroke="#f1f5f9" strokeWidth="0.75" strokeOpacity="0.3" />
-            <line x1="18" y1="1" x2="18" y2="27" stroke="#f1f5f9" strokeWidth="0.75" strokeOpacity="0.3" />
-            <line x1="1" y1="10" x2="27" y2="10" stroke="#f1f5f9" strokeWidth="0.75" strokeOpacity="0.3" />
-            <line x1="1" y1="18" x2="27" y2="18" stroke="#f1f5f9" strokeWidth="0.75" strokeOpacity="0.3" />
-            <polyline points="20,21 23,24 27,19" stroke="#10b981" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-          <span style={{ fontWeight: 700, fontSize: "1rem", letterSpacing: "0.05em" }}>
-            <span style={{ color: "#f1f5f9" }}>URBI</span>
-            <span style={{ color: "#10b981" }}>CHECK</span>
-          </span>
-        </Link>
-        <Link to="/" className="flex items-center gap-1 text-xs hover:opacity-70 transition-opacity"
-          style={{ color: "rgba(241,245,249,0.5)" }}>
-          <ArrowLeft className="w-3 h-3" /> Torna alla home
-        </Link>
+      {/* ── NAVBAR ── */}
+      <nav style={{ background: N, borderBottom: `1px solid ${SD}`, position: "sticky", top: 0, zIndex: 50 }}>
+        <div className="max-w-6xl mx-auto px-5 h-14 flex items-center justify-between">
+          <Link to="/" style={{ textDecoration: "none" }}><Logo /></Link>
+          <Link to="/" style={{ color: SL, fontFamily: MONO, fontSize: "0.7rem", letterSpacing: "2px", textTransform: "uppercase", textDecoration: "none" }} className="hover:text-white transition-colors">
+            ← Torna alla home
+          </Link>
+        </div>
       </nav>
 
-      {/* Content */}
-      <div className="flex-1 flex items-center justify-center px-6 py-16">
-        <div className="w-full max-w-md">
+      {/* ── MAIN ── */}
+      <section style={{ padding: "5rem 1.5rem 6rem" }}>
+        <div className="max-w-xl mx-auto">
+          <motion.div initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.45 }}>
 
-          {status === "success" ? (
-            <div className="text-center">
-              <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6"
-                style={{ background: "rgba(16,185,129,0.15)", border: "2px solid #10b981" }}>
-                <CheckCircle2 className="w-8 h-8" style={{ color: "#10b981" }} />
-              </div>
-              <h1 className="text-2xl font-bold mb-3" style={{ color: "#f1f5f9" }}>Perfetto!</h1>
-              <p className="leading-relaxed mb-8" style={{ color: "rgba(241,245,249,0.6)", fontSize: "0.95rem", fontFamily: "'Libre Baskerville', serif" }}>
-                Ti avvisiamo appena sei operativo nella tua zona.
-              </p>
-              <Link to="/"
-                className="inline-block text-xs font-bold uppercase tracking-widest px-6 py-3 hover:opacity-90 transition-opacity"
-                style={{ background: "#10b981", color: "#0f172a" }}>
-                ← Torna alla home
-              </Link>
+            {/* Badge */}
+            <div className="inline-flex items-center gap-2 mb-6 px-3 py-1.5" style={{ border: `1px solid ${G}40`, background: `${G}15` }}>
+              <span style={{ width: 7, height: 7, borderRadius: "50%", background: G, display: "inline-block", boxShadow: `0 0 8px ${G}` }} />
+              <span style={{ color: G, fontSize: "0.62rem", fontWeight: 700, letterSpacing: "2px", textTransform: "uppercase" }}>Beta aperta — Piemonte e Liguria</span>
             </div>
-          ) : status === "duplicate" ? (
-            <div className="text-center">
-              <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6"
-                style={{ background: "rgba(16,185,129,0.1)", border: "2px solid rgba(16,185,129,0.4)" }}>
-                <CheckCircle2 className="w-8 h-8" style={{ color: "#10b981" }} />
-              </div>
-              <h1 className="text-xl font-bold mb-3" style={{ color: "#f1f5f9" }}>Sei già in lista, grazie!</h1>
-              <p style={{ color: "rgba(241,245,249,0.5)", fontSize: "0.85rem" }}>
-                Ti contatteremo non appena la tua zona sarà disponibile.
-              </p>
-              <Link to="/" className="inline-block mt-6 text-xs hover:underline" style={{ color: "rgba(241,245,249,0.4)" }}>
-                ← Torna alla home
-              </Link>
+
+            <h1 style={{ color: W, fontFamily: MONO, fontWeight: 700, fontSize: "clamp(1.75rem, 4vw, 2.75rem)", lineHeight: 1.15, letterSpacing: "-0.02em", marginBottom: "1.25rem" }}>
+              Entra in lista d'attesa<br />
+              <span style={{ color: G }}>UrbiCheck Beta</span>
+            </h1>
+
+            <p style={{ color: SL, fontFamily: SERIF, fontSize: "1rem", lineHeight: 1.75, marginBottom: "2.5rem" }}>
+              Stiamo espandendo la copertura a nuove regioni. Lascia la tua email e ti avvisiamo appena la tua zona è disponibile.
+            </p>
+
+            {/* Benefit bullets */}
+            <div className="flex flex-col gap-2 mb-8">
+              {["2 query gratuite al lancio per i primi 100 iscritti", "Accesso beta prima dell'apertura pubblica", "Sconto 20% Piano Pro per i primi 6 mesi"].map((b, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <CheckCircle2 style={{ width: 14, height: 14, color: G, flexShrink: 0 }} />
+                  <span style={{ fontFamily: MONO, fontSize: "0.72rem", color: SL }}>{b}</span>
+                </div>
+              ))}
             </div>
-          ) : (
-            <>
-              {/* Header */}
-              <div className="mb-10">
-                <div className="inline-flex items-center gap-2 px-3 py-1 mb-5 text-[10px] font-bold uppercase tracking-widest"
-                  style={{ background: "rgba(16,185,129,0.12)", border: "1px solid rgba(16,185,129,0.3)", color: "#10b981" }}>
-                  Beta · Piemonte e Liguria disponibili
-                </div>
-                <h1 className="font-bold leading-tight mb-4"
-                  style={{ color: "#f1f5f9", fontSize: "clamp(1.6rem, 4vw, 2.2rem)" }}>
-                  Entra in lista d'attesa
-                </h1>
-                <p style={{ color: "rgba(241,245,249,0.55)", fontSize: "0.9rem", fontFamily: "'Libre Baskerville', serif", lineHeight: 1.7 }}>
-                  Stiamo espandendo la copertura a nuove regioni. Lascia la tua email e ti avvisiamo appena la tua zona è disponibile.
-                </p>
-              </div>
 
-              {/* Form */}
-              <form onSubmit={handleSubmit} className="space-y-4">
-                {/* Email */}
-                <div>
-                  <label className="block text-[10px] font-bold uppercase tracking-widest mb-2"
-                    style={{ color: "rgba(241,245,249,0.5)" }}>
-                    Email *
-                  </label>
-                  <input
-                    type="email"
-                    required
-                    placeholder="la-tua@email.com"
-                    value={form.email}
-                    onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
-                    className="w-full h-11 px-4 text-sm outline-none transition-colors"
-                    style={{
-                      background: "rgba(255,255,255,0.05)",
-                      border: "1px solid rgba(255,255,255,0.12)",
-                      color: "#f1f5f9",
-                      fontFamily: mono,
-                    }}
-                    onFocus={e => e.target.style.borderColor = "#10b981"}
-                    onBlur={e => e.target.style.borderColor = "rgba(255,255,255,0.12)"}
-                  />
-                </div>
+            {/* Form / Success */}
+            <div style={{ border: `1px solid #2d3748`, background: SD, padding: "2rem" }}>
+              {submitted ? (
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-center py-4">
+                  {duplicate ? (
+                    <>
+                      <div style={{ fontSize: "2.5rem", marginBottom: "1rem" }}>✌️</div>
+                      <p style={{ fontFamily: MONO, fontWeight: 700, color: G, fontSize: "0.9rem", marginBottom: "0.75rem" }}>Sei già in lista, grazie!</p>
+                      <p style={{ fontFamily: SERIF, color: SL, fontSize: "0.88rem", lineHeight: 1.65 }}>
+                        Il tuo indirizzo <strong style={{ color: W }}>{email}</strong> è già registrato. Ti contatteremo prima del lancio.
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 style={{ width: 48, height: 48, color: G, margin: "0 auto 1rem" }} />
+                      <p style={{ fontFamily: MONO, fontWeight: 700, color: G, fontSize: "0.9rem", marginBottom: "0.75rem" }}>Perfetto! Sei in lista.</p>
+                      <p style={{ fontFamily: SERIF, color: SL, fontSize: "0.88rem", lineHeight: 1.65 }}>
+                        Ti avvisiamo appena sei operativo nella tua zona. Controlla la tua email per la conferma.
+                      </p>
+                    </>
+                  )}
+                  <Link to="/" style={{ display: "inline-block", marginTop: "1.5rem", color: G, fontFamily: MONO, fontSize: "0.7rem", letterSpacing: "1px", textDecoration: "none" }}>← Torna alla home</Link>
+                </motion.div>
+              ) : (
+                <form onSubmit={handleSubmit} className="space-y-4">
+                  <div>
+                    <label style={{ display: "block", fontFamily: MONO, fontSize: "0.6rem", color: SL, textTransform: "uppercase", letterSpacing: "2px", marginBottom: "0.4rem" }}>Email *</label>
+                    <input
+                      type="email"
+                      placeholder="la tua email"
+                      value={email}
+                      onChange={e => setEmail(e.target.value)}
+                      required
+                      style={inputStyle}
+                    />
+                  </div>
 
-                {/* Ruolo */}
-                <div>
-                  <label className="block text-[10px] font-bold uppercase tracking-widest mb-2"
-                    style={{ color: "rgba(241,245,249,0.5)" }}>
-                    Che ruolo hai?
-                  </label>
-                  <select
-                    value={form.ruolo}
-                    onChange={e => setForm(f => ({ ...f, ruolo: e.target.value }))}
-                    className="w-full h-11 px-4 text-sm outline-none transition-colors appearance-none"
+                  <div>
+                    <label style={{ display: "block", fontFamily: MONO, fontSize: "0.6rem", color: SL, textTransform: "uppercase", letterSpacing: "2px", marginBottom: "0.4rem" }}>Che ruolo hai?</label>
+                    <select
+                      value={ruolo}
+                      onChange={e => setRuolo(e.target.value)}
+                      style={{ ...inputStyle, appearance: "none", cursor: "pointer", color: ruolo ? W : SL }}
+                    >
+                      <option value="" disabled>Seleziona il tuo ruolo</option>
+                      {Object.entries(RUOLO_LABELS).map(([v, l]) => (
+                        <option key={v} value={v}>{l}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label style={{ display: "block", fontFamily: MONO, fontSize: "0.6rem", color: SL, textTransform: "uppercase", letterSpacing: "2px", marginBottom: "0.4rem" }}>
+                      Regione di interesse <span style={{ color: "#475569" }}>(opzionale)</span>
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="es. Toscana, Lombardia, Campania..."
+                      value={regioneInteresse}
+                      onChange={e => setRegioneInteresse(e.target.value)}
+                      style={inputStyle}
+                    />
+                  </div>
+
+                  {error && <p style={{ fontFamily: MONO, fontSize: "0.7rem", color: "#f87171" }}>{error}</p>}
+
+                  <button
+                    type="submit"
+                    disabled={loading}
                     style={{
-                      background: "rgba(255,255,255,0.05)",
-                      border: "1px solid rgba(255,255,255,0.12)",
-                      color: form.ruolo ? "#f1f5f9" : "rgba(241,245,249,0.35)",
-                      fontFamily: mono,
+                      width: "100%",
+                      height: "3rem",
+                      background: loading ? "#2d3748" : G,
+                      color: loading ? SL : N,
+                      fontFamily: MONO, fontWeight: 700, fontSize: "0.78rem", letterSpacing: "2px", textTransform: "uppercase",
+                      border: "none", cursor: loading ? "not-allowed" : "pointer",
+                      boxShadow: loading ? "none" : `0 4px 16px ${G}40`,
                     }}
-                    onFocus={e => e.target.style.borderColor = "#10b981"}
-                    onBlur={e => e.target.style.borderColor = "rgba(255,255,255,0.12)"}
                   >
-                    <option value="" style={{ background: "#1e293b" }}>Seleziona (opzionale)</option>
-                    {Object.entries(RUOLO_LABELS).map(([val, label]) => (
-                      <option key={val} value={val} style={{ background: "#1e293b", color: "#f1f5f9" }}>{label}</option>
-                    ))}
-                  </select>
-                </div>
+                    {loading ? "Invio..." : "Iscriviti alla beta →"}
+                  </button>
 
-                {/* Regione */}
-                <div>
-                  <label className="block text-[10px] font-bold uppercase tracking-widest mb-2"
-                    style={{ color: "rgba(241,245,249,0.5)" }}>
-                    Regione di interesse <span style={{ color: "rgba(241,245,249,0.3)", fontWeight: 400 }}>(opzionale)</span>
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="Es. Lombardia, Toscana, Veneto…"
-                    value={form.regione_interesse}
-                    onChange={e => setForm(f => ({ ...f, regione_interesse: e.target.value }))}
-                    className="w-full h-11 px-4 text-sm outline-none transition-colors"
-                    style={{
-                      background: "rgba(255,255,255,0.05)",
-                      border: "1px solid rgba(255,255,255,0.12)",
-                      color: "#f1f5f9",
-                      fontFamily: mono,
-                    }}
-                    onFocus={e => e.target.style.borderColor = "#10b981"}
-                    onBlur={e => e.target.style.borderColor = "rgba(255,255,255,0.12)"}
-                  />
-                </div>
-
-                {/* Error */}
-                {status === "error" && (
-                  <p className="text-xs" style={{ color: "#f87171" }}>
-                    Qualcosa è andato storto. Riprova tra qualche secondo.
+                  <p style={{ fontFamily: SERIF, fontSize: "0.72rem", color: "#475569", textAlign: "center", lineHeight: 1.6 }}>
+                    Nessuno spam. Disdici in qualsiasi momento. I tuoi dati non vengono ceduti a terzi.
                   </p>
-                )}
+                </form>
+              )}
+            </div>
 
-                {/* Submit */}
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="w-full h-12 font-bold text-sm uppercase tracking-widest transition-opacity hover:opacity-90 disabled:opacity-50 flex items-center justify-center gap-2"
-                  style={{ background: "#10b981", color: "#0f172a", marginTop: "0.5rem" }}
-                >
-                  {loading ? <><Loader2 className="w-4 h-4 animate-spin" /> Iscrizione…</> : "Iscriviti alla beta →"}
-                </button>
-              </form>
-
-              <p className="mt-6 text-[11px] text-center" style={{ color: "rgba(241,245,249,0.25)" }}>
-                Nessuno spam. Solo un'email quando la tua regione è pronta.
-              </p>
-            </>
-          )}
+          </motion.div>
         </div>
-      </div>
+      </section>
 
-      {/* Footer */}
-      <div className="px-6 py-5 text-center text-[10px]" style={{ borderTop: "1px solid rgba(255,255,255,0.06)", color: "rgba(241,245,249,0.25)" }}>
-        UrbiCheck © 2026 — Beta &nbsp;·&nbsp; <a href="mailto:loris.cresta@gmail.com" className="hover:opacity-70 transition-opacity">loris.cresta@gmail.com</a>
-      </div>
+      {/* ── FOOTER ── */}
+      <footer style={{ background: "#080f1a", borderTop: `1px solid ${SD}` }}>
+        <div className="max-w-6xl mx-auto px-5 py-8 flex flex-col md:flex-row items-center justify-between gap-4">
+          <p style={{ fontFamily: MONO, fontSize: "0.6rem", color: "#475569" }}>
+            UrbiCheck © 2026 — Beta
+          </p>
+          <div className="flex gap-6">
+            <a href="#" style={{ fontFamily: MONO, fontSize: "0.6rem", textTransform: "uppercase", letterSpacing: "2px", color: "#475569" }} className="hover:text-slate-300 transition-colors">Privacy Policy</a>
+            <a href="#" style={{ fontFamily: MONO, fontSize: "0.6rem", textTransform: "uppercase", letterSpacing: "2px", color: "#475569" }} className="hover:text-slate-300 transition-colors">Terms</a>
+            <a href="mailto:loris.cresta@gmail.com" style={{ fontFamily: MONO, fontSize: "0.6rem", color: G }} className="hover:opacity-80 transition-opacity">loris.cresta@gmail.com</a>
+          </div>
+        </div>
+      </footer>
+
     </div>
   );
 }

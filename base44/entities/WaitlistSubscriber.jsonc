@@ -21,7 +21,7 @@
     },
     "regione_interesse": {
       "type": "string",
-      "description": "Regione italiana di interesse (opzionale)"
+      "description": "Regione italiana di interesse dell'iscritto (opzionale)"
     }
   },
   "required": [

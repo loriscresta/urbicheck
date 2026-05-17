@@ -234,16 +234,17 @@ async function runAnalisiLiguria({ comune, provincia, indirizzo, comuneLower, pr
   let pai = [{ layer: 'Rischio idrogeologico', trovato: false, errore: 'Non eseguito' }, { layer: 'Rischio idraulico', trovato: false, errore: 'Non eseguito' }];
   let overpassResult = { railways: [], waterways: [], lakes: [], overpass_ok: false };
 
-  try {
-    const coords = await geocodeAddress(indirizzo, comune, provincia, 'Liguria');
-    lat = coords.lat; lon = coords.lon;
+  if (lat === null) {
+    try {
+      const coords = await geocodeAddress(indirizzo, comune, provincia, 'Liguria');
+      lat = coords.lat; lon = coords.lon;
+    } catch (err) {
+      geocodingError = err.message;
+    }
+  }
+  if (lat !== null) {
     const proj = wgs84ToEpsg3003(lon, lat);
     x3003 = proj.x; y3003 = proj.y;
-  } catch (err) {
-    geocodingError = err.message;
-  }
-
-  if (lat !== null) {
     try {
       [pai, overpassResult] = await Promise.all([
         queryPAILiguria(x3003, y3003),
@@ -339,16 +340,18 @@ async function runAnalisiLiguria({ comune, provincia, indirizzo, comuneLower, pr
 // ============================================================
 // ANALISI PIEMONTE
 // ============================================================
-async function runAnalisiPiemonte({ comune, provincia, indirizzo, comuneLower }) {
-  let lat = null, lon = null, geocodingError = null;
+async function runAnalisiPiemonte({ comune, provincia, indirizzo, comuneLower, prefill_lat, prefill_lon }) {
+  let lat = prefill_lat || null, lon = prefill_lon || null, geocodingError = null;
   let paiResult = [];
   let overpassResult = { railways: [], waterways: [], lakes: [], overpass_ok: false };
 
-  try {
-    const coords = await geocodeAddress(indirizzo, comune, provincia, 'Piemonte');
-    lat = coords.lat; lon = coords.lon;
-  } catch (err) {
-    geocodingError = err.message;
+  if (lat === null) {
+    try {
+      const coords = await geocodeAddress(indirizzo, comune, provincia, 'Piemonte');
+      lat = coords.lat; lon = coords.lon;
+    } catch (err) {
+      geocodingError = err.message;
+    }
   }
 
   if (lat !== null) {

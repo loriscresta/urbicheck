@@ -2,264 +2,131 @@ import React, { useState } from "react";
 import { base44 } from "@/api/base44Client";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
-import {
-  MapPin, Shield, Waves, Activity, BarChart3, ClipboardList,
-  CheckCircle2, ArrowRight, Zap, Clock, Globe, FileText, X
-} from "lucide-react";
+import { CheckCircle2, MapPin, AlertTriangle, Waves, Activity, FileText, TrendingUp, ClipboardList } from "lucide-react";
 
-// ── Logo ──
-const Logo = ({ light = false }) => (
+const N = "#0f172a";       // navy
+const G = "#10b981";       // verde
+const GA = "#059669";      // verde scuro
+const W = "#ffffff";
+const SL = "#94a3b8";      // slate light
+const SD = "#1e293b";      // slate dark
+const MONO = "'IBM Plex Mono', monospace";
+const SERIF = "'Libre Baskerville', serif";
+
+const Logo = ({ light = true }) => (
   <div className="flex items-center gap-2">
     <svg width="26" height="26" viewBox="0 0 28 28" fill="none">
-      <rect x="1" y="1" width="26" height="26" stroke={light ? "#fff" : "#0f172a"} strokeWidth="1.5" fill="none" />
-      <line x1="10" y1="1" x2="10" y2="27" stroke={light ? "#fff" : "#0f172a"} strokeWidth="0.75" strokeOpacity="0.4" />
-      <line x1="18" y1="1" x2="18" y2="27" stroke={light ? "#fff" : "#0f172a"} strokeWidth="0.75" strokeOpacity="0.4" />
-      <line x1="1" y1="10" x2="27" y2="10" stroke={light ? "#fff" : "#0f172a"} strokeWidth="0.75" strokeOpacity="0.4" />
-      <line x1="1" y1="18" x2="27" y2="18" stroke={light ? "#fff" : "#0f172a"} strokeWidth="0.75" strokeOpacity="0.4" />
-      <polyline points="20,21 23,24 27,19" stroke="#10b981" strokeWidth="2.2" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+      <rect x="1" y="1" width="26" height="26" stroke={light ? W : N} strokeWidth="1.5" fill="none"/>
+      <line x1="10" y1="1" x2="10" y2="27" stroke={light ? W : N} strokeWidth="0.75" strokeOpacity="0.4"/>
+      <line x1="18" y1="1" x2="18" y2="27" stroke={light ? W : N} strokeWidth="0.75" strokeOpacity="0.4"/>
+      <line x1="1" y1="10" x2="27" y2="10" stroke={light ? W : N} strokeWidth="0.75" strokeOpacity="0.4"/>
+      <line x1="1" y1="18" x2="27" y2="18" stroke={light ? W : N} strokeWidth="0.75" strokeOpacity="0.4"/>
+      <polyline points="20,21 23,24 27,19" stroke={G} strokeWidth="2.5" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
     </svg>
-    <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontWeight: 700, fontSize: '1.05rem', letterSpacing: '0.06em' }}>
-      <span style={{ color: light ? '#fff' : '#0f172a' }}>URBI</span>
-      <span style={{ color: '#10b981' }}>CHECK</span>
+    <span style={{ fontFamily: MONO, fontWeight: 700, fontSize: "1.05rem", letterSpacing: "0.04em" }}>
+      <span style={{ color: light ? W : N }}>URBI</span>
+      <span style={{ color: G }}>CHECK</span>
     </span>
   </div>
 );
 
-// ── Demo Modal ──
-function DemoModal({ onClose }) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ background: 'rgba(0,0,0,0.75)' }}
-      onClick={onClose}>
-      <motion.div
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        exit={{ opacity: 0, scale: 0.95 }}
-        className="relative w-full max-w-2xl rounded-2xl overflow-hidden shadow-2xl"
-        style={{ background: '#0f172a', border: '1px solid #1e293b' }}
-        onClick={e => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800">
-          <div>
-            <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontWeight: 700, fontSize: '0.8rem', color: '#10b981', textTransform: 'uppercase', letterSpacing: '2px' }}>
-              Esempio di Report
-            </p>
-            <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.65rem', color: '#64748b', marginTop: 2 }}>
-              Comune di Alessandria · Foglio 42 · Part. 301
-            </p>
-          </div>
-          <button onClick={onClose} className="text-slate-500 hover:text-white transition-colors">
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-        <div className="p-6 space-y-3">
-          {[
-            { icon: '🗺️', label: 'Zona Urbanistica', value: 'B2 — Residenziale di completamento', ok: true },
-            { icon: '⚠️', label: 'Vincolo Paesaggistico', value: 'Nessun vincolo art.142 rilevato', ok: true },
-            { icon: '🌊', label: 'PAI Frane ARPA Piemonte', value: 'Nessuna frana censita nel perimetro', ok: true },
-            { icon: '🔴', label: 'Classificazione Sismica', value: 'Zona 3 — Media sismicità (DGR 6-887/2019)', ok: null },
-            { icon: '💶', label: 'Valore OMI stimato', value: '€ 1.250 – 1.600 / mq', ok: true },
-            { icon: '📋', label: 'Intervento possibile', value: 'Ristrutturazione + sopraelevazione con SCIA', ok: true },
-          ].map((row, i) => (
-            <div key={i} className="flex items-center justify-between rounded-lg px-4 py-3"
-              style={{ background: '#1e293b', border: '1px solid #334155' }}>
-              <div className="flex items-center gap-3">
-                <span className="text-base">{row.icon}</span>
-                <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.68rem', color: '#94a3b8' }}>{row.label}</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.68rem', color: '#e2e8f0', textAlign: 'right', maxWidth: 220 }}>{row.value}</span>
-                {row.ok === true && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />}
-                {row.ok === null && <Activity className="w-3.5 h-3.5 text-amber-400 shrink-0" />}
-              </div>
-            </div>
-          ))}
-          <div className="mt-4 rounded-lg px-4 py-3 flex items-center gap-3"
-            style={{ background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.3)' }}>
-            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-            <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.65rem', color: '#10b981' }}>
-              Report completo elaborato in 48 secondi · PDF disponibile al download
-            </p>
-          </div>
-        </div>
-        <div className="px-6 pb-6">
-          <button
-            onClick={() => { onClose(); base44.auth.redirectToLogin("/dashboard"); }}
-            className="w-full h-11 rounded-lg font-bold text-sm tracking-wide transition-opacity hover:opacity-90"
-            style={{ background: '#10b981', color: '#fff', fontFamily: "'IBM Plex Mono', monospace" }}>
-            Inizia con il tuo immobile →
-          </button>
-        </div>
-      </motion.div>
-    </div>
-  );
-}
+const features = [
+  { icon: MapPin,        label: "Zona urbanistica",         desc: "Destinazione d'uso, PRG/PUC, indici edilizi e edificabilità dal GeoServer regionale." },
+  { icon: AlertTriangle, label: "Vincoli art.142 D.Lgs 42/2004", desc: "Laghi, fiumi, coste, boschi, parchi — fascia di tutela e riferimento normativo per ogni vincolo." },
+  { icon: Waves,         label: "Rischio idrogeologico (PAI)", desc: "Frane e alluvioni dal Piano di Bacino ufficiale. ARPA Piemonte WFS + M450 Liguria." },
+  { icon: Activity,      label: "Classificazione sismica",   desc: "Zona sismica ufficiale DGR regionale (Piemonte DGR 6-887/2019, Liguria OPCM 3274/2003)." },
+  { icon: TrendingUp,    label: "Valutazione finanziaria OMI", desc: "Stima valore di mercato, scenari flip/affitto, ROI atteso su dati OMI Agenzia delle Entrate." },
+  { icon: ClipboardList, label: "Pratiche e iter burocratico", desc: "Interventi fattibili, pratiche necessarie (CILA, SCIA, PdC), enti competenti e tempistiche." },
+];
 
-// ── Feature Card ──
-function FeatureCard({ icon: Icon, title, desc, color }) {
-  return (
-    <div className="rounded-xl p-5 flex flex-col gap-3 transition-all duration-200 hover:-translate-y-0.5"
-      style={{ background: '#1e293b', border: '1px solid #334155' }}>
-      <div className="w-9 h-9 rounded-lg flex items-center justify-center"
-        style={{ background: `${color}20` }}>
-        <Icon className="w-4 h-4" style={{ color }} />
-      </div>
-      <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontWeight: 700, fontSize: '0.78rem', color: '#f1f5f9' }}>{title}</p>
-      <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.65rem', color: '#64748b', lineHeight: 1.7 }}>{desc}</p>
-    </div>
-  );
-}
+const steps = [
+  { n: "01", title: "Inserisci i dati catastali", desc: "Comune, foglio, particella e finalità dell'analisi (acquisto, asta, investimento, ristrutturazione)." },
+  { n: "02", title: "UrbiCheck analizza in tempo reale", desc: "Interroga WFS regionali, ARPA, Overpass, catasto — gli stessi dati che usa un tecnico professionista." },
+  { n: "03", title: "Ricevi il report completo + PDF", desc: "Scheda strutturata con vincoli, rischi, valutazione finanziaria e PDF scaricabile in meno di 60 secondi." },
+];
 
-// ── Pricing Card ──
-function PricingCard({ tier, price, credits, features, popular, onCta }) {
-  return (
-    <div className="rounded-2xl p-6 flex flex-col gap-5 relative"
-      style={{
-        background: popular ? 'linear-gradient(135deg, #0f2d1f 0%, #0a1628 100%)' : '#1e293b',
-        border: popular ? '2px solid #10b981' : '1px solid #334155',
-      }}>
-      {popular && (
-        <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-4 py-1 rounded-full text-xs font-bold"
-          style={{ background: '#10b981', color: '#fff', fontFamily: "'IBM Plex Mono', monospace", whiteSpace: 'nowrap' }}>
-          ★ Più popolare
-        </div>
-      )}
-      <div>
-        <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.65rem', fontWeight: 700, color: popular ? '#10b981' : '#64748b', textTransform: 'uppercase', letterSpacing: '2px' }}>
-          {tier}
-        </p>
-        <div className="flex items-end gap-2 mt-2">
-          <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontWeight: 700, fontSize: '2.2rem', color: '#f1f5f9' }}>{price}</span>
-          <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.7rem', color: '#64748b', marginBottom: 6 }}>una tantum</span>
-        </div>
-        <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.65rem', color: '#10b981', marginTop: 4 }}>{credits}</p>
-      </div>
-      <div className="space-y-2.5">
-        {features.map((f, i) => (
-          <div key={i} className="flex items-start gap-2">
-            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5" />
-            <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.65rem', color: '#94a3b8' }}>{f}</span>
-          </div>
-        ))}
-      </div>
-      <button
-        onClick={onCta}
-        className="w-full h-10 rounded-lg font-bold text-xs tracking-widest uppercase transition-all hover:opacity-90"
-        style={{
-          background: popular ? '#10b981' : 'transparent',
-          color: popular ? '#fff' : '#10b981',
-          border: popular ? 'none' : '1px solid #10b981',
-          fontFamily: "'IBM Plex Mono', monospace",
-        }}>
-        Inizia ora →
-      </button>
-    </div>
-  );
-}
+const packages = [
+  { name: "Starter", price: "€9,90", credits: "9,90 crediti", desc: "1 report completo", highlight: false, features: ["Zona urbanistica", "Vincoli art.142", "Rischio PAI", "Sismica", "PDF scaricabile"] },
+  { name: "Pro",     price: "€24,90", credits: "27,40 crediti", desc: "3 report + 10% bonus", highlight: true, badge: "Più popolare", features: ["Tutto Starter ×3", "+10% crediti bonus", "Valutazione finanziaria", "Accesso agli atti", "Priority support"] },
+  { name: "Business", price: "€59,90", credits: "71,90 crediti", desc: "8 report + 20% bonus", highlight: false, features: ["Tutto Pro ×8", "+20% crediti bonus", "Export Excel", "API access (presto)", "Volume scontato"] },
+];
+
+const stats = [
+  { value: "10+",    label: "Report elaborati" },
+  { value: "2",      label: "Regioni coperte" },
+  { value: "Art.142",label: "Vincoli inclusi" },
+  { value: "< 60s",  label: "Tempo di risposta" },
+];
 
 export default function LandingPage() {
-  const [showDemo, setShowDemo] = useState(false);
+  const [showDemoModal, setShowDemoModal] = useState(false);
+
   const handleLogin = () => base44.auth.redirectToLogin("/dashboard");
 
   return (
-    <div className="min-h-screen" style={{ background: '#0f172a', fontFamily: "'IBM Plex Mono', monospace" }}>
-
-      {showDemo && <DemoModal onClose={() => setShowDemo(false)} />}
+    <div style={{ background: N, fontFamily: MONO, minHeight: "100vh" }}>
 
       {/* ── NAVBAR ── */}
-      <nav style={{ background: 'rgba(15,23,42,0.95)', backdropFilter: 'blur(12px)', borderBottom: '1px solid #1e293b', position: 'sticky', top: 0, zIndex: 40 }}>
-        <div className="max-w-6xl mx-auto px-6 h-14 flex items-center justify-between">
-          <Logo light />
+      <nav style={{ background: N, borderBottom: `1px solid ${SD}`, position: "sticky", top: 0, zIndex: 50 }}>
+        <div className="max-w-6xl mx-auto px-5 h-14 flex items-center justify-between">
+          <Logo />
           <div className="hidden md:flex items-center gap-8">
-            {[['Come funziona', '#come-funziona'], ['Cosa include', '#features'], ['Prezzi', '#prezzi']].map(([label, href]) => (
-              <a key={href} href={href}
-                style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.7rem', color: '#94a3b8', textDecoration: 'none', transition: 'color 0.15s' }}
-                onMouseOver={e => e.target.style.color = '#f1f5f9'}
-                onMouseOut={e => e.target.style.color = '#94a3b8'}>
-                {label}
-              </a>
-            ))}
+            <a href="#come-funziona" style={{ color: SL, fontSize: "0.7rem", letterSpacing: "2px", textTransform: "uppercase" }} className="hover:text-white transition-colors">Come funziona</a>
+            <a href="#feature" style={{ color: SL, fontSize: "0.7rem", letterSpacing: "2px", textTransform: "uppercase" }} className="hover:text-white transition-colors">Report</a>
+            <a href="#prezzi" style={{ color: SL, fontSize: "0.7rem", letterSpacing: "2px", textTransform: "uppercase" }} className="hover:text-white transition-colors">Prezzi</a>
+            <Link to="/waitlist" style={{ color: SL, fontSize: "0.7rem", letterSpacing: "2px", textTransform: "uppercase" }} className="hover:text-white transition-colors">Beta</Link>
           </div>
-          <button onClick={handleLogin}
-            className="text-xs font-bold uppercase tracking-widest px-5 h-9 rounded-lg transition-opacity hover:opacity-90"
-            style={{ background: '#10b981', color: '#fff', fontFamily: "'IBM Plex Mono', monospace", border: 'none' }}>
-            Accedi
+          <button onClick={handleLogin} style={{ background: G, color: N, fontFamily: MONO, fontWeight: 700, fontSize: "0.7rem", letterSpacing: "2px", textTransform: "uppercase", border: "none", padding: "0 1.25rem", height: "2.25rem", cursor: "pointer" }}>
+            Accedi →
           </button>
         </div>
       </nav>
 
       {/* ── HERO ── */}
-      <section className="px-6 pt-24 pb-20 relative overflow-hidden">
-        {/* Background grid decoration */}
-        <div className="absolute inset-0 pointer-events-none" style={{
-          backgroundImage: 'linear-gradient(rgba(16,185,129,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(16,185,129,0.04) 1px, transparent 1px)',
-          backgroundSize: '40px 40px',
-        }} />
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[400px] rounded-full pointer-events-none"
-          style={{ background: 'radial-gradient(ellipse, rgba(16,185,129,0.08) 0%, transparent 70%)' }} />
-
-        <div className="max-w-4xl mx-auto relative">
+      <section style={{ background: `linear-gradient(135deg, ${N} 0%, #0d2137 100%)`, padding: "5rem 1.5rem 6rem", borderBottom: `1px solid ${SD}` }}>
+        <div className="max-w-4xl mx-auto">
           <motion.div initial={{ opacity: 0, y: 28 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.55 }}>
+
             {/* Badge beta */}
-            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full mb-8"
-              style={{ background: 'rgba(16,185,129,0.12)', border: '1px solid rgba(16,185,129,0.3)' }}>
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-              <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.65rem', color: '#10b981', fontWeight: 700, letterSpacing: '1px' }}>
-                BETA · Piemonte e Liguria disponibili
-              </span>
+            <div className="inline-flex items-center gap-2 mb-6 px-3 py-1.5" style={{ border: `1px solid ${G}40`, borderRadius: 4, background: `${G}15` }}>
+              <span style={{ width: 7, height: 7, borderRadius: "50%", background: G, display: "inline-block", boxShadow: `0 0 8px ${G}` }} />
+              <span style={{ color: G, fontSize: "0.65rem", fontWeight: 700, letterSpacing: "2px", textTransform: "uppercase" }}>Beta · Piemonte e Liguria disponibili</span>
             </div>
 
-            <h1 className="font-bold leading-tight mb-6"
-              style={{ color: '#f1f5f9', fontFamily: "'IBM Plex Mono', monospace", fontSize: 'clamp(2rem, 5vw, 3.6rem)', letterSpacing: '-0.02em' }}>
+            <h1 style={{ color: W, fontFamily: MONO, fontWeight: 700, fontSize: "clamp(2rem, 5.5vw, 3.75rem)", lineHeight: 1.1, letterSpacing: "-0.02em", marginBottom: "1.5rem" }}>
               La due diligence<br />
-              immobiliare in{' '}
-              <span style={{ color: '#10b981' }}>60 secondi</span>
+              immobiliare<br />
+              <span style={{ color: G }}>in 60 secondi.</span>
             </h1>
 
-            <p className="mb-10 max-w-2xl leading-relaxed"
-              style={{ color: '#94a3b8', fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.95rem', lineHeight: 1.8 }}>
-              Inserisci foglio e particella — ottieni vincoli urbanistici, sismici, idrogeologici,
-              paesaggistici e valutazione finanziaria istantanea.{' '}
-              <span style={{ color: '#e2e8f0' }}>Senza aspettare il tecnico.</span>
+            <p style={{ color: SL, fontFamily: SERIF, fontSize: "1.05rem", lineHeight: 1.75, maxWidth: 600, marginBottom: "2.5rem" }}>
+              Inserisci foglio e particella — ottieni vincoli urbanistici, sismici, idrogeologici, paesaggistici e valutazione finanziaria istantanea. Senza aspettare il tecnico.
             </p>
 
-            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 mb-10">
+            <div className="flex flex-col sm:flex-row gap-3 items-start">
               <button onClick={handleLogin}
-                className="inline-flex items-center gap-2 px-8 h-12 rounded-xl font-bold text-sm tracking-wide transition-all hover:opacity-90 hover:shadow-lg"
-                style={{ background: '#10b981', color: '#fff', fontFamily: "'IBM Plex Mono', monospace", boxShadow: '0 4px 24px rgba(16,185,129,0.3)' }}>
-                Inizia ora — €9,90 a report
-                <ArrowRight className="w-4 h-4" />
+                style={{ background: G, color: N, fontFamily: MONO, fontWeight: 700, fontSize: "0.8rem", letterSpacing: "1.5px", textTransform: "uppercase", border: "none", padding: "0 2rem", height: "3.25rem", cursor: "pointer", boxShadow: `0 4px 20px ${G}40` }}>
+                Inizia ora — €9,90 a report →
               </button>
-              <button onClick={() => setShowDemo(true)}
-                className="inline-flex items-center gap-2 px-6 h-12 rounded-xl text-sm transition-all hover:bg-slate-800"
-                style={{ color: '#94a3b8', fontFamily: "'IBM Plex Mono', monospace", border: '1px solid #334155' }}>
-                <FileText className="w-4 h-4" />
-                Vedi esempio di report
+              <button onClick={() => setShowDemoModal(true)}
+                style={{ background: "transparent", color: SL, fontFamily: MONO, fontSize: "0.78rem", letterSpacing: "1px", border: `1px solid ${SD}`, padding: "0 1.5rem", height: "3.25rem", cursor: "pointer" }}
+                className="hover:border-slate-500 transition-colors">
+                Vedi un esempio di report ↗
               </button>
             </div>
 
-            {/* Mini trust */}
-            <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.6rem', color: '#475569' }}>
-              ✓ Nessun abbonamento &nbsp;·&nbsp; ✓ Paghi solo i report che usi &nbsp;·&nbsp; ✓ Dati WFS ufficiali regionali
-            </p>
           </motion.div>
         </div>
       </section>
 
-      {/* ── STRIP NUMERI ── */}
-      <section style={{ borderTop: '1px solid #1e293b', borderBottom: '1px solid #1e293b', background: '#0f1f2e' }}>
-        <div className="max-w-5xl mx-auto px-6">
+      {/* ── STATS STRIP ── */}
+      <section style={{ background: SD, borderBottom: `1px solid #2d3748` }}>
+        <div className="max-w-4xl mx-auto px-5">
           <div className="grid grid-cols-2 md:grid-cols-4">
-            {[
-              { value: '10+', label: 'Report elaborati' },
-              { value: '2', label: 'Regioni coperte' },
-              { value: 'art.142', label: 'Vincoli inclusi' },
-              { value: '< 60s', label: 'Tempo di risposta' },
-            ].map((item, i) => (
-              <div key={i} className="py-6 px-4 text-center flex flex-col items-center gap-1"
-                style={{ borderRight: i < 3 ? '1px solid #1e293b' : 'none' }}>
-                <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontWeight: 700, fontSize: '1.4rem', color: '#10b981' }}>{item.value}</span>
-                <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.6rem', color: '#64748b', textTransform: 'uppercase', letterSpacing: '1px' }}>{item.label}</span>
+            {stats.map((s, i) => (
+              <div key={i} className="py-5 px-4 text-center" style={{ borderRight: i < 3 ? `1px solid #2d3748` : "none" }}>
+                <div style={{ fontFamily: MONO, fontWeight: 700, color: G, fontSize: "1.35rem", lineHeight: 1 }}>{s.value}</div>
+                <div style={{ fontFamily: MONO, fontSize: "0.6rem", color: SL, textTransform: "uppercase", letterSpacing: "2px", marginTop: 4 }}>{s.label}</div>
               </div>
             ))}
           </div>
@@ -267,201 +134,182 @@ export default function LandingPage() {
       </section>
 
       {/* ── COME FUNZIONA ── */}
-      <section id="come-funziona" className="px-6 py-24">
-        <div className="max-w-5xl mx-auto">
-          <div className="text-center mb-14">
-            <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.65rem', fontWeight: 700, color: '#10b981', textTransform: 'uppercase', letterSpacing: '3px', marginBottom: 12 }}>
-              Come funziona
-            </p>
-            <h2 style={{ fontFamily: "'IBM Plex Mono', monospace", fontWeight: 700, fontSize: 'clamp(1.4rem, 3vw, 2.1rem)', color: '#f1f5f9', lineHeight: 1.3 }}>
-              Tre passaggi, un report completo
-            </h2>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-0 relative">
-            {[
-              {
-                num: '01',
-                icon: MapPin,
-                title: 'Inserisci i dati catastali',
-                desc: 'Comune, foglio e particella del lotto che vuoi analizzare. Puoi anche caricare una visura catastale per la precompilazione automatica.',
-              },
-              {
-                num: '02',
-                icon: Zap,
-                title: 'Analisi in tempo reale',
-                desc: 'UrbiCheck interroga i WFS regionali (ARPA, Geoportali) e le banche dati PAI, acquisendo vincoli urbanistici, sismici e idrogeologici.',
-              },
-              {
-                num: '03',
-                icon: FileText,
-                title: 'Ricevi il report completo',
-                desc: 'Scheda certificata con tutti i vincoli, valutazione finanziaria OMI e pratiche necessarie. PDF scaricabile incluso.',
-              },
-            ].map((step, i) => (
-              <div key={i} className="p-8 flex flex-col gap-4 relative"
-                style={{ background: '#111827', border: '1px solid #1e293b', borderLeft: i > 0 ? 'none' : '1px solid #1e293b' }}>
-                <div className="flex items-center gap-3">
-                  <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontWeight: 700, fontSize: '0.65rem', color: '#10b981', opacity: 0.6 }}>{step.num}</span>
-                  <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'rgba(16,185,129,0.1)' }}>
-                    <step.icon className="w-4 h-4 text-emerald-400" />
-                  </div>
-                </div>
-                <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontWeight: 700, fontSize: '0.82rem', color: '#f1f5f9' }}>{step.title}</p>
-                <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.65rem', color: '#64748b', lineHeight: 1.8 }}>{step.desc}</p>
-                {i < 2 && (
-                  <div className="hidden md:block absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 z-10 w-6 h-6 rounded-full flex items-center justify-center"
-                    style={{ background: '#10b981' }}>
-                    <ArrowRight className="w-3 h-3 text-white" />
-                  </div>
-                )}
+      <section id="come-funziona" style={{ background: N, padding: "5rem 1.5rem", borderBottom: `1px solid ${SD}` }}>
+        <div className="max-w-4xl mx-auto">
+          <p style={{ color: G, fontSize: "0.65rem", fontWeight: 700, letterSpacing: "4px", textTransform: "uppercase", marginBottom: "1rem" }}>Come funziona</p>
+          <h2 style={{ color: W, fontFamily: MONO, fontWeight: 700, fontSize: "clamp(1.5rem, 3.5vw, 2.25rem)", marginBottom: "3rem", lineHeight: 1.2 }}>
+            3 passi. Dati ufficiali. Output immediato.
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-0" style={{ border: `1px solid ${SD}` }}>
+            {steps.map((s, i) => (
+              <div key={i} className="p-7" style={{ borderRight: i < 2 ? `1px solid ${SD}` : "none", borderBottom: 0 }}>
+                <div style={{ fontFamily: MONO, fontWeight: 700, color: G, fontSize: "2rem", lineHeight: 1, marginBottom: "1rem" }}>{s.n}</div>
+                <p style={{ fontFamily: MONO, fontWeight: 700, color: W, fontSize: "0.78rem", textTransform: "uppercase", letterSpacing: "1px", marginBottom: "0.6rem" }}>{s.title}</p>
+                <p style={{ fontFamily: SERIF, color: SL, fontSize: "0.85rem", lineHeight: 1.65 }}>{s.desc}</p>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* ── COSA INCLUDE ── */}
-      <section id="features" className="px-6 py-24" style={{ background: '#080f1a' }}>
-        <div className="max-w-5xl mx-auto">
-          <div className="text-center mb-14">
-            <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.65rem', fontWeight: 700, color: '#10b981', textTransform: 'uppercase', letterSpacing: '3px', marginBottom: 12 }}>
-              Cosa include il report
-            </p>
-            <h2 style={{ fontFamily: "'IBM Plex Mono', monospace", fontWeight: 700, fontSize: 'clamp(1.4rem, 3vw, 2.1rem)', color: '#f1f5f9', lineHeight: 1.3 }}>
-              Tutto quello che serve per decidere
-            </h2>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            <FeatureCard icon={MapPin} color="#10b981" title="Zona urbanistica e destinazione d'uso" desc="Categoria di zona, indici edilizi, altezze massime e destinazioni previste dal PRG/PRGC vigente." />
-            <FeatureCard icon={Shield} color="#f59e0b" title="Vincoli paesaggistici art.142" desc="Laghi, fiumi, coste, parchi: fascia di tutela, riferimento normativo e link di verifica ufficiale." />
-            <FeatureCard icon={Waves} color="#3b82f6" title="Rischio idrogeologico e frane (PAI)" desc="WFS ARPA Piemonte e Regione Liguria — frane poligonali e puntuali (PIFF), rischio idraulico." />
-            <FeatureCard icon={Activity} color="#ef4444" title="Classificazione sismica ufficiale" desc="Zona sismica per DGR regionale. Piemonte: DGR 6-887/2019 con zone 3S e 3. NTC 2018." />
-            <FeatureCard icon={BarChart3} color="#8b5cf6" title="Valutazione finanziaria + indici OMI" desc="Stima valore di mercato, calcolo ROI per affitto breve e lungo, costi di ristrutturazione." />
-            <FeatureCard icon={ClipboardList} color="#10b981" title="Pratiche necessarie e iter burocratico" desc="CILA, SCIA, Permesso di Costruire: ente competente, tempistiche e costi stimati per ogni intervento." />
+      {/* ── COSA INCLUDE IL REPORT ── */}
+      <section id="feature" style={{ background: SD, padding: "5rem 1.5rem", borderBottom: `1px solid #2d3748` }}>
+        <div className="max-w-4xl mx-auto">
+          <p style={{ color: G, fontSize: "0.65rem", fontWeight: 700, letterSpacing: "4px", textTransform: "uppercase", marginBottom: "1rem" }}>Il report include</p>
+          <h2 style={{ color: W, fontFamily: MONO, fontWeight: 700, fontSize: "clamp(1.5rem, 3.5vw, 2.25rem)", marginBottom: "3rem", lineHeight: 1.2 }}>
+            Tutto ciò che serve per decidere in autonomia.
+          </h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-px" style={{ background: "#2d3748" }}>
+            {features.map((f, i) => {
+              const Icon = f.icon;
+              return (
+                <div key={i} className="p-6" style={{ background: SD }}>
+                  <div className="flex items-center gap-3 mb-3">
+                    <div style={{ width: 34, height: 34, background: `${G}20`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                      <Icon style={{ width: 16, height: 16, color: G }} />
+                    </div>
+                    <p style={{ fontFamily: MONO, fontWeight: 700, color: W, fontSize: "0.72rem", textTransform: "uppercase", letterSpacing: "0.5px" }}>{f.label}</p>
+                  </div>
+                  <p style={{ fontFamily: SERIF, color: SL, fontSize: "0.82rem", lineHeight: 1.65 }}>{f.desc}</p>
+                </div>
+              );
+            })}
           </div>
         </div>
       </section>
 
       {/* ── PRICING ── */}
-      <section id="prezzi" className="px-6 py-24">
-        <div className="max-w-5xl mx-auto">
-          <div className="text-center mb-14">
-            <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.65rem', fontWeight: 700, color: '#10b981', textTransform: 'uppercase', letterSpacing: '3px', marginBottom: 12 }}>
-              Prezzi
-            </p>
-            <h2 style={{ fontFamily: "'IBM Plex Mono', monospace", fontWeight: 700, fontSize: 'clamp(1.4rem, 3vw, 2.1rem)', color: '#f1f5f9', lineHeight: 1.3 }}>
-              Paghi solo ciò che usi
-            </h2>
-            <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.7rem', color: '#64748b', marginTop: 12 }}>
-              Nessun abbonamento. Ricarichi crediti e li usi quando vuoi.
-            </p>
+      <section id="prezzi" style={{ background: N, padding: "5rem 1.5rem", borderBottom: `1px solid ${SD}` }}>
+        <div className="max-w-4xl mx-auto">
+          <p style={{ color: G, fontSize: "0.65rem", fontWeight: 700, letterSpacing: "4px", textTransform: "uppercase", marginBottom: "1rem" }}>Prezzi</p>
+          <h2 style={{ color: W, fontFamily: MONO, fontWeight: 700, fontSize: "clamp(1.5rem, 3.5vw, 2.25rem)", marginBottom: "3rem", lineHeight: 1.2 }}>
+            Pay-per-report. Nessun abbonamento.
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {packages.map((p, i) => (
+              <div key={i} className="relative p-6 flex flex-col" style={{
+                border: p.highlight ? `2px solid ${G}` : `1px solid ${SD}`,
+                background: p.highlight ? `${G}10` : SD,
+                boxShadow: p.highlight ? `0 0 30px ${G}25` : "none",
+              }}>
+                {p.badge && (
+                  <div style={{ position: "absolute", top: -1, right: 16, background: G, color: N, fontFamily: MONO, fontWeight: 700, fontSize: "0.6rem", letterSpacing: "1px", textTransform: "uppercase", padding: "3px 10px" }}>
+                    {p.badge}
+                  </div>
+                )}
+                <p style={{ fontFamily: MONO, fontWeight: 700, color: SL, fontSize: "0.65rem", letterSpacing: "2px", textTransform: "uppercase", marginBottom: "0.75rem" }}>{p.name}</p>
+                <p style={{ fontFamily: MONO, fontWeight: 700, color: p.highlight ? G : W, fontSize: "2.2rem", lineHeight: 1, marginBottom: "0.25rem" }}>{p.price}</p>
+                <p style={{ fontFamily: SERIF, color: SL, fontSize: "0.78rem", marginBottom: "1.5rem" }}>{p.desc} — {p.credits}</p>
+                <ul className="space-y-2 mb-6 flex-1">
+                  {p.features.map((f, j) => (
+                    <li key={j} className="flex items-center gap-2">
+                      <CheckCircle2 style={{ width: 13, height: 13, color: G, flexShrink: 0 }} />
+                      <span style={{ fontFamily: MONO, fontSize: "0.7rem", color: SL }}>{f}</span>
+                    </li>
+                  ))}
+                </ul>
+                <button onClick={handleLogin} style={{
+                  background: p.highlight ? G : "transparent",
+                  color: p.highlight ? N : G,
+                  border: `1px solid ${G}`,
+                  fontFamily: MONO, fontWeight: 700, fontSize: "0.72rem", letterSpacing: "1.5px", textTransform: "uppercase",
+                  padding: "0.75rem", cursor: "pointer", width: "100%",
+                }}>
+                  {p.highlight ? "Inizia ora →" : "Scegli →"}
+                </button>
+              </div>
+            ))}
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
-            <PricingCard
-              tier="Starter"
-              price="€9,90"
-              credits="9,90 crediti · 1 report completo"
-              features={[
-                'Analisi urbanistica completa',
-                'Vincoli art.142 (laghi, fiumi, coste)',
-                'PAI frane e rischio idrogeologico',
-                'Classificazione sismica',
-                'PDF scaricabile',
-              ]}
-              onCta={handleLogin}
-            />
-            <PricingCard
-              tier="Pro"
-              price="€24,90"
-              credits="27,40 crediti · 3 report + 10% bonus"
-              features={[
-                'Tutto incluso in Starter',
-                '10% di crediti bonus',
-                'Valutazione finanziaria OMI',
-                'Scenario flip e rendita affitto',
-                'Priorità in coda elaborazione',
-              ]}
-              popular
-              onCta={handleLogin}
-            />
-            <PricingCard
-              tier="Business"
-              price="€59,90"
-              credits="71,90 crediti · 8 report + 20% bonus"
-              features={[
-                'Tutto incluso in Pro',
-                '20% di crediti bonus',
-                'Accesso agli atti (art. 22 L.241/90)',
-                'Richiesta CDU pre-compilata',
-                'Export dati strutturati JSON',
-              ]}
-              onCta={handleLogin}
-            />
-          </div>
-          <p className="text-center mt-8" style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.6rem', color: '#475569' }}>
-            I crediti non scadono · IVA inclusa · Rimborso entro 48h se il report non viene generato
-          </p>
         </div>
       </section>
 
       {/* ── CTA FINALE ── */}
-      <section className="px-6 py-24" style={{ background: '#080f1a', borderTop: '1px solid #1e293b' }}>
+      <section style={{ background: `linear-gradient(135deg, #0d2137 0%, ${N} 100%)`, padding: "5rem 1.5rem", borderTop: `1px solid ${SD}` }}>
         <div className="max-w-2xl mx-auto text-center">
-          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full mb-8"
-            style={{ background: 'rgba(16,185,129,0.12)', border: '1px solid rgba(16,185,129,0.3)' }}>
-            <Clock className="w-3.5 h-3.5 text-emerald-400" />
-            <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.65rem', color: '#10b981', fontWeight: 700, letterSpacing: '1px' }}>
-              BETA APERTA — accesso immediato
-            </span>
-          </div>
-          <h2 className="font-bold mb-5 leading-tight"
-            style={{ color: '#f1f5f9', fontFamily: "'IBM Plex Mono', monospace", fontSize: 'clamp(1.5rem, 3vw, 2.2rem)' }}>
-            Inizia ad analizzare<br />il tuo prossimo immobile.
+          <p style={{ color: G, fontSize: "0.65rem", fontWeight: 700, letterSpacing: "4px", textTransform: "uppercase", marginBottom: "1.25rem" }}>Sei tra i primi</p>
+          <h2 style={{ color: W, fontFamily: MONO, fontWeight: 700, fontSize: "clamp(1.5rem, 3.5vw, 2.25rem)", lineHeight: 1.2, marginBottom: "1.25rem" }}>
+            Entra nella beta.<br />2 query gratuite per i primi 100.
           </h2>
-          <p className="mb-10 leading-relaxed"
-            style={{ color: '#64748b', fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.8rem' }}>
-            Crea un account gratuito e ricarica i crediti per ottenere il tuo primo report in 60 secondi.
+          <p style={{ color: SL, fontFamily: SERIF, fontSize: "1rem", lineHeight: 1.7, marginBottom: "2.5rem" }}>
+            UrbiCheck è in accesso anticipato. Piemonte e Liguria disponibili da subito. Nuove regioni in arrivo.
           </p>
-          <button onClick={handleLogin}
-            className="inline-flex items-center gap-2 px-10 h-13 rounded-xl font-bold text-sm tracking-wide transition-all hover:opacity-90"
-            style={{ background: '#10b981', color: '#fff', fontFamily: "'IBM Plex Mono', monospace", boxShadow: '0 4px 32px rgba(16,185,129,0.35)', height: 52 }}>
-            Inizia ora — €9,90 a report
-            <ArrowRight className="w-4 h-4" />
-          </button>
+          <div className="flex flex-col sm:flex-row gap-3 justify-center">
+            <button onClick={handleLogin}
+              style={{ background: G, color: N, fontFamily: MONO, fontWeight: 700, fontSize: "0.8rem", letterSpacing: "1.5px", textTransform: "uppercase", border: "none", padding: "0 2rem", height: "3.25rem", cursor: "pointer", boxShadow: `0 4px 20px ${G}40` }}>
+              Inizia ora — €9,90 →
+            </button>
+            <Link to="/waitlist"
+              style={{ display: "flex", alignItems: "center", justifyContent: "center", background: "transparent", color: SL, fontFamily: MONO, fontSize: "0.78rem", letterSpacing: "1px", border: `1px solid ${SD}`, padding: "0 1.5rem", height: "3.25rem", textDecoration: "none" }}
+              className="hover:border-slate-500 transition-colors">
+              Lista d'attesa beta →
+            </Link>
+          </div>
         </div>
       </section>
 
       {/* ── FOOTER ── */}
-      <footer style={{ background: '#0a0f1a', borderTop: '1px solid #1e293b' }}>
-        <div className="max-w-6xl mx-auto px-6 py-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+      <footer style={{ background: "#080f1a", borderTop: `1px solid ${SD}` }}>
+        <div className="max-w-6xl mx-auto px-5 py-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
           <div>
-            <Logo light />
-            <p className="mt-2" style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.6rem', color: '#334155' }}>
-              Fenice Management — P.IVA IT02696760101
+            <Logo />
+            <p style={{ fontFamily: MONO, fontSize: "0.6rem", color: "#475569", marginTop: "0.75rem" }}>
+              Fenice Management — P.IVA IT02655840060
+            </p>
+            <p style={{ fontFamily: MONO, fontSize: "0.6rem", color: "#475569", marginTop: "0.25rem" }}>
+              loris.cresta@gmail.com
             </p>
           </div>
-          <div className="flex flex-wrap items-center gap-6">
-            <a href="#" style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.6rem', color: '#475569', textDecoration: 'none', textTransform: 'uppercase', letterSpacing: '1px' }}
-              onMouseOver={e => e.target.style.color = '#94a3b8'} onMouseOut={e => e.target.style.color = '#475569'}>
-              Privacy Policy
-            </a>
-            <a href="#" style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.6rem', color: '#475569', textDecoration: 'none', textTransform: 'uppercase', letterSpacing: '1px' }}
-              onMouseOver={e => e.target.style.color = '#94a3b8'} onMouseOut={e => e.target.style.color = '#475569'}>
-              Termini di servizio
-            </a>
-            <a href="mailto:loris.cresta@gmail.com" style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.6rem', color: '#10b981', textDecoration: 'none' }}>
-              loris.cresta@gmail.com
-            </a>
+          <div className="flex flex-wrap gap-6">
+            {["Privacy Policy", "Termini di Servizio"].map(l => (
+              <a key={l} href="#" style={{ fontFamily: MONO, fontSize: "0.6rem", textTransform: "uppercase", letterSpacing: "2px", color: "#475569" }} className="hover:text-slate-300 transition-colors">{l}</a>
+            ))}
+            <Link to="/waitlist" style={{ fontFamily: MONO, fontSize: "0.6rem", textTransform: "uppercase", letterSpacing: "2px", color: G }} className="hover:opacity-80 transition-opacity">Lista d'attesa Beta →</Link>
           </div>
         </div>
-        <div style={{ borderTop: '1px solid #0f172a', padding: '1rem 1.5rem' }}>
-          <div className="max-w-6xl mx-auto">
-            <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.58rem', color: '#1e293b' }}>
-              © 2026 URBICHECK — Fenice Management di Dell'Aria Claudia Giuseppina. Tutti i diritti riservati. · Beta
+        <div style={{ borderTop: `1px solid #0f172a` }}>
+          <div className="max-w-6xl mx-auto px-5 py-4">
+            <p style={{ fontFamily: MONO, fontSize: "0.58rem", color: "#475569" }}>
+              UrbiCheck © 2026 — Beta · Analisi orientativa, non sostituisce consulenza professionale. Dati da fonti WFS ufficiali regionali.
             </p>
           </div>
         </div>
       </footer>
+
+      {/* ── DEMO MODAL ── */}
+      {showDemoModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.8)" }} onClick={() => setShowDemoModal(false)}>
+          <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
+            className="max-w-lg w-full p-6" style={{ background: SD, border: `1px solid ${G}40` }}
+            onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <p style={{ fontFamily: MONO, fontWeight: 700, color: W, fontSize: "0.8rem", letterSpacing: "1px" }}>ESEMPIO REPORT — UB-DEMO-2026</p>
+              <button onClick={() => setShowDemoModal(false)} style={{ color: SL, background: "none", border: "none", cursor: "pointer", fontSize: "1.2rem" }}>✕</button>
+            </div>
+            {[
+              ["Comune", "Alessandria (AL)"],
+              ["Foglio / Particella", "15 / 234"],
+              ["Categoria catastale", "A/2 — Abitazione civile"],
+              ["Zona urbanistica", "B — Residenziale consolidata"],
+              ["Edificabilità", "Ammessa con SCIA"],
+              ["Vincolo Sismico", "Zona 3 — Media sismicità"],
+              ["PAI Frane", "✅ Nessuna frana censita ARPA Piemonte"],
+              ["Vincolo Lacustre", "✅ Nessun lago entro 300m"],
+              ["Valore OMI stimato", "€ 1.200–1.600/mq"],
+            ].map(([l, v], i) => (
+              <div key={i} className="flex items-center justify-between py-2" style={{ borderBottom: `1px solid #2d3748` }}>
+                <span style={{ fontFamily: MONO, fontSize: "0.65rem", color: SL, textTransform: "uppercase", letterSpacing: "1px" }}>{l}</span>
+                <span style={{ fontFamily: MONO, fontSize: "0.72rem", color: W, fontWeight: 600 }}>{v}</span>
+              </div>
+            ))}
+            <div className="mt-4 p-3" style={{ background: `${G}15`, border: `1px solid ${G}40` }}>
+              <p style={{ fontFamily: MONO, fontWeight: 700, color: G, fontSize: "0.72rem" }}>✓ Operazione fattibile — Score 7/10</p>
+            </div>
+            <button onClick={handleLogin} style={{ width: "100%", marginTop: "1rem", background: G, color: N, fontFamily: MONO, fontWeight: 700, fontSize: "0.75rem", letterSpacing: "1.5px", textTransform: "uppercase", border: "none", padding: "0.85rem", cursor: "pointer" }}>
+              Ottieni il tuo report — €9,90 →
+            </button>
+          </motion.div>
+        </div>
+      )}
 
     </div>
   );
