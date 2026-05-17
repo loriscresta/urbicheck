@@ -87,8 +87,9 @@ Deno.serve(async (req) => {
         if (!dati.vani && aiResult.vani) dati.vani = aiResult.vani;
         if (!dati.indirizzo_catastale && aiResult.indirizzo_catastale) dati.indirizzo_catastale = aiResult.indirizzo_catastale;
         if (!dati.intestatari && aiResult.intestatari) dati.intestatari = aiResult.intestatari;
-        if (!dati.classe_catastale && aiResult.classe_catastale) dati.classe_catastale = aiResult.classe_catastale;
-        if (!dati.zona_censuaria && aiResult.zona_censuaria) dati.zona_censuaria = aiResult.zona_censuaria;
+        // ── FIX 2: merge esplicito con coercizione a stringa per evitare null passthrough ──
+        if (!dati.classe_catastale && aiResult.classe_catastale != null) dati.classe_catastale = String(aiResult.classe_catastale);
+        if (!dati.zona_censuaria && aiResult.zona_censuaria != null) dati.zona_censuaria = String(aiResult.zona_censuaria);
       }
     } catch (aiErr) {
       console.warn('AI parsing error:', aiErr.message);
@@ -148,13 +149,15 @@ function parseRegex(testo) {
   const surfM = surfRe.exec(testo);
   if (surfM) dati.superficie_mq = parseInt(surfM[1], 10);
 
-  // Classe catastale
-  const classeRe = /Classe\s+(\d+)/i;
+  // ── FIX 2: Classe catastale — pattern robusto per tabella INTESTAZIONE IMMOBILE ──
+  // Gestisce: "Classe 2", "Classe: 2", "Classe\n2", "Classe  2  Consistenza" (cattura il primo numero dopo il header)
+  const classeRe = /Classe[\s:\n]+(\d+|\/\/)/i;
   const classeM = classeRe.exec(testo);
   if (classeM) dati.classe_catastale = classeM[1];
 
-  // Zona censuaria
-  const zonaRe = /Zona\s+Censuaria\s+([\dA-Za-z]+)/i;
+  // ── FIX 2: Zona censuaria — pattern robusto per tabella INTESTAZIONE IMMOBILE ──
+  // Gestisce: "Zona Censuaria 2", "Zona Censuaria: 2A", "Zona\nCensuaria\n2"
+  const zonaRe = /Zona\s*Censuaria[\s:\n]+([\dA-Za-z]+)/i;
   const zonaM = zonaRe.exec(testo);
   if (zonaM) dati.zona_censuaria = zonaM[1];
 
@@ -178,12 +181,12 @@ ${testo ? `TESTO VISURA:\n${testo.slice(0, 8000)}` : 'Analizza il file allegato 
 
 ISTRUZIONI CRITICHE:
 
-La visura AdE ha una sezione "DATI IDENTIFICATIVI DELL'UNITA' IMMOBILIARE" con una tabella che contiene queste colonne:
+La visura AdE ha una sezione chiamata "INTESTAZIONE IMMOBILE" o "DATI IDENTIFICATIVI DELL'UNITA' IMMOBILIARE" con una tabella che contiene queste colonne:
 Foglio | Particella | Subalterno | Categoria | Classe | Consistenza | Superficie | Zona Censuaria | Microzona
 
 Devi estrarre TUTTI questi campi dalla tabella:
 - foglio: numero del foglio catastale (es. "268")
-- particella: numero della particella (es. "5206")  
+- particella: numero della particella (es. "5206")
 - subalterno: numero subalterno (es. "3"), null se assente
 - categoria_catastale: es. "A/3", "C/6", "D/1"
 - classe_catastale: il valore nella colonna "Classe" — OBBLIGATORIO estrarlo. È tipicamente un numero intero ("1","2","3") o può essere "//" o una lettera. Mettilo come stringa.
@@ -200,7 +203,9 @@ Campi aggiuntivi:
 4. provincia: sigla provincia.
 5. intestatari: lista oggetti {nome, quota, data_inizio} dalla sezione intestatari.
 
-IMPORTANTE: classe_catastale e zona_censuaria sono campi PRIORITARI — devono essere estratti dalla tabella dati identificativi. Non lasciarli null se sono visibili nel documento.
+IMPORTANTE: classe_catastale e zona_censuaria sono campi PRIORITARI estratti dalla tabella "INTESTAZIONE IMMOBILE".
+Cerca la riga dati immediatamente sotto l'intestazione della tabella: la colonna "Classe" contiene un singolo numero (es. "2") e la colonna "Zona Censuaria" contiene un numero o codice (es. "2" o "2A").
+Non lasciarli null se sono visibili nel documento — restituisci SEMPRE una stringa non vuota per questi campi se il documento li mostra.
 Se un campo non è presente nella visura, lascia null (non inventare valori).
 
 Restituisci JSON con tutti i campi richiesti.`;
