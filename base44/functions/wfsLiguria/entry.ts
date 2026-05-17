@@ -7,13 +7,16 @@ const WFS_BASE_LIGURIA = 'https://geoservizi.regione.liguria.it/geoserver';
 const WFS_BASE_PIEMONTE = 'https://webgis.arpa.piemonte.it/geoserver';
 
 // ── fetch con timeout compatibile Deno ──
-const fetchWithTimeout = (url, options = {}, ms = 12000) =>
+const fetchWithTimeout = (url, options = {}, ms = 15000) =>
   Promise.race([
     fetch(url, options),
     new Promise((_, reject) =>
       setTimeout(() => reject(new Error(`timeout after ${ms}ms`)), ms)
     ),
   ]);
+
+// ── sleep helper ──
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 // ============================================================
 // DATASET STATICI — LIGURIA
@@ -155,16 +158,26 @@ async function queryPAIPiemonte(lat, lon) {
     { typeName: 'wfs_esterni:wfs_POLIGONALI', label: 'Frane poligonali' },
     { typeName: 'wfs_esterni:wfs_PIFF', label: 'Frane puntuali (PIFF)' },
   ];
+  const TIMEOUTS = [5000, 10000, 15000];
   const results = [];
   for (const layer of layers) {
-    try {
-      const url = `${WFS_BASE_PIEMONTE}/wfs?service=WFS&version=1.1.0&request=GetFeature&typeName=${layer.typeName}&outputFormat=application/json&BBOX=${bbox},EPSG:4326&maxFeatures=20`;
-      const res = await fetchWithTimeout(url, {}, 10000);
-      const json = await res.json();
-      const count = (json.features || []).length;
-      results.push({ layer: layer.label, trovato: count > 0, features_count: count, fonte_ok: true });
-    } catch (_e) {
-      results.push({ layer: layer.label, trovato: false, features_count: 0, fonte_ok: false, errore: 'WFS ARPA Piemonte non raggiungibile — verificare PAI su webgis.arpa.piemonte.it' });
+    let success = false;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      if (attempt > 0) await sleep(2000);
+      try {
+        const url = `${WFS_BASE_PIEMONTE}/wfs?service=WFS&version=1.1.0&request=GetFeature&typeName=${layer.typeName}&outputFormat=application/json&BBOX=${bbox},EPSG:4326&maxFeatures=20`;
+        const res = await fetchWithTimeout(url, {}, TIMEOUTS[attempt]);
+        const json = await res.json();
+        const count = (json.features || []).length;
+        results.push({ layer: layer.label, trovato: count > 0, features_count: count, fonte_ok: true });
+        success = true;
+        break;
+      } catch (_e) {
+        // retry
+      }
+    }
+    if (!success) {
+      results.push({ layer: layer.label, trovato: false, features_count: 0, fonte_ok: false, errore: 'WFS ARPA Piemonte non raggiungibile dopo 3 tentativi — verificare PAI su webgis.arpa.piemonte.it' });
     }
   }
   return results;
@@ -189,9 +202,9 @@ out body;
 out skel qt;`;
 
   const OVERPASS_MIRRORS = [
-    'https://overpass.kumi.systems/api/interpreter',
-    'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
     'https://overpass-api.de/api/interpreter',
+    'https://overpass.osm.ch/api/interpreter',
+    'https://lz4.overpass-api.de/api/interpreter',
   ];
 
   for (const endpoint of OVERPASS_MIRRORS) {
@@ -200,7 +213,7 @@ out skel qt;`;
         method: 'POST',
         body: q,
         headers: { 'Content-Type': 'text/plain' },
-      }, 15000);
+      }, 10000);
       const data = await res.json();
       const railways = [], waterways = [], lakes = [], seen = new Set();
       for (const el of (data.elements || [])) {
@@ -554,6 +567,19 @@ Deno.serve(async (req) => {
 
   const comuneLower = comune.toLowerCase().trim();
   const regioneLower = (regione || '').toLowerCase();
+
+  // ── Cache check: se wfs_liguria esiste e ha meno di 30 giorni, riusa ──
+  const cachedWfs = existingReportData?.wfs_liguria;
+  if (cachedWfs?.successo && cachedWfs?.data_elaborazione) {
+    const ageMs = Date.now() - new Date(cachedWfs.data_elaborazione).getTime();
+    const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
+    if (ageMs < THIRTY_DAYS_MS) {
+      if (query_id) {
+        try { await base44.entities.CadastralQuery.update(query_id, { status: 'completed' }); } catch (_e) {}
+      }
+      return Response.json({ success: true, report: cachedWfs, cached: true });
+    }
+  }
 
   // ── Dispatch by region ──
   let analisi;
