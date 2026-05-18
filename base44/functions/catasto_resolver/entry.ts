@@ -229,14 +229,20 @@ Deno.serve(async (req) => {
     } catch (_e) {}
   }
 
-  // ── Codice Belfiore ──
+  // ── Codice Belfiore + Regione da ComuneItalia ──
   let codiceBelfiore = belfioreDiretto || queryRecord?.codice_comune_catasto;
-  if (!codiceBelfiore && nome_comune) {
+  // ── FIX: estrai regione dal DB quando non è nel payload (es. flusso visura) ──
+  let regione_da_db = '';
+  if ((!codiceBelfiore || !regione) && nome_comune) {
     try {
       const results = await base44.entities.ComuneItalia.filter({ nome: nome_comune });
       for (const r of (results || [])) {
-        const code = r.codice_belfiore || r.codice_catastale || r.belfiore;
-        if (code) { codiceBelfiore = String(code).trim().toUpperCase(); break; }
+        if (!codiceBelfiore) {
+          const code = r.codice_belfiore || r.codice_catastale || r.belfiore;
+          if (code) codiceBelfiore = String(code).trim().toUpperCase();
+        }
+        if (!regione_da_db) regione_da_db = String(r.regione || r.region || r.nome_regione || '').trim();
+        if (codiceBelfiore && regione_da_db) break;
       }
     } catch (_e) {}
   }
@@ -248,8 +254,8 @@ Deno.serve(async (req) => {
   }
   codiceBelfiore = String(codiceBelfiore).trim().toUpperCase();
 
-  // ── File regionale ──
-  const regioneName = regione || queryRecord?.regione || '';
+  // ── File regionale — FIX: fallback su regione_da_db quando non è nel payload ──
+  const regioneName = regione || queryRecord?.regione || regione_da_db || '';
   const regioneFile = REGIONE_FILE[regioneName] ||
     Object.entries(REGIONE_FILE).find(([k]) => k.toLowerCase().includes(regioneName.toLowerCase()))?.[1];
 
