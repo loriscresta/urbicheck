@@ -194,6 +194,64 @@ async function queryPAIPiemonte(lat, lon) {
 }
 
 // ============================================================
+// ZONA URBANISTICA PIEMONTE via WMS Mosaicatura PRG
+// Fonte ufficiale: geomap.reteunitaria.piemonte.it — Regione Piemonte
+// Funziona per TUTTI i comuni (inclusi quelli con PRG, non solo PRGC)
+// ============================================================
+async function queryZonaUrbanisticaPiemonte(lat, lon, comune) {
+  const margin = 0.005; // ~500m — bbox intorno al punto
+  const bbox = `${lon - margin},${lat - margin},${lon + margin},${lat + margin}`;
+  const WMS = 'https://geomap.reteunitaria.piemonte.it/ws/urbasv/rp-01/urbawms/urba_prgc_wms';
+  const url = `${WMS}?SERVICE=WMS&VERSION=1.1.1&REQUEST=GetFeatureInfo` +
+    `&LAYERS=MosaicaturaPRG&QUERY_LAYERS=MosaicaturaPRG` +
+    `&BBOX=${bbox}&WIDTH=101&HEIGHT=101&X=50&Y=50` +
+    `&SRS=EPSG:4326&INFO_FORMAT=application/vnd.ogc.gml&FEATURE_COUNT=5`;
+  try {
+    const res = await fetchWithTimeout(url, {}, 15000);
+    const gml = await res.text();
+    if (!gml.includes('DestUso_feature') && !gml.includes('<def_gen>')) {
+      // Nessuna zona trovata (punto fuori copertura o comune non censito)
+      return {
+        disponibile: false,
+        messaggio: 'Zona urbanistica non presente nella Mosaicatura PRG regionale. Richiedere CDU al Comune.',
+        link_geoportale: `https://www.geoportale.piemonte.it/geonetwork/srv/ita/catalog.search#/search?any=PRG+${encodeURIComponent(comune)}`,
+        fonte: 'WMS Mosaicatura PRG — Regione Piemonte',
+        fonte_ok: true,
+      };
+    }
+    const defGen      = (gml.match(/<def_gen>([^<]*)<\/def_gen>/)           || [])[1]?.trim() || null;
+    const defGenerale = (gml.match(/<def_generale>([^<]*)<\/def_generale>/) || [])[1]?.trim() || null;
+    const siglaPiano  = (gml.match(/<sigla_piano>([^<]*)<\/sigla_piano>/)   || [])[1]?.trim() || null;
+    const distretto   = (gml.match(/<distretto>([^<]*)<\/distretto>/)       || [])[1]?.trim() || null;
+    const nFeatures   = (gml.match(/DestUso_feature/g) || []).length;
+    return {
+      disponibile: true,
+      zona_codice: defGen || 'N/D',
+      destinazione_uso: defGenerale || 'Vedi PRG comunale',
+      sigla_piano: siglaPiano || null,
+      distretto: distretto || null,
+      features_totali: nFeatures,
+      messaggio: `Mosaicatura PRG Piemonte: ${defGenerale || 'zona rilevata'} (codice ${defGen || 'N/D'}).`,
+      link_geoportale: `https://www.geoportale.piemonte.it/geonetwork/srv/ita/catalog.search#/search?any=PRG+${encodeURIComponent(comune)}`,
+      link_comune: `https://www.google.com/search?q=PRG+PRGC+${encodeURIComponent(comune)}+pianificazione+urbanistica`,
+      fonte: 'WMS Mosaicatura PRG — Regione Piemonte (geomap.reteunitaria.piemonte.it)',
+      fonte_ok: true,
+      azione_consigliata: 'Richiedere il Certificato di Destinazione Urbanistica (CDU) al Comune per dettaglio normativo.',
+    };
+  } catch (_e) {
+    return {
+      disponibile: false,
+      messaggio: 'WMS Mosaicatura PRG non raggiungibile. Richiedere CDU al Comune.',
+      link_geoportale: `https://www.geoportale.piemonte.it/geonetwork/srv/ita/catalog.search#/search?any=PRG+${encodeURIComponent(comune)}`,
+      link_comune: `https://www.google.com/search?q=PRG+PRGC+${encodeURIComponent(comune)}+pianificazione+urbanistica`,
+      fonte: 'WMS Mosaicatura PRG — Regione Piemonte',
+      fonte_ok: false,
+      azione_consigliata: 'Richiedere il Certificato di Destinazione Urbanistica (CDU) al Comune.',
+    };
+  }
+}
+
+// ============================================================
 // OVERPASS API: Ferrovie, Corsi d'acqua, Laghi
 // ============================================================
 async function queryOverpass(lat, lon, includeLakes = false) {
@@ -444,80 +502,8 @@ async function runAnalisiPiemonte({ comune, provincia, indirizzo, comuneLower, p
   };
 
   if (lat !== null) {
-    const comuneUpper = comune.toUpperCase();
-    // Layers da provare in ordine: PRGC vigente, varianti PRG storico/alternativo
-    const prgLayersToTry = [
-      'PRGC:PRGC_VIGENTE',
-      'PRGC:PRG_VIGENTE',
-      'PRGC:STRALCIO_PRGC',
-      'r_piemon:PRGC_VIGENTE',
-    ];
-    // Campi geometria possibili nei WFS Geoportale Piemonte
-    const geomFields = ['geom', 'wkb_geometry', 'the_geom', 'SHAPE', 'geometry'];
-    // Filtri per nome comune (fallback)
-    const nomeFilters = [
-      `NOME_COM='${comuneUpper}'`,
-      `COMUNE='${comuneUpper}'`,
-      `nome_com='${comuneUpper}'`,
-    ];
-    const wfsBase = `https://www.geoportale.piemonte.it/geoserver/wfs?SERVICE=WFS&VERSION=2.0.0&REQUEST=GetFeature&outputFormat=application%2Fjson&COUNT=50`;
-
-    outerPRG:
-    for (const typeName of prgLayersToTry) {
-      // 1. Prima prova: intersezione puntuale con le coordinate reali (più precisa)
-      for (const gf of geomFields) {
-        try {
-          const filter = `INTERSECTS(${gf},POINT(${lon} ${lat}))`;
-          const url = `${wfsBase}&TYPENAMES=${typeName}&CQL_FILTER=${encodeURIComponent(filter)}`;
-          const res = await fetchWithTimeout(url, {}, 12000);
-          if (!res.ok) continue;
-          const j = await res.json();
-          if (j.features && j.features.length > 0) {
-            const feat = j.features[0].properties || {};
-            const zonaCodice = feat.ZONA_URB || feat.DESTZONA || feat.zona_urb || feat.COD_ZONA || feat.CODICE || feat.CLASSE || null;
-            const destinazione = feat.DESTZONA || feat.DESCR_ZONA || feat.DESCRIZIONE || feat.destinazione || feat.USO || null;
-            zona_urbanistica = {
-              disponibile: true,
-              zona_codice: zonaCodice || 'Vedi PRG',
-              destinazione_uso: destinazione || 'Verificare su PRG comunale',
-              features_totali: j.features.length,
-              messaggio: `Zonizzazione PRG/PRGC recuperata (layer: ${typeName}).`,
-              link_geoportale: `https://www.geoportale.piemonte.it/geonetwork/srv/ita/catalog.search#/search?any=PRG+${encodeURIComponent(comune)}`,
-              fonte: `WFS Geoportale Piemonte — ${typeName}`,
-            };
-            break outerPRG;
-          }
-        } catch (_e) {
-          // prova campo geometria successivo
-        }
-      }
-      // 2. Fallback: filtro per nome comune (compatibile con vecchi layer senza intersezione)
-      for (const filter of nomeFilters) {
-        try {
-          const url = `${wfsBase}&TYPENAMES=${typeName}&CQL_FILTER=${encodeURIComponent(filter)}`;
-          const res = await fetchWithTimeout(url, {}, 12000);
-          if (!res.ok) continue;
-          const j = await res.json();
-          if (j.features && j.features.length > 0) {
-            const feat = j.features[0].properties || {};
-            const zonaCodice = feat.ZONA_URB || feat.DESTZONA || feat.zona_urb || feat.COD_ZONA || null;
-            const destinazione = feat.DESTZONA || feat.DESCR_ZONA || feat.destinazione || feat.USO || null;
-            zona_urbanistica = {
-              disponibile: true,
-              zona_codice: zonaCodice || 'Vedi PRG',
-              destinazione_uso: destinazione || 'Verificare su PRG comunale',
-              features_totali: j.features.length,
-              messaggio: `Dati PRG/PRGC Piemonte recuperati (${j.features.length} zone per il comune, layer: ${typeName}).`,
-              link_geoportale: `https://www.geoportale.piemonte.it/geonetwork/srv/ita/catalog.search#/search?any=PRG+${encodeURIComponent(comune)}`,
-              fonte: `WFS Geoportale Piemonte — ${typeName}`,
-            };
-            break outerPRG;
-          }
-        } catch (_e) {
-          // prova layer successivo
-        }
-      }
-    }
+    // WMS Mosaicatura PRG (Regione Piemonte) — funziona per tutti i comuni incluso Alessandria
+    zona_urbanistica = await queryZonaUrbanisticaPiemonte(lat, lon, comune);
   }
 
   return {
@@ -593,4 +579,5 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'Forbidden' }, { status: 403 });
     }
     const regioneLower = (q.regione || '').toLowerCase();
-    if (!regioneLo
+    if (!regioneLower.includes('liguria') && !regioneLower.includes('piemonte')) {
+      return Response.json({ error: 
