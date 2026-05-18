@@ -1,4 +1,4 @@
-// wfsLiguria.js — URBICHECK Analisi Urbanistica (Liguria + Piemonte)
+// wfsLiguria.ts — URBICHECK Analisi Urbanistica (Liguria + Piemonte) — v2.1 geocoding-fix
 // Approccio ibrido: logica legale (vincoli ope legis) + WFS PAI + Overpass API (ferrovie/acque)
 
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
