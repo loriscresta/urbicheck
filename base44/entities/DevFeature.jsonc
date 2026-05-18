@@ -66,6 +66,18 @@
         },
         {
           "data.visible_to": "all"
+        },
+        {
+          "$and": [
+            {
+              "user_condition": {
+                "role": "user"
+              }
+            },
+            {
+              "data.visible_to": "beta_users"
+            }
+          ]
         }
       ]
     },
