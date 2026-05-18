@@ -421,12 +421,9 @@ Deno.serve(async (req) => {
         geometry_geojson: wfsResult?.geojson_polygon || undefined,
         codice_comune_catasto: codiceBelfiore,
         fonte_dati_catastali: 'catastomappe',
+        // FIX: scrivi regione su DB se mancante (es. flusso visura) — serve a wfsLiguria
+        ...(regioneName && !queryRecord.regione ? { regione: regioneName } : {}),
         report_data: { ...(queryRecord.report_data || {}), catasto_data },
       });
     } catch (saveErr) {
-      console.warn('Save error:', saveErr.message);
-    }
-  }
-
-  return Response.json({ success: true, codice_belfiore: codiceBelfiore, file_regionale: regioneFile, catasto_data });
-});
+      consol
