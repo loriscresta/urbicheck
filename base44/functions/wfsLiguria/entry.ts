@@ -109,8 +109,18 @@ function wgs84ToEpsg3003(lon, lat) {
 // ============================================================
 async function geocodeAddress(indirizzo, comune, provincia, regione) {
   const regioneLabel = regione || 'Italy';
-  const q = indirizzo
-    ? `${indirizzo}, ${comune}, ${provincia}, ${regioneLabel}, Italy`
+  // Pulisci l'indirizzo: rimuovi designatori di piano (Piano T, Piano R, Piano 1...) e interni
+  // Es. "CORSO MONFERRATO n. 103 Piano T" → "CORSO MONFERRATO n. 103"
+  const indirizzoClean = indirizzo
+    ? indirizzo
+        .replace(/\s+[Pp]iano\s+(?:[TtRrSsBb]|[0-9]+)\b.*/i, '')
+        .replace(/\s+[Pp]\.\s*[TtRrSsBb]\.?\b.*/i, '')
+        .replace(/\s+[Ii]nt(?:erno)?\.?\s*\d+.*/i, '')
+        .replace(/\s+[Ss]cala\s+\w+.*/i, '')
+        .trim()
+    : null;
+  const q = indirizzoClean
+    ? `${indirizzoClean}, ${comune}, ${provincia}, ${regioneLabel}, Italy`
     : `${comune}, ${provincia}, ${regioneLabel}, Italy`;
   const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=1`;
   const res = await fetchWithTimeout(url, { headers: { 'User-Agent': 'URBICHECK/1.0 (info@urbicheck.it)' } }, 10000);
@@ -207,13 +217,15 @@ out skel qt;`;
     'https://lz4.overpass-api.de/api/interpreter',
   ];
 
-  for (const endpoint of OVERPASS_MIRRORS) {
+  for (let mirrorIdx = 0; mirrorIdx < OVERPASS_MIRRORS.length; mirrorIdx++) {
+    if (mirrorIdx > 0) await sleep(1500);
+    const endpoint = OVERPASS_MIRRORS[mirrorIdx];
     try {
       const res = await fetchWithTimeout(endpoint, {
         method: 'POST',
         body: q,
         headers: { 'Content-Type': 'text/plain' },
-      }, 10000);
+      }, 20000);
       const data = await res.json();
       const railways = [], waterways = [], lakes = [], seen = new Set();
       for (const el of (data.elements || [])) {
@@ -309,11 +321,11 @@ async function runAnalisiLiguria({ comune, provincia, indirizzo, comuneLower, pr
 
   const ferrovie = railways.length > 0
     ? railways.map(r => ({ trovato: true, nome: r.nome, tipo_infrastruttura: r.tipo, operatore: r.operatore, livello: 'VERIFICA_NECESSARIA', riferimento_normativo: 'DPR 11 luglio 1980 n.753', fascia_rispetto: "30m dall'asse del binario (art.49)", fonte: 'OpenStreetMap / Overpass API', descrizione: `Rilevata ferrovia (${r.nome}) entro 250m. Il DPR 753/1980 vieta nuove costruzioni entro 30m dall'asse del binario.` }))
-    : [{ trovato: false, nota: geocodingError ? 'Non verificabile (geocoding fallito).' : 'Nessuna ferrovia rilevata entro 250m dal punto analizzato.' }];
+    : [{ trovato: false, nota: geocodingError ? 'Non verificabile (geocoding fallito).' : !overpass_ok ? 'Non verificabile (Overpass API non raggiungibile — verificare manualmente su openrailwaymap.org).' : 'Nessuna ferrovia rilevata entro 250m dal punto analizzato.' }];
 
   const corsi_acqua_vincolo = waterways.length > 0
     ? waterways.map(w => ({ trovato: true, nome: w.nome, tipo: w.tipo, livello: w.tipo === 'river' ? 'POSSIBILE_VINCOLO_ALTO' : 'POSSIBILE_VINCOLO_DA_VERIFICARE', riferimento_normativo: 'Art.142 c.1 lett. c) D.Lgs 42/2004', fascia_tutela: '150m dal ciglio di sponda', fonte: 'OpenStreetMap / Overpass API', descrizione: w.tipo === 'river' ? `Rilevato fiume (${w.nome}) entro 250m. Alta probabilità di vincolo. Verificare con Catasto delle Acque Regione Liguria.` : `Rilevato corso d'acqua (${w.nome}) entro 250m. Se iscritto nelle acque pubbliche, si applica il vincolo di 150m.` }))
-    : [{ trovato: false, nota: geocodingError ? 'Non verificabile (geocoding fallito).' : "Nessun corso d'acqua rilevato entro 250m dal punto analizzato." }];
+    : [{ trovato: false, nota: geocodingError ? 'Non verificabile (geocoding fallito).' : !overpass_ok ? "Non verificabile (Overpass API non raggiungibile — verificare su liguriavincoli.it)." : "Nessun corso d'acqua rilevato entro 250m dal punto analizzato." }];
 
   const zona_urbanistica = {
     disponibile: false,
@@ -408,12 +420,12 @@ async function runAnalisiPiemonte({ comune, provincia, indirizzo, comuneLower, p
   // Ferrovia
   const ferrovie = railways.length > 0
     ? railways.map(r => ({ trovato: true, nome: r.nome, tipo_infrastruttura: r.tipo, operatore: r.operatore, livello: 'VERIFICA_NECESSARIA', riferimento_normativo: 'DPR 11 luglio 1980 n.753', fascia_rispetto: "30m dall'asse del binario (art.49)", fonte: 'OpenStreetMap / Overpass API', descrizione: `Rilevata ferrovia (${r.nome}) entro 250m. Il DPR 753/1980 vieta nuove costruzioni entro 30m dall'asse del binario.` }))
-    : [{ trovato: false, nota: geocodingError ? 'Non verificabile (geocoding fallito).' : 'Nessuna ferrovia rilevata entro 250m dal punto analizzato.' }];
+    : [{ trovato: false, nota: geocodingError ? 'Non verificabile (geocoding fallito).' : !overpass_ok ? 'Non verificabile (Overpass API non raggiungibile — verificare manualmente su openrailwaymap.org).' : 'Nessuna ferrovia rilevata entro 250m dal punto analizzato.' }];
 
   // Corsi d'acqua
   const corsi_acqua_vincolo = waterways.length > 0
     ? waterways.map(w => ({ trovato: true, nome: w.nome, tipo: w.tipo, livello: w.tipo === 'river' ? 'POSSIBILE_VINCOLO_ALTO' : 'POSSIBILE_VINCOLO_DA_VERIFICARE', riferimento_normativo: 'Art.142 c.1 lett. c) D.Lgs 42/2004', fascia_tutela: '150m dal ciglio di sponda', fonte: 'OpenStreetMap / Overpass API', descrizione: w.tipo === 'river' ? `Rilevato fiume (${w.nome}) entro 250m. Alta probabilità di vincolo. Verificare con ARPA Piemonte.` : `Rilevato corso d'acqua (${w.nome}) entro 250m. Se iscritto nelle acque pubbliche, si applica il vincolo di 150m.` }))
-    : [{ trovato: false, nota: geocodingError ? 'Non verificabile (geocoding fallito).' : "Nessun corso d'acqua rilevato entro 250m dal punto analizzato." }];
+    : [{ trovato: false, nota: geocodingError ? 'Non verificabile (geocoding fallito).' : !overpass_ok ? "Non verificabile (Overpass API non raggiungibile — verificare su geoportale.piemonte.it)." : "Nessun corso d'acqua rilevato entro 250m dal punto analizzato." }];
 
   // Sismica Piemonte
   const sismicaPiemonte = getZonaSismicaPiemonte(comuneLower);
@@ -433,35 +445,77 @@ async function runAnalisiPiemonte({ comune, provincia, indirizzo, comuneLower, p
 
   if (lat !== null) {
     const comuneUpper = comune.toUpperCase();
-    const prgcFilters = [
+    // Layers da provare in ordine: PRGC vigente, varianti PRG storico/alternativo
+    const prgLayersToTry = [
+      'PRGC:PRGC_VIGENTE',
+      'PRGC:PRG_VIGENTE',
+      'PRGC:STRALCIO_PRGC',
+      'r_piemon:PRGC_VIGENTE',
+    ];
+    // Campi geometria possibili nei WFS Geoportale Piemonte
+    const geomFields = ['geom', 'wkb_geometry', 'the_geom', 'SHAPE', 'geometry'];
+    // Filtri per nome comune (fallback)
+    const nomeFilters = [
       `NOME_COM='${comuneUpper}'`,
       `COMUNE='${comuneUpper}'`,
       `nome_com='${comuneUpper}'`,
     ];
-    const prgcBase = `https://www.geoportale.piemonte.it/geoserver/wfs?SERVICE=WFS&VERSION=2.0.0&REQUEST=GetFeature&TYPENAMES=PRGC:PRGC_VIGENTE&outputFormat=application%2Fjson&COUNT=50`;
-    for (const filter of prgcFilters) {
-      try {
-        const prgcUrl = `${prgcBase}&CQL_FILTER=${encodeURIComponent(filter)}`;
-        const prgcRes = await fetchWithTimeout(prgcUrl, {}, 12000);
-        if (!prgcRes.ok) continue;
-        const prgcJson = await prgcRes.json();
-        if (prgcJson.features && prgcJson.features.length > 0) {
-          const feat = prgcJson.features[0].properties || {};
-          const zonaCodice = feat.ZONA_URB || feat.DESTZONA || feat.zona_urb || feat.COD_ZONA || null;
-          const destinazione = feat.DESTZONA || feat.DESCR_ZONA || feat.destinazione || feat.USO || null;
-          zona_urbanistica = {
-            disponibile: true,
-            zona_codice: zonaCodice || 'Vedi PRG',
-            destinazione_uso: destinazione || 'Verificare su PRG comunale',
-            features_totali: prgcJson.features.length,
-            messaggio: `Dati PRGC Piemonte recuperati (${prgcJson.features.length} zone per il comune).`,
-            link_geoportale: `https://www.geoportale.piemonte.it/geonetwork/srv/ita/catalog.search#/search?any=PRGC+${encodeURIComponent(comune)}`,
-            fonte: 'WFS Geoportale Piemonte — PRGC_VIGENTE',
-          };
-          break;
+    const wfsBase = `https://www.geoportale.piemonte.it/geoserver/wfs?SERVICE=WFS&VERSION=2.0.0&REQUEST=GetFeature&outputFormat=application%2Fjson&COUNT=50`;
+
+    outerPRG:
+    for (const typeName of prgLayersToTry) {
+      // 1. Prima prova: intersezione puntuale con le coordinate reali (più precisa)
+      for (const gf of geomFields) {
+        try {
+          const filter = `INTERSECTS(${gf},POINT(${lon} ${lat}))`;
+          const url = `${wfsBase}&TYPENAMES=${typeName}&CQL_FILTER=${encodeURIComponent(filter)}`;
+          const res = await fetchWithTimeout(url, {}, 12000);
+          if (!res.ok) continue;
+          const j = await res.json();
+          if (j.features && j.features.length > 0) {
+            const feat = j.features[0].properties || {};
+            const zonaCodice = feat.ZONA_URB || feat.DESTZONA || feat.zona_urb || feat.COD_ZONA || feat.CODICE || feat.CLASSE || null;
+            const destinazione = feat.DESTZONA || feat.DESCR_ZONA || feat.DESCRIZIONE || feat.destinazione || feat.USO || null;
+            zona_urbanistica = {
+              disponibile: true,
+              zona_codice: zonaCodice || 'Vedi PRG',
+              destinazione_uso: destinazione || 'Verificare su PRG comunale',
+              features_totali: j.features.length,
+              messaggio: `Zonizzazione PRG/PRGC recuperata (layer: ${typeName}).`,
+              link_geoportale: `https://www.geoportale.piemonte.it/geonetwork/srv/ita/catalog.search#/search?any=PRG+${encodeURIComponent(comune)}`,
+              fonte: `WFS Geoportale Piemonte — ${typeName}`,
+            };
+            break outerPRG;
+          }
+        } catch (_e) {
+          // prova campo geometria successivo
         }
-      } catch (_e) {
-        // prova filtro successivo
+      }
+      // 2. Fallback: filtro per nome comune (compatibile con vecchi layer senza intersezione)
+      for (const filter of nomeFilters) {
+        try {
+          const url = `${wfsBase}&TYPENAMES=${typeName}&CQL_FILTER=${encodeURIComponent(filter)}`;
+          const res = await fetchWithTimeout(url, {}, 12000);
+          if (!res.ok) continue;
+          const j = await res.json();
+          if (j.features && j.features.length > 0) {
+            const feat = j.features[0].properties || {};
+            const zonaCodice = feat.ZONA_URB || feat.DESTZONA || feat.zona_urb || feat.COD_ZONA || null;
+            const destinazione = feat.DESTZONA || feat.DESCR_ZONA || feat.destinazione || feat.USO || null;
+            zona_urbanistica = {
+              disponibile: true,
+              zona_codice: zonaCodice || 'Vedi PRG',
+              destinazione_uso: destinazione || 'Verificare su PRG comunale',
+              features_totali: j.features.length,
+              messaggio: `Dati PRG/PRGC Piemonte recuperati (${j.features.length} zone per il comune, layer: ${typeName}).`,
+              link_geoportale: `https://www.geoportale.piemonte.it/geonetwork/srv/ita/catalog.search#/search?any=PRG+${encodeURIComponent(comune)}`,
+              fonte: `WFS Geoportale Piemonte — ${typeName}`,
+            };
+            break outerPRG;
+          }
+        } catch (_e) {
+          // prova layer successivo
+        }
       }
     }
   }
@@ -539,85 +593,4 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'Forbidden' }, { status: 403 });
     }
     const regioneLower = (q.regione || '').toLowerCase();
-    if (!regioneLower.includes('liguria') && !regioneLower.includes('piemonte')) {
-      return Response.json({ error: 'Questo servizio è disponibile per Liguria e Piemonte' }, { status: 400 });
-    }
-    comune = q.comune;
-    provincia = q.provincia || q.sigla_provincia || '';
-    indirizzo = q.indirizzo_immobile || null;
-    regione = q.regione;
-    existingReportData = q.report_data || {};
-    // Use stored centroid coordinates to skip geocoding
-    if (q.centroid_lat && q.centroid_lng) {
-      prefill_lat = q.centroid_lat;
-      prefill_lon = q.centroid_lng;
-    }
-    try { await base44.entities.CadastralQuery.update(query_id, { status: 'processing' }); } catch (_e) {}
-  } else {
-    comune = body.comune;
-    provincia = body.provincia;
-    indirizzo = body.indirizzo;
-    regione = body.regione || '';
-    existingReportData = {};
-  }
-
-  if (!comune || !provincia) {
-    return Response.json({ error: 'comune e provincia sono obbligatori' }, { status: 400 });
-  }
-
-  const comuneLower = comune.toLowerCase().trim();
-  const regioneLower = (regione || '').toLowerCase();
-
-  // ── Cache check: se wfs_liguria esiste e ha meno di 30 giorni, riusa ──
-  const cachedWfs = existingReportData?.wfs_liguria;
-  if (cachedWfs?.successo && cachedWfs?.data_elaborazione) {
-    const ageMs = Date.now() - new Date(cachedWfs.data_elaborazione).getTime();
-    const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
-    if (ageMs < THIRTY_DAYS_MS) {
-      if (query_id) {
-        try { await base44.entities.CadastralQuery.update(query_id, { status: 'completed' }); } catch (_e) {}
-      }
-      return Response.json({ success: true, report: cachedWfs, cached: true });
-    }
-  }
-
-  // ── Dispatch by region ──
-  let analisi;
-  let isPiemonte = false;
-  if (regioneLower.includes('piemonte')) {
-    isPiemonte = true;
-    analisi = await runAnalisiPiemonte({ comune, provincia, indirizzo, comuneLower, prefill_lat, prefill_lon });
-  } else {
-    // Default: Liguria
-    analisi = await runAnalisiLiguria({ comune, provincia, indirizzo, comuneLower, prefill_lat, prefill_lon });
-  }
-
-  const report = {
-    successo: true,
-    regione: regione,
-    regione_logica: isPiemonte ? 'piemonte' : 'liguria',
-    input: { comune, provincia, indirizzo: indirizzo || null },
-    coordinate: analisi.coordinate,
-    geocoding_error: analisi.geocoding_error,
-    risultati: analisi.risultati,
-    disclaimer: "Analisi di prima istanza a scopo orientativo. Non sostituisce la Due Diligence urbanistica completa né i certificati ufficiali.",
-    link_utili: analisi.link_utili,
-    data_elaborazione: new Date().toISOString(),
-  };
-
-  if (query_id) {
-    try {
-      await base44.entities.CadastralQuery.update(query_id, {
-        status: 'completed',
-        centroid_lat: analisi.centroid_lat || undefined,
-        centroid_lng: analisi.centroid_lng || undefined,
-        report_data: { ...existingReportData, wfs_liguria: report },
-        note: analisi.note_salvataggio,
-      });
-    } catch (saveErr) {
-      return Response.json({ success: true, report, save_error: saveErr.message });
-    }
-  }
-
-  return Response.json({ success: true, report });
-});
+    if (!regioneLo
