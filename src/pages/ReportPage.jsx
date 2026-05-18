@@ -163,18 +163,88 @@ export default function ReportPage() {
 
   // Dati sismici reali da WFS (override sull'AI che può sbagliare)
   const isPiemonte = (query.regione || '').toLowerCase().includes('piemonte');
+  const isLiguria = (query.regione || '').toLowerCase().includes('liguria');
   const wfsRis = r.wfs_liguria?.risultati;
   const wfsSismica = wfsRis?.sismica;
-  // Per Piemonte: vincolo sismico sempre presente (Zona 3 o 3S per legge)
-  const sismicoPiemonteZona = wfsSismica
-    ? (String(wfsSismica.zona) === '3S' ? 'Zona 3S' : 'Zona 3')
-    : 'Zona 3';
-  const sismicoPiemonteDesc = wfsSismica
-    ? (String(wfsSismica.zona) === '3S' ? 'Alta sismicità — DGR n.6-887/2019' : 'Media sismicità — DGR n.6-887/2019')
-    : 'Media sismicità — DGR n.6-887/2019';
-  const vincoloSismicoEffettivo = isPiemonte
-    ? { presente: true, zona: `${sismicoPiemonteZona} (${sismicoPiemonteDesc})`, dettagli: `${sismicoPiemonteZona} — ${sismicoPiemonteDesc}. Applicare NTC 2018.` }
-    : (r.vincoli?.vincolo_sismico || { presente: false });
+
+  // PROBLEMA 3 FIX — usa dati WFS reali per tutti i vincoli, fallback su AI
+  // Vincolo Sismico
+  let vincoloSismicoEffettivo;
+  if (wfsSismica) {
+    // Dati reali dal WFS (Liguria o Piemonte)
+    const zonaLabel = `Zona ${wfsSismica.zona}`;
+    vincoloSismicoEffettivo = {
+      presente: true,
+      zona: `${zonaLabel} — ${wfsSismica.descrizione || ''}`,
+      dettagli: `${zonaLabel} — ${wfsSismica.descrizione || ''}. ${wfsSismica.nota || ''} Rif: ${wfsSismica.riferimento_normativo || ''}`,
+    };
+  } else if (isPiemonte) {
+    // Piemonte senza WFS: zona 3 per default (legge)
+    vincoloSismicoEffettivo = { presente: true, zona: 'Zona 3 — Media sismicità — DGR n.6-887/2019', dettagli: 'Zona 3 — Media sismicità — DGR n.6-887/2019. Applicare NTC 2018.' };
+  } else {
+    vincoloSismicoEffettivo = r.vincoli?.vincolo_sismico || { presente: false };
+  }
+
+  // Vincolo Idraulico/Idrogeologico — preferisci dati PAI reali da WFS
+  const wfsPai = wfsRis?.pai_rischio_idrogeologico;
+  const paiFranePresenti = wfsPai && (wfsPai.features_totali > 0 || wfsPai.dati?.some(d => d.trovato));
+  let vincoloIdraulicoEffettivo;
+  if (wfsPai) {
+    vincoloIdraulicoEffettivo = {
+      presente: paiFranePresenti,
+      dettagli: wfsPai.nota || (paiFranePresenti ? 'Rilevate geometrie PAI — consultare fonte ufficiale.' : 'Nessuna frana censita entro area di ricerca.'),
+      classe_rischio: paiFranePresenti ? 'Da verificare su fonte ufficiale' : null,
+    };
+  } else {
+    vincoloIdraulicoEffettivo = r.vincoli?.vincolo_idraulico || { presente: false };
+  }
+
+  // Vincolo Paesaggistico — preferisci dati WFS ope legis
+  const wfsVincoliPaesaggistici = wfsRis?.vincoli_paesaggistici_ope_legis;
+  const wfsPaesaggisticoVincoli = wfsVincoliPaesaggistici?.vincoli?.filter(v => v.livello === 'APPLICABILE') || [];
+  let vincoloPaesaggisticoEffettivo;
+  if (wfsVincoliPaesaggistici) {
+    const presente = wfsPaesaggisticoVincoli.length > 0;
+    vincoloPaesaggisticoEffettivo = {
+      presente,
+      dettagli: presente
+        ? wfsPaesaggisticoVincoli.map(v => v.descrizione || v.tipo).join(' | ')
+        : (wfsVincoliPaesaggistici.vincoli?.[0]?.nota || 'Nessun vincolo paesaggistico ope legis rilevato.'),
+      tipo: presente ? wfsPaesaggisticoVincoli.map(v => v.tipo).join(', ') : null,
+    };
+  } else {
+    vincoloPaesaggisticoEffettivo = r.vincoli?.vincolo_paesaggistico || { presente: false };
+  }
+
+  // Vincolo Corsi Acqua — da WFS Overpass
+  const wfsCorsiAcqua = wfsRis?.vincolo_corsi_acqua;
+  const corsiAcquaTrovati = wfsCorsiAcqua?.dati?.filter(d => d.trovato) || [];
+  let vincoloCorsiAcquaEffettivo;
+  if (wfsCorsiAcqua) {
+    vincoloCorsiAcquaEffettivo = {
+      presente: corsiAcquaTrovati.length > 0,
+      dettagli: corsiAcquaTrovati.length > 0
+        ? corsiAcquaTrovati.map(d => `${d.nome} (${d.tipo})`).join(', ') + ' — fascia tutela 150m art.142 D.Lgs 42/2004'
+        : (wfsCorsiAcqua.dati?.[0]?.nota || "Nessun corso d'acqua rilevato entro 250m."),
+    };
+  } else {
+    vincoloCorsiAcquaEffettivo = null;
+  }
+
+  // Vincolo Ferroviario — da WFS Overpass
+  const wfsFerroviario = wfsRis?.vincolo_ferroviario;
+  const ferrorieTrovate = wfsFerroviario?.dati?.filter(d => d.trovato) || [];
+  let vincoloFerroviarioEffettivo;
+  if (wfsFerroviario) {
+    vincoloFerroviarioEffettivo = {
+      presente: ferrorieTrovate.length > 0,
+      dettagli: ferrorieTrovate.length > 0
+        ? ferrorieTrovate.map(d => `${d.nome} — fascia rispetto 30m (DPR 753/1980)`).join(' | ')
+        : (wfsFerroviario.dati?.[0]?.nota || 'Nessuna ferrovia rilevata entro 250m.'),
+    };
+  } else {
+    vincoloFerroviarioEffettivo = null;
+  }
   const FIN_FINALITA = ["investimento", "sviluppo_immobiliare", "asta_giudiziaria"];
   const showFinancial = FIN_FINALITA.includes(query.finalita) || r.fin_data?.prezzo_acquisto;
   const finData = r.fin_data || {};
@@ -348,39 +418,43 @@ export default function ReportPage() {
           </ReportSection>
         )}
 
-        {/* Vincoli */}
-        {r.vincoli && (
+        {/* Vincoli — PROBLEMA 3 FIX: usa dati WFS reali se disponibili, fallback su AI */}
+        {(r.vincoli || wfsRis) && (
           <ReportSection icon={Shield} title="Vincoli Principali" delay={0.06}>
+            {wfsRis && (
+              <p className="text-[10px] uppercase tracking-widest text-emerald-700 mb-3" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
+                ✓ Dati da fonti ufficiali WFS — {isPiemonte ? 'ARPA Piemonte + Overpass' : isLiguria ? 'Regione Liguria + Overpass' : 'WFS ufficiale'}
+              </p>
+            )}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <VincoloCard label="Vincolo Sismico" presente={vincoloSismicoEffettivo.presente} dettagli={vincoloSismicoEffettivo.dettagli} extra={vincoloSismicoEffettivo.zona} />
-              {/* FIX E — Vincolo idrogeologico da AI: mostra nota informativa neutra, non allarme confermato */}
-              {r.vincoli.vincolo_idraulico?.presente && !r.wfs_liguria?.risultati?.pai_rischio_idrogeologico ? (
-                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
-                  <p className="text-xs font-semibold text-amber-800 mb-1">Vincolo Idrogeologico — Da verificare</p>
-                  <p className="text-xs text-amber-700 leading-relaxed">
-                    ⚠ Fonte: stima orientativa AI — non verificato su PAI ufficiale.{" "}
-                    Per comuni interni non alluvionali (es. centro storico) il rischio reale può essere assente.
-                  </p>
-                  <div className="mt-2 space-y-0.5">
-                    <a href="https://webgis.arpa.piemonte.it/" target="_blank" rel="noopener noreferrer"
-                      className="text-[11px] text-primary flex items-center gap-1 hover:underline">
-                      → Verifica su PAI ARPA Piemonte
-                    </a>
-                    <a href="https://www.comune.alessandria.it" target="_blank" rel="noopener noreferrer"
-                      className="text-[11px] text-primary flex items-center gap-1 hover:underline">
-                      → Ufficio Urbanistica Comune
-                    </a>
-                  </div>
-                </div>
-              ) : (
-                <VincoloCard label="Vincolo Idraulico" presente={r.vincoli.vincolo_idraulico?.presente} dettagli={r.vincoli.vincolo_idraulico?.dettagli} extra={r.vincoli.vincolo_idraulico?.classe_rischio} />
+              <VincoloCard
+                label="Rischio Idrogeologico (PAI)"
+                presente={vincoloIdraulicoEffettivo.presente}
+                dettagli={vincoloIdraulicoEffettivo.dettagli}
+                extra={vincoloIdraulicoEffettivo.classe_rischio}
+              />
+              <VincoloCard
+                label="Vincolo Paesaggistico"
+                presente={vincoloPaesaggisticoEffettivo.presente}
+                dettagli={vincoloPaesaggisticoEffettivo.dettagli}
+                extra={vincoloPaesaggisticoEffettivo.tipo}
+              />
+              {/* Vincolo Archeologico solo da AI */}
+              {r.vincoli?.vincolo_archeologico && (
+                <VincoloCard label="Vincolo Archeologico" presente={r.vincoli.vincolo_archeologico.presente} dettagli={r.vincoli.vincolo_archeologico.dettagli} />
               )}
-              <VincoloCard label="Vincolo Paesaggistico" presente={r.vincoli.vincolo_paesaggistico?.presente} dettagli={r.vincoli.vincolo_paesaggistico?.dettagli} extra={r.vincoli.vincolo_paesaggistico?.tipo} />
-              <VincoloCard label="Vincolo Archeologico" presente={r.vincoli.vincolo_archeologico?.presente} dettagli={r.vincoli.vincolo_archeologico?.dettagli} />
+              {/* Vincoli infrastrutturali da WFS Overpass */}
+              {vincoloCorsiAcquaEffettivo && (
+                <VincoloCard label="Corsi d'Acqua (art.142)" presente={vincoloCorsiAcquaEffettivo.presente} dettagli={vincoloCorsiAcquaEffettivo.dettagli} />
+              )}
+              {vincoloFerroviarioEffettivo && (
+                <VincoloCard label="Vincolo Ferroviario" presente={vincoloFerroviarioEffettivo.presente} dettagli={vincoloFerroviarioEffettivo.dettagli} />
+              )}
             </div>
-            {r.vincoli.altri_vincoli?.length > 0 && (
+            {r.vincoli?.altri_vincoli?.length > 0 && !wfsRis && (
               <div className="mt-4 space-y-2">
-                <p className="text-sm font-medium text-muted-foreground">Altri Vincoli</p>
+                <p className="text-sm font-medium text-muted-foreground">Altri Vincoli (stima AI)</p>
                 {r.vincoli.altri_vincoli.map((v, i) => (
                   <VincoloCard key={i} label={v.nome} presente={v.presente} dettagli={v.dettagli} />
                 ))}
@@ -522,20 +596,24 @@ export default function ReportPage() {
         )}
 
         {/* === MAPPA CATASTALE — da catasto_resolver (OnData + AdE WFS) === */}
-        {(query.centroid_lat || r.catasto_data?.lat) && (() => {
-          // Calcola baricentro dal poligono al volo — fonte autoritativa
+        {(query.centroid_lat || query.geometry_geojson || r.catasto_data?.lat) && (() => {
+          // PROBLEMA 2 FIX — leggi geometry_geojson direttamente dall'entity (campo top-level)
           const poly = query.geometry_geojson || r.catasto_data?.geojson_polygon;
-          let mapLat = r.catasto_data?.lat || query.centroid_lat;
-          let mapLon = r.catasto_data?.lon || query.centroid_lng;
-          let mapFonte = r.catasto_data?.fonte || 'ondata_only';
-          if (poly?.type === 'Polygon' && poly.coordinates?.[0]?.length) {
-            const ring = poly.coordinates[0];
+          // Preferisci centroid_lat/lng dall'entity (fonte autoritativa), poi catasto_data
+          let mapLat = query.centroid_lat || r.catasto_data?.lat;
+          let mapLon = query.centroid_lng || r.catasto_data?.lon;
+          let mapFonte = r.catasto_data?.fonte || 'OnData CC BY 4.0';
+          // Se abbiamo un poligono GeoJSON valido, calcola il baricentro
+          const polyGeom = poly?.type === 'Feature' ? poly.geometry : poly;
+          if (polyGeom?.type === 'Polygon' && polyGeom.coordinates?.[0]?.length) {
+            const ring = polyGeom.coordinates[0];
             let sLon = 0, sLat = 0;
             for (const [lo, la] of ring) { sLon += lo; sLat += la; }
             mapLat = sLat / ring.length;
             mapLon = sLon / ring.length;
             mapFonte = 'WFS AdE — Agenzia delle Entrate';
           }
+          if (!mapLat || !mapLon) return null;
           return (
             <ReportSection icon={MapPin} title="Mappa Particella Catastale" delay={0.05}>
               <div className="mb-2 flex flex-wrap gap-4 text-xs text-muted-foreground">

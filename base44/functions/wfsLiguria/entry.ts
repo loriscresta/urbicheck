@@ -578,6 +578,95 @@ Deno.serve(async (req) => {
     if (user && user.email && q.created_by !== user.email && user.role !== 'admin') {
       return Response.json({ error: 'Forbidden' }, { status: 403 });
     }
+    // PROBLEMA 1 FIX — leggi centroid dal DB prima di tentare geocoding
+    if (typeof q.centroid_lat === 'number' && !isNaN(q.centroid_lat)) {
+      prefill_lat = q.centroid_lat;
+    }
+    if (typeof q.centroid_lng === 'number' && !isNaN(q.centroid_lng)) {
+      prefill_lon = q.centroid_lng;
+    }
     const regioneLower = (q.regione || '').toLowerCase();
     if (!regioneLower.includes('liguria') && !regioneLower.includes('piemonte')) {
-      return Response.json({ error: 
+      return Response.json({ error: 'Regione non supportata (solo Liguria e Piemonte)' }, { status: 400 });
+    }
+    comune = q.comune || '';
+    provincia = q.provincia || q.sigla_provincia || '';
+    indirizzo = q.indirizzo_immobile || q.indirizzo_catastale || '';
+    regione = q.regione || '';
+    existingReportData = q.report_data || {};
+  } else {
+    // Chiamata diretta con parametri espliciti
+    comune = body.comune || '';
+    provincia = body.provincia || '';
+    indirizzo = body.indirizzo || '';
+    regione = body.regione || '';
+    existingReportData = {};
+    prefill_lat = (typeof body.prefill_lat === 'number' && !isNaN(body.prefill_lat)) ? body.prefill_lat : null;
+    prefill_lon = (typeof body.prefill_lon === 'number' && !isNaN(body.prefill_lon)) ? body.prefill_lon : null;
+  }
+
+  if (!comune) {
+    return Response.json({ error: 'Parametro "comune" obbligatorio' }, { status: 400 });
+  }
+
+  const comuneLower = comune.toLowerCase().trim();
+  const regioneLowerFinal = (regione || '').toLowerCase();
+  const isPiemonte = regioneLowerFinal.includes('piemonte');
+
+  let risultato;
+  try {
+    if (isPiemonte) {
+      risultato = await runAnalisiPiemonte({ comune, provincia, indirizzo, comuneLower, prefill_lat, prefill_lon });
+    } else {
+      risultato = await runAnalisiLiguria({ comune, provincia, indirizzo, comuneLower, prefill_lat, prefill_lon });
+    }
+  } catch (err) {
+    console.error('Errore analisi WFS:', err);
+    return Response.json({ error: err.message || 'Errore analisi WFS' }, { status: 500 });
+  }
+
+  // PROBLEMA 1 FIX — non sovrascrivere centroid con null se già presente nel DB
+  // Recupera q se disponibile per il fallback
+  let qRef = null;
+  if (query_id) {
+    try {
+      const queries = await base44.asServiceRole.entities.CadastralQuery.filter({ id: query_id });
+      qRef = queries[0] || null;
+    } catch (_e) {}
+  }
+  const finalCentroidLat = risultato.centroid_lat ?? qRef?.centroid_lat ?? null;
+  const finalCentroidLon = risultato.centroid_lng ?? qRef?.centroid_lng ?? null;
+
+  // Salva i risultati nella CadastralQuery se query_id presente
+  if (query_id) {
+    try {
+      const updatePayload = {
+        report_data: {
+          ...existingReportData,
+          wfs_liguria: risultato,
+        },
+      };
+      // Aggiorna centroid solo se ora disponibile e prima era null
+      if (finalCentroidLat !== null && !qRef?.centroid_lat) {
+        updatePayload.centroid_lat = finalCentroidLat;
+      }
+      if (finalCentroidLon !== null && !qRef?.centroid_lng) {
+        updatePayload.centroid_lng = finalCentroidLon;
+      }
+      await base44.asServiceRole.entities.CadastralQuery.update(query_id, updatePayload);
+    } catch (err) {
+      console.error('Errore salvataggio wfsLiguria su CadastralQuery:', err);
+    }
+  }
+
+  return Response.json({
+    success: true,
+    regione: isPiemonte ? 'Piemonte' : 'Liguria',
+    comune,
+    centroid_lat: finalCentroidLat,
+    centroid_lng: finalCentroidLon,
+    risultati: risultato.risultati,
+    geocoding_error: risultato.geocoding_error || null,
+    note_salvataggio: risultato.note_salvataggio || null,
+  });
+});
