@@ -578,13 +578,9 @@ Deno.serve(async (req) => {
     if (user && user.email && q.created_by !== user.email && user.role !== 'admin') {
       return Response.json({ error: 'Forbidden' }, { status: 403 });
     }
-    // PROBLEMA 1 FIX — leggi centroid dal DB prima di tentare geocoding
-    if (typeof q.centroid_lat === 'number' && !isNaN(q.centroid_lat)) {
-      prefill_lat = q.centroid_lat;
-    }
-    if (typeof q.centroid_lng === 'number' && !isNaN(q.centroid_lng)) {
-      prefill_lon = q.centroid_lng;
-    }
+    // Leggi centroid dal DB prima di tentare geocoding (gestisce sia number che string)
+    prefill_lat = (q.centroid_lat !== null && q.centroid_lat !== undefined && !isNaN(Number(q.centroid_lat))) ? Number(q.centroid_lat) : null;
+    prefill_lon = (q.centroid_lng !== null && q.centroid_lng !== undefined && !isNaN(Number(q.centroid_lng))) ? Number(q.centroid_lng) : null;
     const regioneLower = (q.regione || '').toLowerCase();
     if (!regioneLower.includes('liguria') && !regioneLower.includes('piemonte')) {
       return Response.json({ error: 'Regione non supportata (solo Liguria e Piemonte)' }, { status: 400 });
