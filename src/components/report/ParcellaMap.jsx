@@ -31,9 +31,17 @@ export default function ParcellaMap({ lat, lon, geojsonPolygon, queryId, foglio,
   const displayLon = lon;
   const fonteLabel = hasPolygon ? 'WFS AdE — Agenzia delle Entrate' : 'OnData CC BY 4.0';
 
-  // FIX C — Tenta fetch geometria lato backend (evita CORS del browser)
+  // Sync prop → state when geojsonPolygon arrives after initial render
   useEffect(() => {
-    if (resolvedPolygon || wfsAttempted || !lat || !lon) return;
+    if (geojsonPolygon && !resolvedPolygon) {
+      setResolvedPolygon(geojsonPolygon);
+    }
+  }, [geojsonPolygon]);
+
+  // FIX REGRESSION 1 — tenta fetch WFS backend SOLO se geometry_geojson è assente nell'entity
+  // Se geojsonPolygon è passato come prop (da entity.geometry_geojson), NON fare nessuna chiamata esterna
+  useEffect(() => {
+    if (geojsonPolygon || resolvedPolygon || wfsAttempted || !lat || !lon || !queryId) return;
     setWfsAttempted(true);
     fetchParcelGeometry({ queryId, centroid_lat: lat, centroid_lng: lon })
       .then((res) => {
@@ -41,7 +49,7 @@ export default function ParcellaMap({ lat, lon, geojsonPolygon, queryId, foglio,
         if (geom) setResolvedPolygon(geom);
       })
       .catch(() => { /* non bloccante */ });
-  }, [lat, lon]);
+  }, [lat, lon, geojsonPolygon]);
 
   // Re-render map when polygon resolves after initial mount
   const prevPolygonRef = useRef(null);

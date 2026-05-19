@@ -53,7 +53,9 @@ export default function FinancialDueDiligence({ query, finData, onSnapshotReady 
   const isAffittoBreve = fd.destinazione_obiettivo === "affitto_breve";
 
   // ── Dati OMI reali (statici, nessuna chiamata AI) ─────────────────────────
-  const codiceBelfiore  = query.codice_comune_catasto || null;
+  // Pulizia codice Belfiore: rimuovi underscore e spazi (es "A182_" → "A182")
+  const codiceBelfioreRaw = query.codice_comune_catasto || null;
+  const codiceBelfiore = codiceBelfioreRaw ? codiceBelfioreRaw.replace(/[_\s]/g, '').toUpperCase() : null;
   const isZonaCentrale  = false; // default: fascia B/C periferica
   const omi = getOMIData(codiceBelfiore, query.categoria_catastale, isZonaCentrale);
 

@@ -99,7 +99,7 @@ const OMI_DB = {
     zona_centrale: { valore_min: 2800, valore_max: 5200, loc_min: 13.0, loc_max: 23.0 },
     anno_sem: "2024-II", is_costiero: true,
   },
-  "G605": { // Santa Margherita Ligure
+  "H025": { // Santa Margherita Ligure (codice Belfiore corretto)
     residenziale:  { valore_min: 3500, valore_max: 7000, loc_min: 15.0, loc_max: 28.0 },
     zona_centrale: { valore_min: 5000, valore_max: 10000, loc_min: 20.0, loc_max: 38.0 },
     anno_sem: "2024-II", is_costiero: true,
