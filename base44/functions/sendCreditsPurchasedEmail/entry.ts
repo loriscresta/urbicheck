@@ -1,6 +1,6 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 
-const APP_URL = 'https://app.urbicheck.it';
+const APP_URL = Deno.env.get("APP_URL") ?? "https://urbicheck.it";
 
 Deno.serve(async (req) => {
   try {

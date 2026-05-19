@@ -141,6 +141,10 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'query_id required' }, { status: 400 });
     }
 
+    // Authenticate the requesting user (may be null for automation/service calls)
+    let requestingUser = null;
+    try { requestingUser = await base44.auth.me(); } catch (_e) {}
+
     // Get query — prefer data from payload if already included
     let query = (payload.data?.status === 'completed') ? payload.data : null;
     if (!query) {
@@ -148,6 +152,14 @@ Deno.serve(async (req) => {
       query = rows[0];
     }
     if (!query) return Response.json({ error: 'Query not found' }, { status: 404 });
+
+    // Ownership check — if a user is authenticated, they must own this query
+    // (automation/service-role calls without a user are allowed through)
+    if (requestingUser && requestingUser.role !== 'admin') {
+      if (query.created_by !== requestingUser.email) {
+        return Response.json({ error: 'Forbidden' }, { status: 403 });
+      }
+    }
 
     const userEmail = query.created_by;
     if (!userEmail) return Response.json({ error: 'No user email' }, { status: 400 });
