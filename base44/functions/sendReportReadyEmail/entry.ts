@@ -1,6 +1,6 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 
-const APP_URL = 'https://app.urbicheck.it';
+const APP_URL = Deno.env.get('APP_BASE_URL') || 'https://urbicheck.base44.app';
 
 function buildEmailHtml({ userName, comune, foglio, particella, score, elementi, queryId }) {
   const scoreColor = score >= 7 ? '#059669' : score >= 5 ? '#d97706' : '#dc2626';
@@ -12,7 +12,7 @@ function buildEmailHtml({ userName, comune, foglio, particella, score, elementi,
       <td style="padding:10px 16px; border-bottom:1px solid #e5e7eb; font-family:'Courier New',monospace; font-size:13px; color:#374151;">
         ${e.icon} &nbsp;${e.label}
       </td>
-      <td style="padding:10px 16px; border-bottom:1px solid #e5e7eb; font-family:'Courier New',monospace; font-size:13px; color:${e.ok ? '#059669' : '#dc2626'}; font-weight:600; text-align:right;">
+      <td style="padding:10px 16px; border-bottom:1px solid #e5e7eb; font-family:'Courier New',monospace; font-size:13px; color:${e.ok === true ? '#059669' : e.ok === false ? '#dc2626' : '#d97706'}; font-weight:600; text-align:right;">
         ${e.value}
       </td>
     </tr>
@@ -166,21 +166,44 @@ Deno.serve(async (req) => {
     const scoreRaw = valSin.score_rischio || valSin.score || 7;
     const score = typeof scoreRaw === 'number' ? Math.min(10, Math.max(1, Math.round(scoreRaw))) : 7;
 
-    // Build key elements
+    // Build key elements — leggi da WFS (fonte autoritativa) con fallback su AI
     const elementi = [];
-    if (r.vincoli?.vincolo_sismico) {
-      elementi.push({ icon: '🔴', label: 'Zona Sismica', value: r.vincoli.vincolo_sismico.zona || 'Zona 3', ok: false });
+    const wfsRis2 = r.wfs_liguria?.risultati;
+    const vincoli2 = r.vincoli || {};
+
+    // Sismica: WFS autoritativo
+    const sismicaWfs2 = wfsRis2?.sismica;
+    if (sismicaWfs2?.zona) {
+      elementi.push({ icon: '🟠', label: 'Zona Sismica', value: `Zona ${sismicaWfs2.zona}`, ok: null });
+    } else {
+      elementi.push({ icon: '⚪', label: 'Zona Sismica', value: 'Verifica manuale', ok: null });
     }
-    if (r.vincoli?.vincolo_paesaggistico) {
-      const presente = r.vincoli.vincolo_paesaggistico.presente;
-      elementi.push({ icon: presente ? '🟡' : '🟢', label: 'Vincolo Paesaggistico', value: presente ? 'Presente' : 'Assente', ok: !presente });
+
+    // Vincolo paesaggistico
+    const vpWfs2 = wfsRis2?.vincoli_paesaggistici_ope_legis?.vincoli;
+    if (vpWfs2) {
+      const presente2 = vpWfs2.some(v => v.livello && v.livello !== 'NESSUN_VINCOLO_RILEVATO');
+      elementi.push({ icon: presente2 ? '🟡' : '🟢', label: 'Vincolo Paesaggistico', value: presente2 ? 'Presente' : 'Assente', ok: !presente2 });
+    } else if (vincoli2.vincolo_paesaggistico) {
+      const presente2 = vincoli2.vincolo_paesaggistico.presente;
+      elementi.push({ icon: presente2 ? '🟡' : '🟢', label: 'Vincolo Paesaggistico', value: presente2 ? 'Presente' : 'Assente', ok: !presente2 });
     }
-    if (r.zonizzazione?.destinazione_prevalente) {
-      elementi.push({ icon: '🏙️', label: 'Zona Urbanistica', value: r.zonizzazione.destinazione_prevalente, ok: true });
+
+    // Zona urbanistica
+    const zonaUrb2 = wfsRis2?.zona_urbanistica;
+    const zonaVal = zonaUrb2?.zona_codice || r.zonizzazione?.zona_codice || r.zonizzazione?.destinazione_prevalente || null;
+    if (zonaVal) {
+      elementi.push({ icon: '🏙️', label: 'Zona Urbanistica', value: zonaVal, ok: true });
     }
-    if (r.vincoli?.vincolo_idraulico) {
-      const p = r.vincoli.vincolo_idraulico.presente;
-      elementi.push({ icon: p ? '🔴' : '🟢', label: 'Rischio Idraulico', value: p ? `Classe ${r.vincoli.vincolo_idraulico.classe_rischio || '?'}` : 'Nessun rischio', ok: !p });
+
+    // Rischio idraulico
+    const corsiWfs2 = wfsRis2?.vincolo_corsi_acqua?.dati;
+    if (corsiWfs2) {
+      const trovato2 = corsiWfs2.some(d => d.trovato);
+      elementi.push({ icon: trovato2 ? '🔵' : '🟢', label: 'Rischio Idraulico', value: trovato2 ? 'Vincolo rilevato' : 'Nessun rischio', ok: !trovato2 });
+    } else if (vincoli2.vincolo_idraulico) {
+      const p2 = vincoli2.vincolo_idraulico.presente;
+      elementi.push({ icon: p2 ? '🔴' : '🟢', label: 'Rischio Idraulico', value: p2 ? 'Rilevato' : 'Nessun rischio', ok: !p2 });
     }
 
     const subject = `✅ Il tuo report UrbiCheck è pronto — ${query.comune} Fg.${query.foglio} Map.${query.particella}`;

@@ -4,7 +4,7 @@
  */
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 
-const APP_URL = 'https://app.urbicheck.it';
+const APP_URL = Deno.env.get('APP_BASE_URL') || 'https://urbicheck.base44.app';
 
 // ── HTML template base ──
 function baseTemplate(content) {
@@ -81,15 +81,46 @@ function buildReportReadyEmail({ query, reportUrl }) {
     ? `<span style="background:#fef3c7;color:#d97706;padding:3px 10px;font-size:11px;font-weight:700;letter-spacing:1px;">▲ RISCHIO MEDIO</span>`
     : `<span style="background:#d1fae5;color:#059669;padding:3px 10px;font-size:11px;font-weight:700;letter-spacing:1px;">✓ BASSO RISCHIO</span>`;
 
-  // Punti salienti
+  // Punti salienti — leggi da WFS (fonte autoritativa) con fallback su AI
   const highlights = [];
   const vincoli = r.vincoli || {};
-  if (vincoli.vincolo_sismico?.presente) highlights.push(`🔴 Vincolo sismico — ${vincoli.vincolo_sismico.zona || 'zona rilevata'}`);
-  if (vincoli.vincolo_paesaggistico?.presente) highlights.push(`🟡 Vincolo paesaggistico art.142 — ${vincoli.vincolo_paesaggistico.tipo || 'presente'}`);
-  if (vincoli.vincolo_idraulico?.presente) highlights.push(`🔵 Rischio idraulico/idrogeologico — ${vincoli.vincolo_idraulico.classe_rischio || 'rilevato'}`);
   const wfsRis = r.wfs_liguria?.risultati;
-  if (wfsRis?.pai_rischio_idrogeologico?.dati?.some(d => d.trovato)) highlights.push(`🔵 PAI: rischio idrogeologico rilevato`);
-  if (r.zonizzazione?.destinazione_prevalente) highlights.push(`🗺️ Zona: ${r.zonizzazione.zona_codice || ''} — ${r.zonizzazione.destinazione_prevalente}`);
+
+  // Sismica: WFS autoritativo (zona "3", "2", "4" ecc.), fallback AI, fallback neutro
+  const sismicaWfs = wfsRis?.sismica;
+  if (sismicaWfs?.zona) {
+    highlights.push(`🟠 Zona Sismica — Zona ${sismicaWfs.zona}${sismicaWfs.descrizione ? ' — ' + sismicaWfs.descrizione : ''}`);
+  } else if (vincoli.vincolo_sismico?.presente) {
+    highlights.push(`🟠 Zona Sismica — Verifica manuale`);
+  }
+
+  // Vincolo paesaggistico: da WFS ope legis
+  const vpWfs = wfsRis?.vincoli_paesaggistici_ope_legis?.vincoli;
+  if (vpWfs) {
+    const presente = vpWfs.some(v => v.livello && v.livello !== 'NESSUN_VINCOLO_RILEVATO');
+    highlights.push(presente ? `🟡 Vincolo paesaggistico art.142 — Presente` : `🟢 Vincolo paesaggistico — Assente`);
+  } else if (vincoli.vincolo_paesaggistico?.presente !== undefined) {
+    highlights.push(vincoli.vincolo_paesaggistico.presente ? `🟡 Vincolo paesaggistico art.142 — Presente` : `🟢 Vincolo paesaggistico — Assente`);
+  }
+
+  // Rischio idraulico: da WFS corsi acqua
+  const corsiWfs = wfsRis?.vincolo_corsi_acqua?.dati;
+  if (corsiWfs) {
+    const trovato = corsiWfs.some(d => d.trovato);
+    highlights.push(trovato ? `🔵 Corsi d'acqua — Vincolo rilevato` : `🟢 Rischio idraulico — Nessun rischio`);
+  } else if (wfsRis?.pai_rischio_idrogeologico?.dati?.some(d => d.trovato)) {
+    highlights.push(`🔵 PAI: rischio idrogeologico rilevato`);
+  } else if (vincoli.vincolo_idraulico?.presente) {
+    highlights.push(`🔵 Rischio idraulico — ${vincoli.vincolo_idraulico.classe_rischio || 'rilevato'}`);
+  }
+
+  // Zona urbanistica: WFS zona_urbanistica > zonizzazione AI
+  const zonaUrb = wfsRis?.zona_urbanistica;
+  const zonaCode = zonaUrb?.zona_codice || r.zonizzazione?.zona_codice || '';
+  const zonaLabel = zonaUrb?.destinazione_uso || r.zonizzazione?.destinazione_prevalente || '';
+  if (zonaCode || zonaLabel) {
+    highlights.push(`🗺️ Zona: ${[zonaCode, zonaLabel].filter(Boolean).join(' — ')}`);
+  }
   const topHighlights = highlights.slice(0, 3);
 
   const highlightsHtml = topHighlights.length > 0
