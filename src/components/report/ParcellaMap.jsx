@@ -23,12 +23,12 @@ export default function ParcellaMap({ lat, lon, geojsonPolygon, queryId, foglio,
   const [resolvedPolygon, setResolvedPolygon] = useState(geojsonPolygon || null);
   const [wfsAttempted, setWfsAttempted] = useState(false);
 
-  // Se il poligono è disponibile, usa SEMPRE il baricentro calcolato al volo
   const polyGeom = resolvedPolygon?.type === 'Feature' ? resolvedPolygon.geometry : resolvedPolygon;
   const hasPolygon = polyGeom?.type === 'Polygon' || polyGeom?.type === 'MultiPolygon';
-  const centroid = hasPolygon ? calcCentroid(resolvedPolygon) : null;
-  const displayLat = centroid?.lat ?? lat;
-  const displayLon = centroid?.lon ?? lon;
+  // Usa sempre lat/lon passati (baricentro dal DB/entity) come centro della mappa;
+  // il fitBounds del poligono sovrascriverà il centro se il poligono è disponibile
+  const displayLat = lat;
+  const displayLon = lon;
   const fonteLabel = hasPolygon ? 'WFS AdE — Agenzia delle Entrate' : 'OnData CC BY 4.0';
 
   // FIX C — Tenta fetch geometria lato backend (evita CORS del browser)
@@ -74,19 +74,14 @@ export default function ParcellaMap({ lat, lon, geojsonPolygon, queryId, foglio,
     if (!displayLat || !displayLon || !mapRef.current) return;
     if (leafletMapRef.current) return; // already initialized
 
-    // Load Leaflet CSS + JS from CDN
     const loadLeaflet = () => new Promise((resolve) => {
       if (window.L) { resolve(); return; }
-
-      // CSS
       if (!document.querySelector('link[href*="leaflet"]')) {
         const link = document.createElement('link');
         link.rel = 'stylesheet';
         link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
         document.head.appendChild(link);
       }
-
-      // JS
       const script = document.createElement('script');
       script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
       script.onload = resolve;
@@ -97,57 +92,53 @@ export default function ParcellaMap({ lat, lon, geojsonPolygon, queryId, foglio,
       const L = window.L;
       if (!mapRef.current || leafletMapRef.current) return;
 
+      // Inizializza con zoom 18 su centroid; fitBounds lo sovrascriverà se c'è il poligono
       const map = L.map(mapRef.current, {
         center: [displayLat, displayLon],
-        zoom: 17,
+        zoom: 18,
         zoomControl: true,
         scrollWheelZoom: false,
       });
-
       leafletMapRef.current = map;
 
-      // Tile layer OpenStreetMap
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-        maxZoom: 19,
+        maxZoom: 21,
       }).addTo(map);
 
-      // Supporta sia GeoJSON Polygon che Feature (wrapper)
-      const geomToCheck = resolvedPolygon?.type === 'Feature'
-        ? resolvedPolygon.geometry
-        : resolvedPolygon;
+      const geomToCheck = resolvedPolygon?.type === 'Feature' ? resolvedPolygon.geometry : resolvedPolygon;
 
       if (geomToCheck && (geomToCheck.type === 'Polygon' || geomToCheck.type === 'MultiPolygon')) {
-        // Disegna poligono
+        // Poligono disponibile: disegna fill blu + border, poi fitBounds
         const layer = L.geoJSON(geomToCheck, {
-          style: { color: '#FF6B35', weight: 2, opacity: 1, fillColor: '#FF6B35', fillOpacity: 0.25 },
+          style: { color: '#1A3A6B', weight: 2.5, opacity: 1, fillColor: '#1A3A6B', fillOpacity: 0.30 },
         }).addTo(map);
 
-        // Marker baricentro calcolato dal poligono
+        // Marker sul centroid passato (lat/lon dal DB)
         const icon = L.divIcon({
           className: '',
-          html: `<div style="width:10px;height:10px;background:#FF6B35;border:2px solid white;border-radius:50%;box-shadow:0 1px 4px rgba(0,0,0,0.5);"></div>`,
+          html: `<div style="width:10px;height:10px;background:#B33A2A;border:2px solid white;border-radius:50%;box-shadow:0 1px 4px rgba(0,0,0,0.5);"></div>`,
           iconSize: [10, 10], iconAnchor: [5, 5],
         });
-        L.marker([displayLat, displayLon], { icon }).addTo(map).bindPopup(`📍 Baricentro WFS AdE`);
+        L.marker([displayLat, displayLon], { icon }).addTo(map).bindPopup(`📍 Foglio ${foglio}, N. ${particella}`);
 
+        // FitBounds sul poligono — zoom automatico alla particella
         try {
-          map.fitBounds(layer.getBounds(), { padding: [30, 30] });
+          map.fitBounds(layer.getBounds(), { padding: [40, 40], maxZoom: 20 });
         } catch (_e) {
-          map.setView([lat, lon], 17);
+          map.setView([displayLat, displayLon], 18);
         }
       } else {
-        // Solo marker puntuale (fallback quando poligono non disponibile)
+        // Solo marker puntuale — zoom 18 fisso
         const icon = L.divIcon({
           className: '',
           html: `<div style="width:16px;height:16px;background:#1A3A6B;border:3px solid #B33A2A;border-radius:50%;box-shadow:0 2px 6px rgba(0,0,0,0.4);"></div>`,
-          iconSize: [16, 16],
-          iconAnchor: [8, 8],
+          iconSize: [16, 16], iconAnchor: [8, 8],
         });
         L.marker([displayLat, displayLon], { icon })
           .addTo(map)
           .bindPopup(`📍 Lat: ${displayLat.toFixed(5)}, Lon: ${displayLon.toFixed(5)}`);
-        map.setView([displayLat, displayLon], 17);
+        map.setView([displayLat, displayLon], 18);
       }
     });
 

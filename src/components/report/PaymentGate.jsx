@@ -2,11 +2,121 @@ import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import { useQuery } from "@tanstack/react-query";
-import { Loader2, Unlock, ArrowLeft, AlertTriangle, CreditCard } from "lucide-react";
+import { Loader2, Unlock, ArrowLeft, AlertTriangle, CreditCard, Lock, MapPin, Shield, Building2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { motion } from "framer-motion";
+import ParcellaMap from "@/components/report/ParcellaMap";
 
 const PRICE = 9.90;
+
+function PreviewPanel({ query }) {
+  const r = query.report_data || {};
+  const wfsSismica = r.wfs_liguria?.risultati?.sismica;
+  const zonizzazione = r.zonizzazione;
+  const vincoli = r.vincoli;
+  const wfsVincoli = r.wfs_liguria?.risultati?.vincoli_paesaggistici_ope_legis?.vincoli || [];
+  const vincPaesCount = wfsVincoli.filter(v => v.livello === 'APPLICABILE').length;
+
+  // Mappa: mostra solo se ci sono coordinate
+  const poly = query.geometry_geojson || r.catasto_data?.geojson_polygon;
+  const hasCoords = query.centroid_lat || r.catasto_data?.lat;
+
+  return (
+    <div className="rounded-xl border border-border bg-white overflow-hidden mb-6">
+      {/* Header preview */}
+      <div className="px-5 py-3 border-b border-border bg-muted/30">
+        <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold">Anteprima gratuita</p>
+      </div>
+
+      <div className="p-5 space-y-4">
+        {/* Dati identificativi */}
+        <div className="grid grid-cols-2 gap-3 text-sm">
+          <div>
+            <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-0.5">Comune</p>
+            <p className="font-semibold">{query.comune} ({query.regione})</p>
+          </div>
+          <div>
+            <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-0.5">Identificativo</p>
+            <p className="font-mono text-xs">F.{query.foglio} P.{query.particella}{query.subalterno ? ` Sub.${query.subalterno}` : ''}</p>
+          </div>
+          {zonizzazione?.zona_codice && (
+            <div>
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-0.5">Zona urbanistica</p>
+              <p className="font-semibold text-sm">{zonizzazione.zona_codice}</p>
+              {zonizzazione.destinazione_prevalente && (
+                <p className="text-xs text-muted-foreground">{zonizzazione.destinazione_prevalente}</p>
+              )}
+            </div>
+          )}
+          <div>
+            <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-0.5">Vincolo sismico</p>
+            {wfsSismica ? (
+              <p className="font-semibold text-sm">Zona {wfsSismica.zona} — {wfsSismica.descrizione}</p>
+            ) : (
+              <p className="text-sm text-muted-foreground">Disponibile nel report</p>
+            )}
+          </div>
+          <div>
+            <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-0.5">Vincoli paesaggistici</p>
+            {wfsVincoli.length > 0 ? (
+              <p className={`font-semibold text-sm ${vincPaesCount > 0 ? 'text-amber-700' : 'text-emerald-700'}`}>
+                {vincPaesCount > 0 ? `${vincPaesCount} vincolo/i rilevato/i` : 'Nessun vincolo ope legis'}
+              </p>
+            ) : vincoli?.vincolo_paesaggistico ? (
+              <p className={`font-semibold text-sm ${vincoli.vincolo_paesaggistico.presente ? 'text-amber-700' : 'text-emerald-700'}`}>
+                {vincoli.vincolo_paesaggistico.presente ? 'Presente' : 'Non rilevato'}
+              </p>
+            ) : (
+              <p className="text-sm text-muted-foreground">Verifica nel report</p>
+            )}
+          </div>
+        </div>
+
+        {/* Mappa — visibile gratuitamente */}
+        {hasCoords && (
+          <div>
+            <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-2 flex items-center gap-1">
+              <MapPin className="w-3 h-3" /> Mappa particella
+            </p>
+            <ParcellaMap
+              lat={query.centroid_lat || r.catasto_data?.lat}
+              lon={query.centroid_lng || r.catasto_data?.lon}
+              geojsonPolygon={poly}
+              queryId={query.id}
+              foglio={query.foglio}
+              particella={query.particella}
+              height={220}
+            />
+          </div>
+        )}
+
+        {/* Contenuto bloccato */}
+        <div className="relative rounded-lg overflow-hidden">
+          <div className="space-y-2 opacity-30 select-none pointer-events-none">
+            {[
+              'Indici edilizi (IF, RC, H max, distanze)',
+              'Dettaglio vincoli PAI e paesaggistici',
+              'Analisi finanziaria & OMI',
+              'Fattibilità interventi e pratiche',
+              'Valutazione sintetica e raccomandazioni',
+            ].map((item, i) => (
+              <div key={i} className="flex items-center gap-2 px-3 py-2 bg-muted rounded text-sm">
+                <div className="w-3 h-3 rounded-full bg-border" />
+                <span>{item}</span>
+              </div>
+            ))}
+          </div>
+          <div className="absolute inset-0 flex items-center justify-center bg-background/70 backdrop-blur-[2px]">
+            <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-white border border-border shadow text-sm font-semibold text-foreground">
+              <Lock className="w-4 h-4 text-muted-foreground" />
+              Sblocca il report completo — €9,90
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function PaymentGate({ query, onPaid }) {
   const navigate = useNavigate();
@@ -29,7 +139,6 @@ export default function PaymentGate({ query, onPaid }) {
     try {
       const user = await base44.auth.me();
 
-      // 1. Verifica saldo
       const creditsList = await base44.entities.UserCredits.filter({ user_email: user.email });
       const currentCredits = creditsList[0];
       if (!currentCredits || currentCredits.balance < PRICE) {
@@ -38,7 +147,6 @@ export default function PaymentGate({ query, onPaid }) {
         return;
       }
 
-      // 2. Crea CreditTransaction PRIMA (step 1 - atomico)
       await base44.entities.CreditTransaction.create({
         user_email: user.email,
         type: "query_charge",
@@ -47,38 +155,31 @@ export default function PaymentGate({ query, onPaid }) {
         query_id: query.id,
       });
 
-      // 3. Aggiorna balance (step 2)
       await base44.entities.UserCredits.update(currentCredits.id, {
         balance: currentCredits.balance - PRICE,
         total_spent: (currentCredits.total_spent || 0) + PRICE,
         total_queries: (currentCredits.total_queries || 0) + 1,
       });
 
-      // 4. Imposta paid=true (step 3 - gate autoritativo)
       await base44.entities.CadastralQuery.update(query.id, {
         paid: true,
         status: "completed",
       });
 
-      // Dev mode: auto-refund dopo 60s (solo admin)
       if (user.role === "admin") {
         setTimeout(async () => {
           try {
             const latestCredits = await base44.entities.UserCredits.filter({ user_email: user.email });
             const latest = latestCredits[0];
             if (latest) {
-              await base44.entities.UserCredits.update(latest.id, {
-                balance: latest.balance + PRICE,
-              });
+              await base44.entities.UserCredits.update(latest.id, { balance: latest.balance + PRICE });
               await base44.entities.CreditTransaction.create({
-                user_email: user.email,
-                type: "refund",
-                amount: +PRICE,
-                description: `[DEV MODE] Auto-refund dopo 60s — ${query.comune} F.${query.foglio} P.${query.particella}`,
+                user_email: user.email, type: "refund", amount: +PRICE,
+                description: `[DEV MODE] Auto-refund — ${query.comune} F.${query.foglio} P.${query.particella}`,
                 query_id: query.id,
               });
             }
-          } catch (_e) { /* non bloccante */ }
+          } catch (_e) {}
         }, 60000);
       }
 
@@ -103,7 +204,7 @@ export default function PaymentGate({ query, onPaid }) {
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
         {/* Header scheda */}
         <div className="rounded-xl p-5 mb-6" style={{ background: '#1e3a5f' }}>
-          <p className="text-white/60 text-xs uppercase tracking-widest mb-1">Scheda elaborata — pagamento richiesto</p>
+          <p className="text-white/60 text-xs uppercase tracking-widest mb-1">Scheda elaborata — anteprima gratuita</p>
           <h1 className="text-xl font-bold text-white">
             {query.comune} ({query.regione})
           </h1>
@@ -112,6 +213,9 @@ export default function PaymentGate({ query, onPaid }) {
             {query.subalterno ? ` · Sub. ${query.subalterno}` : ""}
           </p>
         </div>
+
+        {/* Preview gratuita */}
+        <PreviewPanel query={query} />
 
         {/* Payment card */}
         <div className="rounded-xl border-2 border-emerald-400 bg-emerald-50 p-6">

@@ -52,8 +52,12 @@ export default function CadastralSearchForm({ onSubmit, isLoading, submitLabel =
   const [speseAccessorie, setSpeseAccessorie] = useState("10");
 
   const showFinancialSection = FIN_FINALITA.includes(finalita);
+  // Per "investimento" i dati finanziari sono obbligatori (prezzo + superficie)
+  const isInvestimento = finalita === 'investimento';
+  const finDataRequired = isInvestimento;
+  const finDataFilled = !finDataRequired || (prezzoAcquisto && superficie);
 
-  const isValid = selectedComune && foglio && particella && finalita;
+  const isValid = selectedComune && foglio && particella && finalita && finDataFilled;
 
   const handleFinalitaChange = (value) => {
     try {
@@ -202,21 +206,29 @@ export default function CadastralSearchForm({ onSubmit, isLoading, submitLabel =
         </Select>
       </div>
 
-      {/* Sezione finanziaria (opzionale, mostrata per finalità rilevanti) */}
+      {/* Sezione finanziaria */}
       <div key="financial-section-wrapper" style={{ display: showFinancialSection ? 'block' : 'none' }}>
-        <div className="rounded-lg border border-border bg-muted/30 p-4 space-y-4">
-          <button
-            type="button"
-            className="flex items-center gap-2 w-full text-left"
-            onClick={() => { try { setShowFinancial(v => !v); } catch (_e) {} }}
-          >
-            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex-1">
-              Dati finanziari (opzionale — per analisi investimento)
-            </p>
-            {showFinancial ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
-          </button>
+        <div className={`rounded-lg border p-4 space-y-4 ${finDataRequired ? 'border-primary bg-blue-50/40' : 'border-border bg-muted/30'}`}>
+          {finDataRequired ? (
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: '#1A3A6B' }}>
+                Dati finanziari <span className="text-accent ml-1">* obbligatorio</span>
+              </p>
+            </div>
+          ) : (
+            <button
+              type="button"
+              className="flex items-center gap-2 w-full text-left"
+              onClick={() => { try { setShowFinancial(v => !v); } catch (_e) {} }}
+            >
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex-1">
+                Dati finanziari (opzionale — per analisi investimento)
+              </p>
+              {showFinancial ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
+            </button>
+          )}
 
-          <div key="financial-fields" style={{ display: showFinancial ? 'grid' : 'none' }} className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div key="financial-fields" style={{ display: (finDataRequired || showFinancial) ? 'grid' : 'none' }} className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label>Prezzo di acquisto (€)</Label>
               <Input key="prezzo-input" type="number" value={prezzoAcquisto} onChange={(e) => { try { setPrezzoAcquisto(e.target.value); } catch (_e) {} }} placeholder="es. 150000" />
@@ -269,7 +281,9 @@ export default function CadastralSearchForm({ onSubmit, isLoading, submitLabel =
 
       {!isValid && (
         <p className="text-xs text-center" style={{ color: '#7A7268', fontFamily: "'IBM Plex Mono', monospace" }}>
-          Inserisci comune, foglio, particella e finalità per procedere
+          {finDataRequired && !(prezzoAcquisto && superficie)
+            ? "* Per finalità \"Investimento\" inserisci prezzo di acquisto e superficie"
+            : "Inserisci comune, foglio, particella e finalità per procedere"}
         </p>
       )}
     </form>

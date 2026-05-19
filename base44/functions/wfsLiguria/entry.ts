@@ -159,35 +159,56 @@ async function queryPAILiguria(x3003, y3003) {
 }
 
 // ============================================================
-// PAI FRANE via WFS ARPA Piemonte (EPSG:4326 BBOX)
+// PAI FRANE via WFS ARPA Piemonte — multi-endpoint con fallback
 // ============================================================
+const ARPA_WFS_ENDPOINTS = [
+  // Endpoint primario (geoservizi) — tenta prima
+  (bbox, typeName) => `https://geoservizi.arpa.piemonte.it/geoserver/ows?SERVICE=WFS&VERSION=2.0.0&REQUEST=GetFeature&typeName=${typeName}&outputFormat=application/json&BBOX=${bbox},EPSG:4326&count=20`,
+  // Endpoint alternativo (webgis) — fallback
+  (bbox, typeName) => `https://webgis.arpa.piemonte.it/geoserver/wfs?service=WFS&version=1.1.0&request=GetFeature&typeName=${typeName}&outputFormat=application/json&BBOX=${bbox},EPSG:4326&maxFeatures=20`,
+];
+
+const ARPA_TYPE_NAMES = [
+  { primaryName: 'pai:frana_poligonale', fallbackName: 'wfs_esterni:wfs_POLIGONALI', label: 'Frane poligonali' },
+  { primaryName: 'pai:frana_puntuale',   fallbackName: 'wfs_esterni:wfs_PIFF',        label: 'Frane puntuali (PIFF)' },
+];
+
 async function queryPAIPiemonte(lat, lon) {
   const margin = 0.002;
-  const bbox = `${lat - margin},${lon - margin},${lat + margin},${lon + margin}`;
-  const layers = [
-    { typeName: 'wfs_esterni:wfs_POLIGONALI', label: 'Frane poligonali' },
-    { typeName: 'wfs_esterni:wfs_PIFF', label: 'Frane puntuali (PIFF)' },
-  ];
-  const TIMEOUTS = [5000, 10000, 15000];
+  const bbox = `${lon - margin},${lat - margin},${lon + margin},${lat + margin}`;
   const results = [];
-  for (const layer of layers) {
+
+  for (const layerDef of ARPA_TYPE_NAMES) {
     let success = false;
-    for (let attempt = 0; attempt < 3; attempt++) {
-      if (attempt > 0) await sleep(2000);
+    // Prova prima endpoint geoservizi con primaryName, poi webgis con fallbackName
+    const attempts = [
+      { endpointFn: ARPA_WFS_ENDPOINTS[0], typeName: layerDef.primaryName, timeout: 15000 },
+      { endpointFn: ARPA_WFS_ENDPOINTS[0], typeName: layerDef.fallbackName, timeout: 15000 },
+      { endpointFn: ARPA_WFS_ENDPOINTS[1], typeName: layerDef.fallbackName, timeout: 15000 },
+    ];
+    for (const attempt of attempts) {
       try {
-        const url = `${WFS_BASE_PIEMONTE}/wfs?service=WFS&version=1.1.0&request=GetFeature&typeName=${layer.typeName}&outputFormat=application/json&BBOX=${bbox},EPSG:4326&maxFeatures=20`;
-        const res = await fetchWithTimeout(url, {}, TIMEOUTS[attempt]);
+        const url = attempt.endpointFn(bbox, attempt.typeName);
+        const res = await fetchWithTimeout(url, {}, attempt.timeout);
+        if (!res.ok) continue;
         const json = await res.json();
         const count = (json.features || []).length;
-        results.push({ layer: layer.label, trovato: count > 0, features_count: count, fonte_ok: true });
+        results.push({ layer: layerDef.label, trovato: count > 0, features_count: count, fonte_ok: true });
         success = true;
         break;
       } catch (_e) {
-        // retry
+        await sleep(1000);
       }
     }
     if (!success) {
-      results.push({ layer: layer.label, trovato: false, features_count: 0, fonte_ok: false, errore: 'WFS ARPA Piemonte non raggiungibile dopo 3 tentativi — verificare PAI su webgis.arpa.piemonte.it' });
+      // Non è un errore bloccante — frame come verifica manuale raccomandata
+      results.push({
+        layer: layerDef.label,
+        trovato: false,
+        features_count: 0,
+        fonte_ok: false,
+        nota: 'Verifica manuale consigliata su webgis.arpa.piemonte.it — il geoportale PAI è temporaneamente non interrogabile automaticamente.',
+      });
     }
   }
   return results;
@@ -528,7 +549,7 @@ async function runAnalisiPiemonte({ comune, provincia, indirizzo, comuneLower, p
         features_totali: paiFraneTotali,
         fonte_ok: paiFraneOk,
         link_pai: 'https://webgis.arpa.piemonte.it',
-        nota: paiFraneTotali > 0 ? `Rilevate ${paiFraneTotali} geometrie PAI entro area di ricerca. Consultare webgis.arpa.piemonte.it per dettaglio.` : (paiFraneOk ? 'Nessuna frana censita ARPA Piemonte entro area di ricerca.' : 'Fonte WFS ARPA Piemonte non raggiungibile — verificare manualmente.'),
+        nota: paiFraneTotali > 0 ? `Rilevate ${paiFraneTotali} geometrie PAI entro area di ricerca. Consultare webgis.arpa.piemonte.it per dettaglio.` : (paiFraneOk ? 'Nessuna frana censita ARPA Piemonte entro area di ricerca.' : 'Verifica manuale consigliata su webgis.arpa.piemonte.it'),
       },
       sismica: sismicaPiemonte,
       zona_urbanistica,

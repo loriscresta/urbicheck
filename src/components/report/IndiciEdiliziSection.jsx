@@ -4,7 +4,7 @@
  * banner CDU + link reali invece dei valori approssimativi.
  */
 import React from "react";
-import { BarChart3, ExternalLink, AlertTriangle } from "lucide-react";
+import { BarChart3, ExternalLink, AlertTriangle, Info } from "lucide-react";
 import ReportSection from "@/components/report/ReportSection";
 
 const CDU_LINKS = {
@@ -95,21 +95,16 @@ function CduBanner({ comune, cduInfo }) {
 
 function IndiceCard({ label, value, cduInfo, comune }) {
   if (isPlaceholder(value)) {
+    // Dato non disponibile nel DB regionale — mostra in grigio neutro, non come warning
     return (
-      <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+      <div className="bg-muted/20 border border-border rounded-lg p-3">
         <p className="text-xs text-muted-foreground mb-1">{label}</p>
-        <p className="text-xs text-amber-700 font-medium flex items-center gap-1">
-          <AlertTriangle className="w-3 h-3 shrink-0" /> Dato non disponibile da WFS
-        </p>
+        <p className="text-xs text-muted-foreground italic">n.d. — verifica su NTA/PRG Comunale</p>
         {cduInfo && (
           <div className="mt-1.5 space-y-0.5">
             <a href={cduInfo.cdu} target="_blank" rel="noopener noreferrer"
               className="text-[10px] text-primary flex items-center gap-1 hover:underline">
               <ExternalLink className="w-2.5 h-2.5" /> CDU Comune di {comune}
-            </a>
-            <a href={cduInfo.geoportale} target="_blank" rel="noopener noreferrer"
-              className="text-[10px] text-primary flex items-center gap-1 hover:underline">
-              <ExternalLink className="w-2.5 h-2.5" /> Geoportale Regionale
             </a>
           </div>
         )}
@@ -142,8 +137,17 @@ export default function IndiciEdiliziSection({ indici, comune, delay = 0.08 }) {
 
   return (
     <ReportSection icon={BarChart3} title="Indici Edilizi" delay={delay}>
-      {anyPlaceholder && cduInfo && (
-        <CduBanner comune={comune} cduInfo={cduInfo} />
+      {anyPlaceholder && (
+        <div className="mb-4 rounded-lg border border-border bg-muted/20 p-3 flex items-start gap-2">
+          <Info className="w-4 h-4 text-muted-foreground shrink-0 mt-0.5" />
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            Gli indici urbanistici non sono disponibili nel database WFS regionale aperto.
+            I valori n.d. non indicano un rischio — richiedere il CDU al Comune per i valori ufficiali.
+            {cduInfo && (
+              <> <a href={cduInfo.cdu} target="_blank" rel="noopener noreferrer" className="text-primary underline ml-1">Richiedi CDU →</a></>
+            )}
+          </p>
+        </div>
       )}
       <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
         {fields.map((f) => (
