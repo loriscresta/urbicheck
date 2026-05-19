@@ -388,9 +388,9 @@ export default function ReportPage() {
               <DataRow label="Microzona" value={r.dati_catastali.microzona} />
             )}
             {query.intestatari?.length > 0
-              ? <DataRow label="Intestatari" value={query.intestatari.join(" — ")} />
-              : <DataRow label="Intestatari" value={r.dati_catastali.intestatari} />
-            }
+               ? <DataRow label="Intestatari" value={query.intestatari.join(" — ")} />
+               : <DataRow label="Intestatari" value={query.intestatari && query.intestatari.length > 0 ? query.intestatari.join(" — ") : "Non disponibile dalla visura"} />
+             }
             {query.visura_uploaded && query.superficie_mq && (
               <DataRow label="Superficie catastale" value={`${query.superficie_mq} mq`} />
             )}
@@ -431,7 +431,17 @@ export default function ReportPage() {
               <VincoloCard
                 label="Rischio Idrogeologico (PAI)"
                 presente={vincoloIdraulicoEffettivo.presente}
-                dettagli={vincoloIdraulicoEffettivo.dettagli}
+                dettagli={
+                  isPiemonte && query.centroid_lat && query.centroid_lng
+                    ? <span>
+                        {vincoloIdraulicoEffettivo.dettagli}
+                        {vincoloIdraulicoEffettivo.dettagli && !vincoloIdraulicoEffettivo.dettagli.includes('webgis') && ' — '}
+                        <a href={`https://webgis.arpa.piemonte.it/paigeo/?lat=${query.centroid_lat}&lon=${query.centroid_lng}`} target="_blank" rel="noopener noreferrer" style={{ color: '#1A3A6B', textDecoration: 'underline' }}>
+                          Mappa ARPA interattiva →
+                        </a>
+                      </span>
+                    : vincoloIdraulicoEffettivo.dettagli
+                }
                 extra={vincoloIdraulicoEffettivo.classe_rischio}
               />
               <VincoloCard
@@ -610,14 +620,25 @@ export default function ReportPage() {
                 <span className="italic">{fonte}</span>
               </div>
               <ParcellaMap
-                lat={mapLat}
-                lon={mapLon}
-                geojsonPolygon={poly}
-                queryId={query.id}
-                foglio={query.foglio}
-                particella={query.particella}
-                height={320}
+               lat={mapLat}
+               lon={mapLon}
+               geojsonPolygon={poly}
+               queryId={query.id}
+               foglio={query.foglio}
+               particella={query.particella}
+               height={320}
               />
+              <div className="mt-3 flex gap-2">
+               <a
+                 href="https://www.agenziaentrate.gov.it/portale/web/guest/schede/fabbricatiterreni/consultazione-cartografia-catastale/servizio-di-consultazione-della-cartografia-catastale"
+                 target="_blank"
+                 rel="noopener noreferrer"
+                 className="text-xs text-primary hover:underline flex items-center gap-1"
+               >
+                 Vedi su Geoportale AdE →
+               </a>
+               <span className="text-xs text-muted-foreground italic">(Foglio {query.foglio}, Part. {query.particella})</span>
+              </div>
             </ReportSection>
           );
         })()}
