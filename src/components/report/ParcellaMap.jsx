@@ -114,6 +114,26 @@ export default function ParcellaMap({ lat, lon, geojsonPolygon, queryId, foglio,
         maxZoom: 21,
       }).addTo(map);
 
+      // WMS catastale AdE — visibile solo a zoom >= 16
+      const wmsLayer = L.tileLayer.wms('https://wms.cartografia.agenziaentrate.gov.it/inspire/wms', {
+        layers: 'CP.CadastralParcel',
+        format: 'image/png',
+        transparent: true,
+        version: '1.3.0',
+        opacity: 0.6,
+        attribution: '© Agenzia delle Entrate',
+        maxZoom: 21,
+      });
+      const toggleWms = () => {
+        if (map.getZoom() >= 16) {
+          if (!map.hasLayer(wmsLayer)) wmsLayer.addTo(map);
+        } else {
+          if (map.hasLayer(wmsLayer)) map.removeLayer(wmsLayer);
+        }
+      };
+      map.on('zoomend', toggleWms);
+      toggleWms(); // run once at init zoom
+
       const geomToCheck = resolvedPolygon?.type === 'Feature' ? resolvedPolygon.geometry : resolvedPolygon;
 
       if (geomToCheck && (geomToCheck.type === 'Polygon' || geomToCheck.type === 'MultiPolygon')) {
@@ -146,6 +166,19 @@ export default function ParcellaMap({ lat, lon, geojsonPolygon, queryId, foglio,
         L.marker([displayLat, displayLon], { icon })
           .addTo(map)
           .bindPopup(`📍 Lat: ${displayLat.toFixed(5)}, Lon: ${displayLon.toFixed(5)}`);
+
+        // Cerchio approssimato 20m
+        const popupText = foglio && particella
+          ? `Particella ${particella} — Foglio ${foglio}`
+          : `📍 Posizione approssimata`;
+        L.circle([displayLat, displayLon], {
+          radius: 20,
+          color: '#e74c3c',
+          fillColor: '#e74c3c',
+          fillOpacity: 0.15,
+          weight: 2,
+        }).addTo(map).bindPopup(popupText);
+
         map.setView([displayLat, displayLon], 18);
       }
     });
@@ -185,6 +218,16 @@ export default function ParcellaMap({ lat, lon, geojsonPolygon, queryId, foglio,
             </span>
           )
         }
+      </div>
+      <div style={{
+        padding: '5px 10px',
+        borderTop: '1px solid #C4BAA8',
+        background: '#F4EFE6',
+        fontFamily: "'IBM Plex Mono', monospace",
+        fontSize: '0.58rem',
+        color: '#7A7268',
+      }}>
+        📍 Posizione approssimata della particella. Layer catastale © Agenzia delle Entrate
       </div>
     </div>
   );
