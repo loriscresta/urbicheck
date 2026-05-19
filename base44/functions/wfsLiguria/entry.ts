@@ -1,4 +1,5 @@
-// wfsLiguria.ts — URBICHECK Analisi Urbanistica (Liguria + Piemonte) — v2.1 geocoding-fix
+// wfsLiguria.ts — URBICHECK Analisi Urbanistica (Liguria + Piemonte) — v2.2 prg-agent
+const PRG_AGENT_URL = Deno.env.get("PRG_AGENT_URL") ?? "https://urbicheck-prg-agent-production.up.railway.app";
 // Approccio ibrido: logica legale (vincoli ope legis) + WFS PAI + Overpass API (ferrovie/acque)
 
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
@@ -522,6 +523,8 @@ async function runAnalisiPiemonte({ comune, provincia, indirizzo, comuneLower, p
     azione_consigliata: 'Richiedere il Certificato di Destinazione Urbanistica (CDU) presso il Comune.',
   };
 
+  // PRG Agent (shapefile Piemonte) — dati zona urbanistica precisi per punto
+  let prg_agent_data = null;
   if (lat !== null) {
     // WMS Mosaicatura PRG (Regione Piemonte) — funziona per tutti i comuni incluso Alessandria
     zona_urbanistica = await queryZonaUrbanisticaPiemonte(lat, lon, comune);
@@ -532,7 +535,45 @@ async function runAnalisiPiemonte({ comune, provincia, indirizzo, comuneLower, p
       zona_urbanistica.nota_prg = 'PRG comunale — verificare gli indici edilizi sulle NTA';
       zona_urbanistica.fonte_prg = 'Geoportale Piemonte';
     }
+
+    // ── PRG Agent esterno (shapefile Piemonte) ──
+    try {
+      const prgResp = await fetchWithTimeout(`${PRG_AGENT_URL}/query`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ comune: comuneLower, lat, lon }),
+      }, 15000);
+      if (prgResp.ok) {
+        const prg = await prgResp.json();
+        prg_agent_data = prg;
+        // Sovrascrivi zona_urbanistica con dati shapefile precisi
+        if (prg.zona_urbanistica) {
+          zona_urbanistica = {
+            disponibile: true,
+            destinazione: prg.zona_urbanistica.destinazione,
+            compromissione: prg.zona_urbanistica.compromissione,
+            caratteristica: prg.zona_urbanistica.caratteristica,
+            sigla_piano: prg.zona_urbanistica.sigla_piano || null,
+            area_zona_mq: prg.zona_urbanistica.area_mq,
+            messaggio: `${prg.zona_urbanistica.destinazione} — ${prg.zona_urbanistica.compromissione}${prg.zona_urbanistica.caratteristica ? ' — ' + prg.zona_urbanistica.caratteristica : ''}`,
+            fonte: prg.fonte,
+            fonte_ok: true,
+            link_prg_comunale: linkPrg,
+          };
+        }
+      }
+    } catch (e) {
+      console.error('PRG Agent non raggiungibile:', e);
+    }
   }
+
+  // Aggiungi vincoli e dati PRG Agent se disponibili
+  const prg_vincoli = prg_agent_data?.vincoli?.length > 0
+    ? prg_agent_data.vincoli.map(v => ({ codice: v.codice, descrizione: v.descrizione, gravita: v.gravita, fonte: 'PRG comunale — Mosaicatura Piemonte' }))
+    : null;
+  const prg_mod_intervento = prg_agent_data?.mod_intervento?.length > 0 ? prg_agent_data.mod_intervento : null;
+  const prg_caratt_storica = prg_agent_data?.caratt_storica?.length > 0 ? prg_agent_data.caratt_storica : null;
+  const prg_fonte = prg_agent_data?.fonte || null;
 
   return {
     coordinate: lat !== null ? { lat, lon } : null,
@@ -560,12 +601,16 @@ async function runAnalisiPiemonte({ comune, provincia, indirizzo, comuneLower, p
       },
       sismica: sismicaPiemonte,
       zona_urbanistica,
+      ...(prg_vincoli ? { vincoli_prg: prg_vincoli } : {}),
+      ...(prg_mod_intervento ? { mod_intervento: prg_mod_intervento } : {}),
+      ...(prg_caratt_storica ? { caratt_storica: prg_caratt_storica } : {}),
+      ...(prg_fonte ? { prg_fonte } : {}),
     },
     link_utili: {
       geoportale_piemonte: 'https://www.geoportale.piemonte.it',
       arpa_piemonte: 'https://webgis.arpa.piemonte.it',
     },
-    note_salvataggio: `WFS Piemonte completato il ${new Date().toLocaleDateString('it-IT')}. Frane PAI: ${paiFraneTotali}, Overpass ok: ${overpass_ok}, Laghi: ${lakes.length}.`,
+    note_salvataggio: `WFS Piemonte completato il ${new Date().toLocaleDateString('it-IT')}. Frane PAI: ${paiFraneTotali}, Overpass ok: ${overpass_ok}, PRG Agent: ${prg_agent_data ? 'ok' : 'n/d'}.`,
   };
 }
 

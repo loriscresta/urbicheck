@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
   Map, Shield, Droplets, Activity, ExternalLink, Train, Waves,
-  Loader2, CheckCircle2, AlertTriangle, Info, XCircle
+  Loader2, CheckCircle2, AlertTriangle, Info, XCircle, Building2
 } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { wfsLiguria } from "@/functions/wfsLiguria";
@@ -555,6 +555,88 @@ function PaiFraneCard({ data }) {
   );
 }
 
+// ── Vincoli PRG Comunale Card ──
+function VincoliPRGCard({ vincoli, mod_intervento, caratt_storica, fonte }) {
+  if (!vincoli?.length && !mod_intervento?.length && !caratt_storica?.length) return null;
+
+  const gravityConfig = {
+    alto:   { border: '#fca5a5', bg: '#fff7f7', badge: 'bg-red-100 text-red-800 border-red-200',    icon: '#dc2626' },
+    medio:  { border: '#fed7aa', bg: '#fff7ed', badge: 'bg-orange-100 text-orange-800 border-orange-200', icon: '#ea580c' },
+    info:   { border: '#C4BAA8', bg: '#F4EFE6', badge: 'bg-gray-100 text-gray-700 border-gray-300',  icon: '#7A7268' },
+  };
+
+  const topGravity = vincoli?.some(v => v.gravita === 'alto') ? 'alto'
+    : vincoli?.some(v => v.gravita === 'medio') ? 'medio' : 'info';
+  const cfg = gravityConfig[topGravity] || gravityConfig.info;
+
+  return (
+    <div style={{ border: `1px solid ${cfg.border}`, background: cfg.bg, gridColumn: 'span 2' }}>
+      <div className="flex items-start justify-between p-4 gap-3">
+        <div className="flex items-start gap-3">
+          <div style={{ width: 32, height: 32, background: topGravity === 'alto' ? '#fee2e2' : topGravity === 'medio' ? '#ffedd5' : '#F4EFE6', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <Building2 className="w-4 h-4" style={{ color: cfg.icon }} />
+          </div>
+          <div>
+            <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.7rem', fontWeight: 700, color: '#1C1A17', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+              Vincoli PRG Comunale
+            </p>
+            <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.58rem', color: '#7A7268', marginTop: 2 }}>
+              {fonte || 'PRG comunale — Mosaicatura Piemonte (shapefile)'}
+            </p>
+          </div>
+        </div>
+        {vincoli?.length > 0 && (
+          <Badge className={`text-[10px] whitespace-nowrap ${cfg.badge}`}>
+            {vincoli.length} vincolo{vincoli.length > 1 ? 'i' : ''}
+          </Badge>
+        )}
+      </div>
+
+      {vincoli?.length > 0 && (
+        <div style={{ borderTop: `1px solid ${cfg.border}`, padding: '0.75rem 1rem' }}>
+          <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.6rem', fontWeight: 700, color: '#7A7268', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '0.5rem' }}>Vincoli rilevati</p>
+          <div className="space-y-2">
+            {vincoli.map((v, i) => {
+              const vcfg = gravityConfig[v.gravita] || gravityConfig.info;
+              return (
+                <div key={i} className="flex items-start gap-2">
+                  <Badge className={`text-[9px] shrink-0 mt-0.5 ${vcfg.badge}`}>{v.gravita?.toUpperCase() || 'INFO'}</Badge>
+                  <div>
+                    {v.codice && <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.62rem', fontWeight: 700, color: '#1C1A17' }}>[{v.codice}] </span>}
+                    <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.62rem', color: '#1C1A17' }}>{v.descrizione}</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {mod_intervento?.length > 0 && (
+        <div style={{ borderTop: `1px solid ${cfg.border}`, padding: '0.75rem 1rem' }}>
+          <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.6rem', fontWeight: 700, color: '#7A7268', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '0.4rem' }}>Modalità di Intervento</p>
+          <div className="flex flex-wrap gap-1">
+            {mod_intervento.map((m, i) => (
+              <Badge key={i} variant="outline" className="text-[10px]">{m}</Badge>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {caratt_storica?.length > 0 && (
+        <div style={{ borderTop: `1px solid ${cfg.border}`, padding: '0.75rem 1rem' }}>
+          <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.6rem', fontWeight: 700, color: '#7A7268', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '0.4rem' }}>Caratterizzazione Storica</p>
+          <div className="flex flex-wrap gap-1">
+            {caratt_storica.map((c, i) => (
+              <Badge key={i} className="text-[10px] bg-amber-50 text-amber-800 border-amber-200">{c}</Badge>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main Panel ──
 const POLL_INTERVAL_MS = 3000;
 const POLL_TIMEOUT_MS = 120000; // 2 min max
@@ -771,6 +853,14 @@ export default function WfsLiguriaPanel({ query, onComplete }) {
             <FerroviaCard data={risultati?.vincolo_ferroviario} />
             <SismicaCard data={risultati?.sismica} />
             <ZonaUrbanisticaCard data={risultati?.zona_urbanistica} comuneNome={query?.comune} />
+            {isPiemonte && (risultati?.vincoli_prg || risultati?.mod_intervento || risultati?.caratt_storica) && (
+              <VincoliPRGCard
+                vincoli={risultati?.vincoli_prg}
+                mod_intervento={risultati?.mod_intervento}
+                caratt_storica={risultati?.caratt_storica}
+                fonte={risultati?.prg_fonte}
+              />
+            )}
           </div>
 
           {/* Disclaimer */}
