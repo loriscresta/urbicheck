@@ -19,9 +19,21 @@ Deno.serve(async (req) => {
       return Response.json({ skipped: true, reason: 'not a create event' });
     }
 
-    // ── Attendi 10 secondi: lascia il tempo a catasto_resolver di popolare ──
-    // centroid_lat/lng e regione sul record prima che wfsLiguria venga invocato.
-    await new Promise(r => setTimeout(r, 10000));
+    // ── Attendi che catasto_resolver completi: polling su codice_comune_catasto ──
+    // wfsLiguria NON deve partire finché codice_comune_catasto non è valorizzato.
+    // Max 60s di attesa (12 tentativi × 5s).
+    let codiceOk = false;
+    for (let i = 0; i < 12; i++) {
+      await new Promise(r => setTimeout(r, 5000));
+      try {
+        const check = await base44.asServiceRole.entities.CadastralQuery.filter({ id: entityId });
+        if (check[0]?.codice_comune_catasto) { codiceOk = true; break; }
+      } catch (_e) {}
+    }
+    if (!codiceOk) {
+      console.warn(`triggerWfsOnNewQuery: codice_comune_catasto mai valorizzato per ${entityId} dopo 60s — skip wfsLiguria`);
+      return Response.json({ skipped: true, reason: 'codice_comune_catasto not set after 60s' });
+    }
 
     // Re-fetch dati aggiornati dopo lo sleep
     const queries = await base44.asServiceRole.entities.CadastralQuery.filter({ id: entityId });

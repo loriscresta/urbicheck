@@ -120,7 +120,7 @@ function IndiceCard({ label, value, cduInfo, comune }) {
   );
 }
 
-export default function IndiciEdiliziSection({ indici, comune, delay = 0.08 }) {
+export default function IndiciEdiliziSection({ indici, comune, wfsZonaUrbanistica, delay = 0.08 }) {
   if (!indici) return null;
 
   const cduInfo = getCduLinks(comune);
@@ -134,6 +134,8 @@ export default function IndiciEdiliziSection({ indici, comune, delay = 0.08 }) {
   ].filter((f) => f.value);
 
   const anyPlaceholder = fields.some((f) => isPlaceholder(f.value));
+  // Link PRG da wfs_liguria zona_urbanistica (Piemonte)
+  const linkPrg = wfsZonaUrbanistica?.link_prg_comunale;
 
   return (
     <ReportSection icon={BarChart3} title="Indici Edilizi" delay={delay}>
@@ -147,6 +149,24 @@ export default function IndiciEdiliziSection({ indici, comune, delay = 0.08 }) {
               <> <a href={cduInfo.cdu} target="_blank" rel="noopener noreferrer" className="text-primary underline ml-1">Richiedi CDU →</a></>
             )}
           </p>
+        </div>
+      )}
+      {/* FIX 4 — CTA prominente PRG Piemonte se disponibile */}
+      {linkPrg && (
+        <div className="mb-4 p-4 rounded-lg border border-primary/30 bg-primary/5 flex flex-col sm:flex-row sm:items-start gap-3">
+          <div className="flex-1">
+            <p className="text-sm font-semibold" style={{ color: '#1A3A6B' }}>Consulta il PRG Comunale</p>
+            <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+              Nel PRG trovi: <strong>IF</strong> (Indice di Fabbricabilità), <strong>RC</strong> (Rapporto di Copertura),
+              <strong> H max</strong> (Altezza massima), distanze dai confini, destinazione d'uso specifica della zona.
+            </p>
+          </div>
+          <a href={linkPrg} target="_blank" rel="noopener noreferrer"
+            className="shrink-0 inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold rounded text-white"
+            style={{ background: '#1A3A6B', fontFamily: "'IBM Plex Mono', monospace" }}>
+            Consulta PRG Comunale →
+            <ExternalLink className="w-3 h-3" />
+          </a>
         </div>
       )}
       <div className="grid grid-cols-2 md:grid-cols-3 gap-4">

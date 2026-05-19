@@ -525,6 +525,13 @@ async function runAnalisiPiemonte({ comune, provincia, indirizzo, comuneLower, p
   if (lat !== null) {
     // WMS Mosaicatura PRG (Regione Piemonte) — funziona per tutti i comuni incluso Alessandria
     zona_urbanistica = await queryZonaUrbanisticaPiemonte(lat, lon, comune);
+    // FIX 4 — Arricchisci sempre con link PRG comunale dal geoportale Piemonte
+    const linkPrg = `https://www.geoportale.piemonte.it/geonetwork/srv/ita/catalog.search#/search?any=PRG+${encodeURIComponent(comune)}`;
+    zona_urbanistica.link_prg_comunale = linkPrg;
+    if (!zona_urbanistica.disponibile) {
+      zona_urbanistica.nota_prg = 'PRG comunale — verificare gli indici edilizi sulle NTA';
+      zona_urbanistica.fonte_prg = 'Geoportale Piemonte';
+    }
   }
 
   return {

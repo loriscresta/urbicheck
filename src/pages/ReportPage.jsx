@@ -466,7 +466,7 @@ export default function ReportPage() {
         {/* === SOLO SCHEDA COMPLETA === */}
 
         {/* Indici Edilizi */}
-        <IndiciEdiliziSection indici={r.indici_edilizi} comune={query.comune} delay={0.08} />
+        <IndiciEdiliziSection indici={r.indici_edilizi} comune={query.comune} wfsZonaUrbanistica={r.wfs_liguria?.risultati?.zona_urbanistica} delay={0.08} />
 
         {/* === VINCOLI E RISCHI — PIEMONTE (solo se regione Piemonte, dati da wfs_liguria) === */}
         {isPiemonte && query.report_data?.wfs_liguria && (
@@ -595,31 +595,19 @@ export default function ReportPage() {
           </motion.div>
         )}
 
-        {/* === MAPPA CATASTALE — da catasto_resolver (OnData + AdE WFS) === */}
-        {(query.centroid_lat || query.geometry_geojson || r.catasto_data?.lat) && (() => {
-          // PROBLEMA 2 FIX — leggi geometry_geojson direttamente dall'entity (campo top-level)
+        {/* === MAPPA CATASTALE — usa SEMPRE centroid_lat/lng dall'entity (fonte autoritativa) === */}
+        {(query.centroid_lat || query.centroid_lng) && (() => {
+          // FIX 2 — baricentro SEMPRE da entity.centroid_lat/lng, mai da wfs_liguria.coordinate
+          const mapLat = query.centroid_lat;
+          const mapLon = query.centroid_lng;
           const poly = query.geometry_geojson || r.catasto_data?.geojson_polygon;
-          // Preferisci centroid_lat/lng dall'entity (fonte autoritativa), poi catasto_data
-          let mapLat = query.centroid_lat || r.catasto_data?.lat;
-          let mapLon = query.centroid_lng || r.catasto_data?.lon;
-          let mapFonte = r.catasto_data?.fonte || 'OnData CC BY 4.0';
-          // Se abbiamo un poligono GeoJSON valido, calcola il baricentro
-          const polyGeom = poly?.type === 'Feature' ? poly.geometry : poly;
-          if (polyGeom?.type === 'Polygon' && polyGeom.coordinates?.[0]?.length) {
-            const ring = polyGeom.coordinates[0];
-            let sLon = 0, sLat = 0;
-            for (const [lo, la] of ring) { sLon += lo; sLat += la; }
-            mapLat = sLat / ring.length;
-            mapLon = sLon / ring.length;
-            mapFonte = 'WFS AdE — Agenzia delle Entrate';
-          }
-          if (!mapLat || !mapLon) return null;
+          const fonte = query.geometry_geojson ? 'WFS AdE — Agenzia delle Entrate' : (r.catasto_data?.fonte || 'OnData CC BY 4.0');
           return (
             <ReportSection icon={MapPin} title="Mappa Particella Catastale" delay={0.05}>
               <div className="mb-2 flex flex-wrap gap-4 text-xs text-muted-foreground">
                 <span>📍 WGS84: {mapLat?.toFixed(5)}, {mapLon?.toFixed(5)}</span>
                 {r.catasto_data?.inspire_id && <span>INSPIRE ID: {r.catasto_data.inspire_id}</span>}
-                <span className="italic">{mapFonte}</span>
+                <span className="italic">{fonte}</span>
               </div>
               <ParcellaMap
                 lat={mapLat}
