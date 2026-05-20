@@ -1,6 +1,6 @@
 /**
  * ParcellaMap — mappa Leaflet per particella catastale
- * Coordinate da query.centroid_lat / query.centroid_lng
+ * Coordinate da query.centroid_lat / query.centroid_lng con fallback chain.
  */
 import React, { useEffect, useRef, useState } from "react";
 
@@ -46,13 +46,16 @@ async function loadWFSParcel(map, L, centroLat, centroLon) {
   } catch (_e) { return false; }
 }
 
-export default function ParcellaMap({ lat, lon, foglio, particella, height = 420 }) {
+export default function ParcellaMap({ lat: latProp, lon: lonProp, query, foglio, particella, height = 420 }) {
   const mapRef = useRef(null);
   const leafletMapRef = useRef(null);
   const wfsCalledRef = useRef(false);
-  const [wfsOk, setWfsOk] = useState(null); // null | true | false
+  const [wfsOk, setWfsOk] = useState(null);
 
-  const validCoords = lat && lon && !isNaN(lat) && !isNaN(lon) && (lat !== 0 || lon !== 0);
+  // Fallback chain per le coordinate
+  const lat = latProp || query?.centroid_lat || query?.wfs_liguria?.lat || query?.report_data?.lat || null;
+  const lon = lonProp || query?.centroid_lng || query?.wfs_liguria?.lon || query?.report_data?.lon || null;
+  const validCoords = lat && lon && !isNaN(Number(lat)) && !isNaN(Number(lon)) && !(Number(lat) === 0 && Number(lon) === 0);
 
   useEffect(() => {
     if (!validCoords || !mapRef.current) return;
@@ -84,13 +87,11 @@ export default function ParcellaMap({ lat, lon, foglio, particella, height = 420
       });
       leafletMapRef.current = map;
 
-      // OSM base
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '© OpenStreetMap',
         maxZoom: 21,
       }).addTo(map);
 
-      // WMS AdE catastale
       L.tileLayer.wms('https://wms.cartografia.agenziaentrate.gov.it/inspire/wms/ows', {
         layers: 'CP.CadastralParcel',
         format: 'image/png',
@@ -101,7 +102,6 @@ export default function ParcellaMap({ lat, lon, foglio, particella, height = 420
         maxZoom: 21,
       }).addTo(map);
 
-      // Marker cerchio rosso centroide
       const icon = L.divIcon({
         className: '',
         html: `<div style="width:14px;height:14px;background:#e74c3c;border:2.5px solid white;border-radius:50%;box-shadow:0 2px 6px rgba(0,0,0,0.45);"></div>`,
@@ -109,9 +109,8 @@ export default function ParcellaMap({ lat, lon, foglio, particella, height = 420
       });
       L.marker([lat, lon], { icon })
         .addTo(map)
-        .bindPopup(`📍 Foglio ${foglio}, Particella ${particella}<br/>${lat.toFixed(5)}, ${lon.toFixed(5)}`);
+        .bindPopup(`📍 Foglio ${foglio}, Particella ${particella}<br/>${Number(lat).toFixed(5)}, ${Number(lon).toFixed(5)}`);
 
-      // WFS poligono vettoriale
       if (!wfsCalledRef.current) {
         wfsCalledRef.current = true;
         loadWFSParcel(map, L, lat, lon)
@@ -141,7 +140,6 @@ export default function ParcellaMap({ lat, lon, foglio, particella, height = 420
 
   return (
     <div style={{ border: '1px solid #C4BAA8', overflow: 'hidden' }}>
-      {/* Intestazione coordinate */}
       <div style={{
         padding: '4px 10px',
         background: '#F4EFE6',
@@ -150,13 +148,11 @@ export default function ParcellaMap({ lat, lon, foglio, particella, height = 420
         fontSize: '0.58rem',
         color: '#7A7268',
       }}>
-        📍 WGS84: {lat?.toFixed(5)}, {lon?.toFixed(5)} &nbsp;|&nbsp; OnData CC BY 4.0
+        📍 WGS84: {Number(lat).toFixed(5)}, {Number(lon).toFixed(5)} &nbsp;|&nbsp; OnData CC BY 4.0
       </div>
 
-      {/* Mappa */}
       <div ref={mapRef} style={{ height, width: '100%' }} />
 
-      {/* Footer */}
       <div style={{
         padding: '5px 10px',
         borderTop: '1px solid #C4BAA8',
@@ -175,12 +171,8 @@ export default function ParcellaMap({ lat, lon, foglio, particella, height = 420
           {wfsOk === true && ' | ✓ Poligono WFS AdE'}
           {' | © Leaflet | © OpenStreetMap | © Agenzia delle Entrate'}
         </span>
-        <a
-          href={ADE_GEOPORTALE_URL}
-          target="_blank"
-          rel="noopener noreferrer"
-          style={{ color: '#1A3A6B', whiteSpace: 'nowrap' }}
-        >
+        <a href={ADE_GEOPORTALE_URL} target="_blank" rel="noopener noreferrer"
+          style={{ color: '#1A3A6B', whiteSpace: 'nowrap' }}>
           🔗 Vedi su Geoportale AdE → (Foglio {foglio}, Part. {particella})
         </a>
       </div>

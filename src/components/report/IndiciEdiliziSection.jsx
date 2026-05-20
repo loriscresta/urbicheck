@@ -24,28 +24,19 @@ const INDICI_NTA = {
 };
 
 const CDU_LINKS = {
-  "alessandria": {
-    cdu: "https://www.comune.alessandria.it/index.php?id=551",
-    geoportale: "https://www.geoportale.piemonte.it/geonetwork/srv/ita/catalog.search#/search?any=PRGC+Alessandria",
-    piano: "PRGC — Piano Regolatore Generale Comunale di Alessandria",
-    sportello: "Piazza della Libertà 1, 15121 Alessandria — Tel. 0131 515111",
-  },
-  "torino": {
-    cdu: "https://www.comune.torino.it/urb/",
-    geoportale: "https://www.geoportale.piemonte.it/geonetwork/srv/ita/catalog.search#/search?any=PRG+Torino",
-    piano: "PRG — Piano Regolatore Generale",
-    sportello: "Ufficio Urbanistica, Torino",
-  },
-  "savona": {
-    cdu: "https://www.comune.savona.it/it/page/urbanistica",
-    geoportale: "https://geoportal.regione.liguria.it/",
-    piano: "PUC — Piano Urbanistico Comunale",
-    sportello: "UTC di Savona",
-  },
+  "Alessandria": "https://www.comune.alessandria.it/servizi/certificato-destinazione-urbanistica",
+  "Torino":      "https://www.comune.torino.it/suapps/sportello/sportello.shtml",
+  "Genova":      "https://servizionline.comune.genova.it/",
+  "La Spezia":   "https://www.comune.laspezia.it/servizi/certificato-destinazione-urbanistica/",
+  "Savona":      "https://www.comune.savona.it/it/servizi/urbanistica",
+  "Cuneo":       "https://www.comune.cuneo.it/urbanistica.html",
+  "Asti":        "https://www.comune.asti.it/urbanistica",
+  "Novara":      "https://www.comune.novara.it/it/certificato-destinazione-urbanistica",
 };
 
 function getCduLinks(comuneNome) {
-  return CDU_LINKS[(comuneNome || "").toLowerCase().trim()] || null;
+  if (!comuneNome) return null;
+  return CDU_LINKS[comuneNome] || CDU_LINKS[Object.keys(CDU_LINKS).find(k => k.toLowerCase() === comuneNome.toLowerCase().trim())] || null;
 }
 
 function getNtaData(comuneNome) {
@@ -91,9 +82,9 @@ function NtaFoundSection({ nta, comune, cduInfo, linkPrg }) {
         <p className="text-xs text-muted-foreground italic mb-3">{nta.note}</p>
       )}
       {cduInfo && (
-        <a href={cduInfo.cdu} target="_blank" rel="noopener noreferrer"
+        <a href={cduInfo} target="_blank" rel="noopener noreferrer"
           className="text-xs text-primary flex items-center gap-1 hover:underline">
-          <ExternalLink className="w-3 h-3" /> Richiedi CDU per conferma sub-zona →
+          <ExternalLink className="w-3 h-3" /> 🔗 Richiedi CDU al Comune di {comune} →
         </a>
       )}
       {linkPrg && !cduInfo && (
@@ -125,14 +116,14 @@ function NtaNotFoundSection({ comune, cduInfo, linkPrg }) {
       </div>
       <div className="flex flex-wrap gap-3 text-xs">
         {cduInfo ? (
-          <a href={cduInfo.cdu} target="_blank" rel="noopener noreferrer"
+          <a href={cduInfo} target="_blank" rel="noopener noreferrer"
             className="text-primary flex items-center gap-1 hover:underline font-medium">
-            <ExternalLink className="w-3 h-3" /> Richiedi CDU — {comune}
+            <ExternalLink className="w-3 h-3" /> 🔗 Richiedi CDU al Comune di {comune} →
           </a>
         ) : (
-          <a href={searchUrl} target="_blank" rel="noopener noreferrer"
+          <a href={`https://www.google.com/search?q=CDU+certificato+destinazione+urbanistica+${encodeURIComponent(comune || '')}`} target="_blank" rel="noopener noreferrer"
             className="text-primary flex items-center gap-1 hover:underline">
-            <ExternalLink className="w-3 h-3" /> Cerca sportello CDU — {comune}
+            <ExternalLink className="w-3 h-3" /> 🔗 Richiedi CDU al Comune di {comune} →
           </a>
         )}
         {linkPrg && (
