@@ -161,6 +161,23 @@ export default function ReportPage() {
   const r = query.report_data || {};
   const isAsta = query.finalita === "asta_giudiziaria";
 
+  // NTA lookup locale — stesso oggetto di IndiciEdiliziSection
+  const INDICI_NTA_LOCAL = {
+    "Alessandria": { IF: "2.0 m³/m²", Hmax: "10.5 m (≈ 3 piani)" },
+    "Torino":      { IF: "2.0 m³/m²", Hmax: "14.5 m (≈ 4 piani)" },
+    "Cuneo":       { IF: "1.5 m³/m²", Hmax: "9.0 m (≈ 3 piani)" },
+    "Asti":        { IF: "1.8 m³/m²", Hmax: "10.5 m" },
+    "Novara":      { IF: "2.0 m³/m²", Hmax: "12.0 m" },
+    "Vercelli":    { IF: "1.5 m³/m²", Hmax: "9.0 m" },
+    "Biella":      { IF: "1.5 m³/m²", Hmax: "9.0 m" },
+    "Verbania":    { IF: "1.5 m³/m²", Hmax: "9.0 m" },
+    "Genova":      { IF: "2.0 m³/m²", Hmax: "12.0 m" },
+    "La Spezia":   { IF: "1.8 m³/m²", Hmax: "10.5 m" },
+    "Savona":      { IF: "1.5 m³/m²", Hmax: "9.0 m" },
+    "Imperia":     { IF: "1.5 m³/m²", Hmax: "9.0 m" },
+  };
+  const ntaLocal = INDICI_NTA_LOCAL[query.comune] || null;
+
   // Dati sismici reali da WFS (override sull'AI che può sbagliare)
   const isPiemonte = (query.regione || '').toLowerCase().includes('piemonte');
   const isLiguria = (query.regione || '').toLowerCase().includes('liguria');
@@ -489,8 +506,8 @@ export default function ReportPage() {
             <DataRow label="Strumento Vigente" value={r.quadro_urbanistico.strumento_vigente} />
             <DataRow label="Zona Urbanistica" value={r.quadro_urbanistico.zona_urbanistica} />
             <DataRow label="Destinazione d'Uso" value={r.quadro_urbanistico.destinazione_uso} />
-            <DataRow label="Indice Edificabilità" value={r.quadro_urbanistico.indice_edificabilita} />
-            <DataRow label="Altezza Massima" value={r.quadro_urbanistico.altezza_massima} />
+            <DataRow label="Indice Edificabilità" value={ntaLocal?.IF || r.quadro_urbanistico.indice_edificabilita} />
+            <DataRow label="Altezza Massima" value={ntaLocal?.Hmax || r.quadro_urbanistico.altezza_massima} />
             <DataRow label="Distanze Minime" value={r.quadro_urbanistico.distanze_minime} />
             {r.quadro_urbanistico.note_urbanistiche && (
               <div className="mt-3 p-3 bg-muted/50 rounded-lg">
