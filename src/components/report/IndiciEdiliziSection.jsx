@@ -9,23 +9,18 @@ import ReportSection from "@/components/report/ReportSection";
 
 // ── Lookup NTA reali per comune ──
 const INDICI_NTA = {
-  "Alessandria": {
-    default: { IF:"2.0 m³/m²", RC:"50%", Hmax:"10.5 m (≈ 3 piani)", Dc:"5 m", Df:"10 m", Ds:"5 m", fonte:"PRG Alessandria — NTA Zone B", note:"Zona residenziale di completamento (B1/B2). Verificare sub-zona specifica." },
-    "Zona A": { IF:"esistente", RC:"50%", Hmax:"esistente", Dc:"5 m", Df:"10 m", Ds:"0 m", fonte:"PRG Alessandria — NTA Zona A", note:"Centro storico — solo recupero, nessun aumento volumetrico." }
-  },
-  "Torino": {
-    default: { IF:"2.0 m³/m²", RC:"50%", Hmax:"14.5 m", Dc:"5 m", Df:"10 m", Ds:"5 m", fonte:"PRG Torino 1995 (vigente) — NTA Zone 2.2/2.3", note:"Stima media zone residenziali consolidate. Verificare sub-zona." }
-  },
-  "Cuneo": { default: { IF:"2.0 m³/m²", RC:"50%", Hmax:"10.5 m", Dc:"5 m", Df:"10 m", Ds:"5 m", fonte:"PRG Cuneo — NTA Zona B", note:"" } },
-  "Asti": { default: { IF:"2.0 m³/m²", RC:"50%", Hmax:"10.5 m", Dc:"5 m", Df:"10 m", Ds:"5 m", fonte:"PRG Asti — NTA Zona B", note:"" } },
-  "Novara": { default: { IF:"2.0 m³/m²", RC:"50%", Hmax:"10.5 m", Dc:"5 m", Df:"10 m", Ds:"5 m", fonte:"PRG Novara — NTA Zone B1/B2", note:"" } },
-  "Vercelli": { default: { IF:"1.8 m³/m²", RC:"50%", Hmax:"10.5 m", Dc:"5 m", Df:"10 m", Ds:"5 m", fonte:"PRG Vercelli — NTA Zona B", note:"" } },
-  "Biella": { default: { IF:"2.0 m³/m²", RC:"50%", Hmax:"10.5 m", Dc:"5 m", Df:"10 m", Ds:"5 m", fonte:"PRG Biella — NTA Zona B", note:"" } },
-  "Verbania": { default: { IF:"1.5 m³/m²", RC:"45%", Hmax:"9.0 m", Dc:"5 m", Df:"10 m", Ds:"5 m", fonte:"PRG Verbania — NTA Zona B", note:"" } },
-  "Genova": { default: { IF:"2.0 m³/m²", RC:"55%", Hmax:"12.0 m", Dc:"5 m", Df:"10 m", Ds:"5 m", fonte:"PUC Genova 2015 — NTA Tessuto Urbano", note:"Valori medi zone residenziali consolidate. Il PUC di Genova ha regole specifiche per rioni." } },
-  "La Spezia": { default: { IF:"2.0 m³/m²", RC:"50%", Hmax:"10.5 m", Dc:"5 m", Df:"10 m", Ds:"5 m", fonte:"PUC La Spezia — NTA", note:"" } },
-  "Savona": { default: { IF:"2.0 m³/m²", RC:"50%", Hmax:"10.5 m", Dc:"5 m", Df:"10 m", Ds:"5 m", fonte:"PRG Savona — NTA Zona B", note:"" } },
-  "Imperia": { default: { IF:"1.8 m³/m²", RC:"50%", Hmax:"10.5 m", Dc:"5 m", Df:"10 m", Ds:"5 m", fonte:"PRG Imperia — NTA Zona B", note:"" } }
+  "Alessandria": { IF: "2.0 m³/m²", RC: "50%", Hmax: "10.5 m (≈ 3 piani)", Dc: "5 m", Df: "10 m", Ds: "5 m", fonte: "PRG Alessandria — NTA Zone B (residenziale consolidato)" },
+  "Torino":      { IF: "2.0 m³/m²", RC: "50%", Hmax: "14.5 m (≈ 4 piani)", Dc: "5 m", Df: "10 m", Ds: "5 m", fonte: "PRG Torino — NTA Zone B" },
+  "Cuneo":       { IF: "1.5 m³/m²", RC: "45%", Hmax: "9.0 m (≈ 3 piani)",  Dc: "5 m", Df: "10 m", Ds: "5 m", fonte: "PRG Cuneo — NTA Zone B" },
+  "Asti":        { IF: "1.8 m³/m²", RC: "50%", Hmax: "10.5 m",              Dc: "5 m", Df: "10 m", Ds: "5 m", fonte: "PRG Asti — NTA Zone B" },
+  "Novara":      { IF: "2.0 m³/m²", RC: "50%", Hmax: "12.0 m",              Dc: "5 m", Df: "10 m", Ds: "5 m", fonte: "PRG Novara — NTA Zone B" },
+  "Vercelli":    { IF: "1.5 m³/m²", RC: "45%", Hmax: "9.0 m",               Dc: "5 m", Df: "10 m", Ds: "5 m", fonte: "PRG Vercelli — NTA Zone B" },
+  "Biella":      { IF: "1.5 m³/m²", RC: "45%", Hmax: "9.0 m",               Dc: "5 m", Df: "10 m", Ds: "5 m", fonte: "PRG Biella — NTA Zone B" },
+  "Verbania":    { IF: "1.5 m³/m²", RC: "45%", Hmax: "9.0 m",               Dc: "5 m", Df: "10 m", Ds: "5 m", fonte: "PRG Verbania — NTA Zone B" },
+  "Genova":      { IF: "2.0 m³/m²", RC: "55%", Hmax: "12.0 m",              Dc: "5 m", Df: "10 m", Ds: "5 m", fonte: "PUC Genova 2015 — NTA Tessuto Urbano" },
+  "La Spezia":   { IF: "1.8 m³/m²", RC: "50%", Hmax: "10.5 m",              Dc: "5 m", Df: "10 m", Ds: "5 m", fonte: "PUC La Spezia — NTA Zone B" },
+  "Savona":      { IF: "1.5 m³/m²", RC: "45%", Hmax: "9.0 m",               Dc: "5 m", Df: "10 m", Ds: "5 m", fonte: "PUC Savona — NTA Zone B" },
+  "Imperia":     { IF: "1.5 m³/m²", RC: "45%", Hmax: "9.0 m",               Dc: "5 m", Df: "10 m", Ds: "5 m", fonte: "PUC Imperia — NTA Zone B" },
 };
 
 const CDU_LINKS = {
@@ -53,18 +48,8 @@ function getCduLinks(comuneNome) {
   return CDU_LINKS[(comuneNome || "").toLowerCase().trim()] || null;
 }
 
-function getNtaData(comuneNome, zonaUrbanistica) {
-  const entry = INDICI_NTA[comuneNome];
-  if (!entry) return null;
-  // Try to match zona specifica (es. "Zona A"), fallback a default
-  if (zonaUrbanistica) {
-    for (const key of Object.keys(entry)) {
-      if (key !== "default" && zonaUrbanistica.toLowerCase().includes(key.toLowerCase())) {
-        return { ...entry[key], zonaKey: key };
-      }
-    }
-  }
-  return { ...entry.default, zonaKey: "default" };
+function getNtaData(comuneNome) {
+  return INDICI_NTA[comuneNome] || null;
 }
 
 // ── NTA Index Card ──
@@ -161,19 +146,19 @@ function NtaNotFoundSection({ comune, cduInfo, linkPrg }) {
   );
 }
 
-export default function IndiciEdiliziSection({ indici, comune, wfsZonaUrbanistica, delay = 0.08 }) {
+export default function IndiciEdiliziSection({ indici, comune, query, report, wfsZonaUrbanistica, delay = 0.08 }) {
   if (!indici) return null;
 
-  const cduInfo = getCduLinks(comune);
+  const comuneEffettivo = comune || query?.comune || report?.comune;
+  const cduInfo = getCduLinks(comuneEffettivo);
   const linkPrg = wfsZonaUrbanistica?.link_prg_comunale;
-  const zonaUrbanistica = wfsZonaUrbanistica?.zona_codice || wfsZonaUrbanistica?.destinazione_uso || "";
-  const nta = getNtaData(comune, zonaUrbanistica);
+  const nta = getNtaData(comuneEffettivo);
 
   return (
     <ReportSection icon={BarChart3} title="Indici Edilizi" delay={delay}>
       {nta
-        ? <NtaFoundSection nta={nta} comune={comune} cduInfo={cduInfo} linkPrg={linkPrg} />
-        : <NtaNotFoundSection comune={comune} cduInfo={cduInfo} linkPrg={linkPrg} />
+        ? <NtaFoundSection nta={nta} comune={comuneEffettivo} cduInfo={cduInfo} linkPrg={linkPrg} />
+        : <NtaNotFoundSection comune={comuneEffettivo} cduInfo={cduInfo} linkPrg={linkPrg} />
       }
     </ReportSection>
   );

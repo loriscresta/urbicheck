@@ -17,18 +17,18 @@ import { Badge } from "@/components/ui/badge";
 
 // ── Lookup PAI pre-calcolato per comune ──
 const PAI_COMUNI = {
-  "Alessandria": { frane:"P1-P2", frane_label:"Basso-moderato", alluvioni:"H2-H3", alluvioni_label:"Medio-alto (fascia C PSFF — Piano Stralcio Fasce Fluviali Po)", note:"Comune attraversato da Tanaro e Bormida. Alcune aree in fascia di inondazione catastrofica (F8C). Verifica puntuale obbligatoria.", link:"https://webgis.arpa.piemonte.it", regione:"Piemonte" },
-  "Torino": { frane:"P0-P1", frane_label:"Assente-basso (pianura)", alluvioni:"H1-H2", alluvioni_label:"Basso-medio (fascia Po)", note:"Zona prevalentemente pianeggiante.", link:"https://webgis.arpa.piemonte.it", regione:"Piemonte" },
-  "Cuneo": { frane:"P1", frane_label:"Basso-moderato", alluvioni:"H1-H2", alluvioni_label:"Basso", note:"", link:"https://webgis.arpa.piemonte.it", regione:"Piemonte" },
-  "Asti": { frane:"P1-P2", frane_label:"Basso-moderato (colline astigiane)", alluvioni:"H2", alluvioni_label:"Medio (Tanaro)", note:"", link:"https://webgis.arpa.piemonte.it", regione:"Piemonte" },
-  "Novara": { frane:"P0", frane_label:"Assente (pianura padana)", alluvioni:"H1", alluvioni_label:"Basso", note:"", link:"https://webgis.arpa.piemonte.it", regione:"Piemonte" },
-  "Vercelli": { frane:"P0", frane_label:"Assente", alluvioni:"H1-H2", alluvioni_label:"Basso-medio (Sesia)", note:"", link:"https://webgis.arpa.piemonte.it", regione:"Piemonte" },
-  "Biella": { frane:"P2-P3", frane_label:"Moderato-elevato (area prealpina)", alluvioni:"H2", alluvioni_label:"Medio", note:"Verifica puntuale essenziale per i versanti.", link:"https://webgis.arpa.piemonte.it", regione:"Piemonte" },
-  "Verbania": { frane:"P2-P3", frane_label:"Moderato-elevato (Lago Maggiore)", alluvioni:"H1", alluvioni_label:"Basso", note:"Versanti ripidi — verifica puntuale necessaria.", link:"https://webgis.arpa.piemonte.it", regione:"Piemonte" },
-  "Genova": { frane:"P2-P3", frane_label:"Moderato-elevato (versanti appenninici)", alluvioni:"H2-H3", alluvioni_label:"Medio-alto ⚠️ (Bisagno, Polcevera, Fereggiano)", note:"ATTENZIONE: Genova ha elevato rischio idrogeologico. Verifica puntuale su portale ARIA Liguria sempre necessaria.", link:"https://geoportal.regione.liguria.it/", regione:"Liguria" },
-  "La Spezia": { frane:"P1-P2", frane_label:"Basso-moderato", alluvioni:"H1-H2", alluvioni_label:"Basso-medio", note:"", link:"https://geoportal.regione.liguria.it/", regione:"Liguria" },
-  "Savona": { frane:"P1-P2", frane_label:"Basso-moderato", alluvioni:"H1", alluvioni_label:"Basso", note:"", link:"https://geoportal.regione.liguria.it/", regione:"Liguria" },
-  "Imperia": { frane:"P1-P2", frane_label:"Basso-moderato", alluvioni:"H1", alluvioni_label:"Basso", note:"", link:"https://geoportal.regione.liguria.it/", regione:"Liguria" }
+  "Alessandria": { frane: "P1-P2", frane_label: "Basso-moderato", alluvioni: "H2-H3", alluvioni_label: "Medio-alto (fascia C PSFF)", note: "Comune attraversato da Tanaro e Bormida. Verificare fascia B/C PSFF per la particella specifica.", link: "https://webgis.arpa.piemonte.it", regione: "Piemonte" },
+  "Torino": { frane: "P0-P1", frane_label: "Basso (pianura)", alluvioni: "H1-H2", alluvioni_label: "Basso-medio (Po)", note: "Torino in pianura. Rischio frana molto basso. Verificare fascia Po per immobili vicini al fiume.", link: "https://webgis.arpa.piemonte.it", regione: "Piemonte" },
+  "Cuneo": { frane: "P1-P2", frane_label: "Basso-moderato", alluvioni: "H1-H2", alluvioni_label: "Basso-medio", note: "Area pedemontana. Verificare posizione rispetto a torrenti alpini.", link: "https://webgis.arpa.piemonte.it", regione: "Piemonte" },
+  "Asti": { frane: "P1", frane_label: "Basso", alluvioni: "H2", alluvioni_label: "Medio (Tanaro)", note: "Verificare fascia Tanaro per immobili vicini al fiume.", link: "https://webgis.arpa.piemonte.it", regione: "Piemonte" },
+  "Novara": { frane: "P0", frane_label: "Trascurabile (pianura)", alluvioni: "H1-H2", alluvioni_label: "Basso-medio", note: "Novara in pianura padana, rischio frana trascurabile.", link: "https://webgis.arpa.piemonte.it", regione: "Piemonte" },
+  "Vercelli": { frane: "P0", frane_label: "Trascurabile (pianura)", alluvioni: "H2", alluvioni_label: "Medio (Po/Sesia)", note: "Pianura. Verificare fasce Po e Sesia.", link: "https://webgis.arpa.piemonte.it", regione: "Piemonte" },
+  "Biella": { frane: "P2-P3", frane_label: "Moderato-elevato (versanti prealpini)", alluvioni: "H2", alluvioni_label: "Medio", note: "ATTENZIONE: Biella ha versanti con rischio frana significativo. Verificare posizione.", link: "https://webgis.arpa.piemonte.it", regione: "Piemonte" },
+  "Verbania": { frane: "P2", frane_label: "Moderato (versanti lago)", alluvioni: "H1-H2", alluvioni_label: "Basso-medio", note: "Lago Maggiore — verificare vincolo lacustre e versanti.", link: "https://webgis.arpa.piemonte.it", regione: "Piemonte" },
+  "Genova": { frane: "P2-P3", frane_label: "Moderato-elevato (Appennino)", alluvioni: "H2-H3", alluvioni_label: "Medio-alto", note: "ATTENZIONE: Genova ha elevato rischio idrogeologico. Verificare sempre su geoportale.", link: "https://geoportal.regione.liguria.it/geoviewer/", regione: "Liguria" },
+  "La Spezia": { frane: "P1-P2", frane_label: "Basso-moderato", alluvioni: "H1-H2", alluvioni_label: "Basso-medio", note: "Verificare posizione rispetto ai torrenti locali.", link: "https://geoportal.regione.liguria.it/geoviewer/", regione: "Liguria" },
+  "Savona": { frane: "P2", frane_label: "Moderato", alluvioni: "H2", alluvioni_label: "Medio", note: "Versanti appenninici. Verificare su geoportale Liguria.", link: "https://geoportal.regione.liguria.it/geoviewer/", regione: "Liguria" },
+  "Imperia": { frane: "P1-P2", frane_label: "Basso-moderato", alluvioni: "H1-H2", alluvioni_label: "Basso-medio", note: "Verificare torrenti locali.", link: "https://geoportal.regione.liguria.it/geoviewer/", regione: "Liguria" }
 };
 
 function getPaiColor(code) {
