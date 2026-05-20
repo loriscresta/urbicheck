@@ -105,18 +105,17 @@ function wgs84ToEpsg3003(lon, lat) {
   return { x: Math.round(x), y: Math.round(y) };
 }
 
-// ============================================================
-// GEOCODING — Nominatim OSM con fallback robusto
-// ============================================================
-const CAPOLUOGHI_FALLBACK = {
+// ── Coordinate capoluoghi — fallback finale ──
+const CAPOLUOGHI = {
   piemonte: { lat: 45.0703, lon: 7.6869 },
   liguria:  { lat: 44.4056, lon: 8.9463 },
 };
 
+// ============================================================
+// GEOCODING — Nominatim OSM con doppio fallback + capoluogo
+// ============================================================
 async function geocodeAddress(indirizzo, comune, provincia, regione) {
   const regioneLabel = regione || 'Italy';
-  const regioneLower = regioneLabel.toLowerCase();
-
   // Pulisci l'indirizzo: rimuovi designatori di piano e interni
   const indirizzoClean = indirizzo
     ? indirizzo
@@ -127,50 +126,37 @@ async function geocodeAddress(indirizzo, comune, provincia, regione) {
         .trim()
     : null;
 
-  const headers = { 'User-Agent': 'URBICHECK/1.0 (info@urbicheck.it)', 'Accept': 'application/json' };
+  const HEADERS = { 'User-Agent': 'URBICHECK/1.0 (info@urbicheck.it)', 'Accept': 'application/json' };
 
-  // Tentativo 1: indirizzo completo
-  if (indirizzoClean) {
-    try {
-      const q = `${indirizzoClean}, ${comune}, ${regioneLabel}, Italy`;
-      const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=1&addressdetails=1`;
-      const res = await fetchWithTimeout(url, { headers }, 12000);
-      const text = await res.text();
-      if (text.trim().startsWith('[')) {
-        const data = JSON.parse(text);
-        if (data.length > 0) return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) };
-      }
-    } catch (_e) { /* fallthrough */ }
-    await sleep(300);
-  }
-
-  // Tentativo 2: solo comune + regione
+  // Tentativo 1 — con indirizzo completo (o solo comune+regione se no indirizzo)
+  const q1 = indirizzoClean
+    ? `${indirizzoClean}, ${comune}, ${regioneLabel}, Italy`
+    : `${comune}, ${regioneLabel}, Italy`;
   try {
-    const url = `https://nominatim.openstreetmap.org/search?city=${encodeURIComponent(comune)}&state=${encodeURIComponent(regioneLabel)}&country=Italy&format=json&limit=1`;
-    const res = await fetchWithTimeout(url, { headers }, 12000);
-    const text = await res.text();
-    if (text.trim().startsWith('[')) {
-      const data = JSON.parse(text);
-      if (data.length > 0) return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) };
+    const url1 = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q1)}&format=json&limit=1&addressdetails=1`;
+    const res1 = await fetchWithTimeout(url1, { headers: HEADERS }, 10000);
+    const text1 = await res1.text();
+    const data1 = JSON.parse(text1);
+    if (Array.isArray(data1) && data1.length > 0) {
+      return { lat: parseFloat(data1[0].lat), lon: parseFloat(data1[0].lon) };
     }
-  } catch (_e) { /* fallthrough */ }
+  } catch (_e) { /* try fallback */ }
 
-  // Tentativo 3: query semplice comune
+  // Tentativo 2 — solo comune + regione
   try {
-    const q = `${comune}, Italy`;
-    const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=1`;
-    const res = await fetchWithTimeout(url, { headers }, 10000);
-    const text = await res.text();
-    if (text.trim().startsWith('[')) {
-      const data = JSON.parse(text);
-      if (data.length > 0) return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) };
+    const url2 = `https://nominatim.openstreetmap.org/search?city=${encodeURIComponent(comune)}&state=${encodeURIComponent(regioneLabel)}&country=Italy&format=json&limit=1`;
+    const res2 = await fetchWithTimeout(url2, { headers: HEADERS }, 10000);
+    const text2 = await res2.text();
+    const data2 = JSON.parse(text2);
+    if (Array.isArray(data2) && data2.length > 0) {
+      return { lat: parseFloat(data2[0].lat), lon: parseFloat(data2[0].lon) };
     }
-  } catch (_e) { /* fallthrough */ }
+  } catch (_e) { /* try capoluogo */ }
 
-  // Fallback finale: capoluogo di regione
-  const fallback = CAPOLUOGHI_FALLBACK[regioneLower] || CAPOLUOGHI_FALLBACK.piemonte;
-  console.warn(`Geocoding fallback capoluogo per ${comune} (${regioneLabel})`);
-  return { lat: fallback.lat, lon: fallback.lon };
+  // Fallback finale — coordinate capoluogo di regione
+  const regioneLower = (regione || '').toLowerCase();
+  const fallback = CAPOLUOGHI[regioneLower.includes('piemonte') ? 'piemonte' : 'liguria'];
+  return { lat: fallback.lat, lon: fallback.lon, isFallbackCapoluogo: true };
 }
 
 // ============================================================
@@ -758,7 +744,7 @@ Deno.serve(async (req) => {
           wfs_liguria: risultato,
         },
       };
-      // Aggiorna SEMPRE centroid se ora disponibile
+      // Aggiorna SEMPRE centroid se ora disponibile (sovrascrive anche valori precedenti per correggere geocoding rotto)
       if (finalCentroidLat !== null) {
         updatePayload.centroid_lat = finalCentroidLat;
       }

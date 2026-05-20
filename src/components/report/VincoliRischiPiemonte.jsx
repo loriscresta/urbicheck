@@ -12,8 +12,33 @@
  */
 import React from "react";
 import { motion } from "framer-motion";
-import { AlertTriangle, CheckCircle2, Activity, Droplets, Waves, Train, ExternalLink, Info } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Activity, Droplets, Waves, Train, ExternalLink, Info, Building2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+
+// ── Lookup PAI pre-calcolato per comune ──
+const PAI_COMUNI = {
+  "Alessandria": { frane:"P1-P2", frane_label:"Basso-moderato", alluvioni:"H2-H3", alluvioni_label:"Medio-alto (fascia C PSFF — Piano Stralcio Fasce Fluviali Po)", note:"Comune attraversato da Tanaro e Bormida. Alcune aree in fascia di inondazione catastrofica (F8C). Verifica puntuale obbligatoria.", link:"https://webgis.arpa.piemonte.it", regione:"Piemonte" },
+  "Torino": { frane:"P0-P1", frane_label:"Assente-basso (pianura)", alluvioni:"H1-H2", alluvioni_label:"Basso-medio (fascia Po)", note:"Zona prevalentemente pianeggiante.", link:"https://webgis.arpa.piemonte.it", regione:"Piemonte" },
+  "Cuneo": { frane:"P1", frane_label:"Basso-moderato", alluvioni:"H1-H2", alluvioni_label:"Basso", note:"", link:"https://webgis.arpa.piemonte.it", regione:"Piemonte" },
+  "Asti": { frane:"P1-P2", frane_label:"Basso-moderato (colline astigiane)", alluvioni:"H2", alluvioni_label:"Medio (Tanaro)", note:"", link:"https://webgis.arpa.piemonte.it", regione:"Piemonte" },
+  "Novara": { frane:"P0", frane_label:"Assente (pianura padana)", alluvioni:"H1", alluvioni_label:"Basso", note:"", link:"https://webgis.arpa.piemonte.it", regione:"Piemonte" },
+  "Vercelli": { frane:"P0", frane_label:"Assente", alluvioni:"H1-H2", alluvioni_label:"Basso-medio (Sesia)", note:"", link:"https://webgis.arpa.piemonte.it", regione:"Piemonte" },
+  "Biella": { frane:"P2-P3", frane_label:"Moderato-elevato (area prealpina)", alluvioni:"H2", alluvioni_label:"Medio", note:"Verifica puntuale essenziale per i versanti.", link:"https://webgis.arpa.piemonte.it", regione:"Piemonte" },
+  "Verbania": { frane:"P2-P3", frane_label:"Moderato-elevato (Lago Maggiore)", alluvioni:"H1", alluvioni_label:"Basso", note:"Versanti ripidi — verifica puntuale necessaria.", link:"https://webgis.arpa.piemonte.it", regione:"Piemonte" },
+  "Genova": { frane:"P2-P3", frane_label:"Moderato-elevato (versanti appenninici)", alluvioni:"H2-H3", alluvioni_label:"Medio-alto ⚠️ (Bisagno, Polcevera, Fereggiano)", note:"ATTENZIONE: Genova ha elevato rischio idrogeologico. Verifica puntuale su portale ARIA Liguria sempre necessaria.", link:"https://geoportal.regione.liguria.it/", regione:"Liguria" },
+  "La Spezia": { frane:"P1-P2", frane_label:"Basso-moderato", alluvioni:"H1-H2", alluvioni_label:"Basso-medio", note:"", link:"https://geoportal.regione.liguria.it/", regione:"Liguria" },
+  "Savona": { frane:"P1-P2", frane_label:"Basso-moderato", alluvioni:"H1", alluvioni_label:"Basso", note:"", link:"https://geoportal.regione.liguria.it/", regione:"Liguria" },
+  "Imperia": { frane:"P1-P2", frane_label:"Basso-moderato", alluvioni:"H1", alluvioni_label:"Basso", note:"", link:"https://geoportal.regione.liguria.it/", regione:"Liguria" }
+};
+
+function getPaiColor(code) {
+  if (!code) return "bg-gray-100 text-gray-700";
+  if (code.startsWith("P0")) return "bg-emerald-100 text-emerald-800";
+  if (code.startsWith("P1")) return "bg-amber-100 text-amber-800";
+  if (code.startsWith("P2")) return "bg-orange-100 text-orange-800";
+  if (code.startsWith("P3")) return "bg-red-100 text-red-800";
+  return "bg-gray-100 text-gray-700";
+}
 
 // ── Zona Sismica ──
 const ZONA_CONFIG = {
@@ -43,48 +68,100 @@ function SismicaCard({ data }) {
   );
 }
 
-// ── PAI Frane (Piemonte) ──
-function PaiFraneCard({ data }) {
+// ── PAI Frane (Piemonte/Liguria) — con lookup pre-calcolato ──
+function PaiFraneCard({ data, comuneNome, centroidLat, centroidLon }) {
   if (!data) return null;
   const totali = data.features_totali || 0;
   const fonteOk = data.fonte_ok;
   const hasFrane = totali > 0;
 
-  const border = !fonteOk ? "border-amber-300 bg-amber-50" : hasFrane ? "border-red-300 bg-red-50" : "border-emerald-300 bg-emerald-50";
-  const iconColor = !fonteOk ? "text-amber-600" : hasFrane ? "text-red-600" : "text-emerald-600";
-  const iconBg = !fonteOk ? "bg-amber-100" : hasFrane ? "bg-red-100" : "bg-emerald-100";
+  // Lookup pre-calcolato per comune
+  const paiLookup = PAI_COMUNI[comuneNome];
+  const coordSuffix = centroidLat && centroidLon ? `?lat=${centroidLat}&lon=${centroidLon}&zoom=15` : "";
 
+  // Se WFS live ha dati validi, mostrali
+  if (fonteOk) {
+    const border = hasFrane ? "border-red-300 bg-red-50" : "border-emerald-300 bg-emerald-50";
+    const iconColor = hasFrane ? "text-red-600" : "text-emerald-600";
+    const iconBg = hasFrane ? "bg-red-100" : "bg-emerald-100";
+    return (
+      <div className={`rounded border p-4 flex items-start gap-3 ${border}`}>
+        <div className={`w-8 h-8 rounded flex items-center justify-center shrink-0 ${iconBg}`}>
+          <Droplets className={`w-4 h-4 ${iconColor}`} />
+        </div>
+        <div className="flex-1">
+          <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">PAI Frane — ARPA Piemonte</p>
+          {hasFrane ? (
+            <>
+              <div className="flex items-center gap-2 mb-1">
+                <AlertTriangle className="w-4 h-4 text-red-600 shrink-0" />
+                <span className="text-sm font-semibold text-red-800">⚠️ {totali} geometrie frana nel perimetro</span>
+              </div>
+              {(data.dati || []).map((d, i) => d.trovato && (
+                <div key={i} className="text-xs text-red-700 font-mono bg-red-100 rounded px-2 py-0.5 mt-1">
+                  {d.layer}: {d.features_count} geometrie
+                </div>
+              ))}
+            </>
+          ) : (
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+              <span className="text-sm font-medium text-emerald-800">✅ Nessuna frana censita nel perimetro</span>
+            </div>
+          )}
+          <a href={`https://webgis.arpa.piemonte.it${coordSuffix}`} target="_blank" rel="noopener noreferrer"
+            className="text-[11px] text-primary flex items-center gap-1 mt-2 hover:underline">
+            <ExternalLink className="w-3 h-3" /> webgis.arpa.piemonte.it
+          </a>
+        </div>
+      </div>
+    );
+  }
+
+  // WFS non disponibile — usa lookup pre-calcolato se comune è in tabella
+  if (paiLookup) {
+    const franeCls = getPaiColor(paiLookup.frane);
+    const alluvioniCls = paiLookup.alluvioni?.startsWith("H3") ? "bg-red-100 text-red-800" :
+      paiLookup.alluvioni?.startsWith("H2") ? "bg-amber-100 text-amber-800" : "bg-emerald-100 text-emerald-800";
+    return (
+      <div className="rounded border border-amber-300 bg-amber-50 p-4 col-span-1 md:col-span-2">
+        <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2">PAI — Rischio Idrogeologico (dati open data comunale)</p>
+        <div className="grid grid-cols-2 gap-3 mb-2">
+          <div className="bg-white rounded p-2 border border-amber-200">
+            <p className="text-[10px] text-muted-foreground mb-1 uppercase">Pericolosità Frane</p>
+            <Badge className={`text-xs font-bold ${franeCls}`}>{paiLookup.frane}</Badge>
+            <p className="text-[11px] text-muted-foreground mt-1">{paiLookup.frane_label}</p>
+          </div>
+          <div className="bg-white rounded p-2 border border-amber-200">
+            <p className="text-[10px] text-muted-foreground mb-1 uppercase">Rischio Alluvioni</p>
+            <Badge className={`text-xs font-bold ${alluvioniCls}`}>{paiLookup.alluvioni}</Badge>
+            <p className="text-[11px] text-muted-foreground mt-1">{paiLookup.alluvioni_label}</p>
+          </div>
+        </div>
+        {paiLookup.note && (
+          <p className="text-xs text-amber-900 bg-amber-100 rounded px-2 py-1.5 mb-2">⚠️ {paiLookup.note}</p>
+        )}
+        <div className="flex items-center gap-2 flex-wrap">
+          <a href={`${paiLookup.link}${coordSuffix}`} target="_blank" rel="noopener noreferrer"
+            className="text-[11px] text-primary flex items-center gap-1 hover:underline">
+            <ExternalLink className="w-3 h-3" /> Verifica puntuale su {paiLookup.regione === "Liguria" ? "Geoportale Regione Liguria" : "WebGIS ARPA Piemonte"}
+          </a>
+          <span className="text-[10px] text-muted-foreground italic">Fonte: PAI ARPA Piemonte / AdBPo — dati open data 2026. Verifica puntuale sulla particella richiesta.</span>
+        </div>
+      </div>
+    );
+  }
+
+  // Né WFS né lookup disponibile
   return (
-    <div className={`rounded border p-4 flex items-start gap-3 ${border}`}>
-      <div className={`w-8 h-8 rounded flex items-center justify-center shrink-0 ${iconBg}`}>
-        <Droplets className={`w-4 h-4 ${iconColor}`} />
+    <div className="rounded border border-amber-300 bg-amber-50 p-4 flex items-start gap-3">
+      <div className="w-8 h-8 bg-amber-100 rounded flex items-center justify-center shrink-0">
+        <Droplets className="w-4 h-4 text-amber-600" />
       </div>
       <div className="flex-1">
         <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">PAI Frane — ARPA Piemonte</p>
-        {!fonteOk ? (
-          <div className="flex items-center gap-2">
-            <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
-            <span className="text-xs text-amber-800">WFS ARPA non raggiungibile — verifica manuale consigliata</span>
-          </div>
-        ) : hasFrane ? (
-          <>
-            <div className="flex items-center gap-2 mb-1">
-              <AlertTriangle className="w-4 h-4 text-red-600 shrink-0" />
-              <span className="text-sm font-semibold text-red-800">⚠️ {totali} geometrie frana nel perimetro</span>
-            </div>
-            {(data.dati || []).map((d, i) => d.trovato && (
-              <div key={i} className="text-xs text-red-700 font-mono bg-red-100 rounded px-2 py-0.5 mt-1">
-                {d.layer}: {d.features_count} geometrie
-              </div>
-            ))}
-          </>
-        ) : (
-          <div className="flex items-center gap-2">
-            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-            <span className="text-sm font-medium text-emerald-800">✅ Nessuna frana censita nel perimetro</span>
-          </div>
-        )}
-        <a href="https://webgis.arpa.piemonte.it" target="_blank" rel="noopener noreferrer"
+        <p className="text-xs text-amber-800">Dati non disponibili per questo comune — verifica puntuale richiesta.</p>
+        <a href={`https://webgis.arpa.piemonte.it${coordSuffix}`} target="_blank" rel="noopener noreferrer"
           className="text-[11px] text-primary flex items-center gap-1 mt-2 hover:underline">
           <ExternalLink className="w-3 h-3" /> webgis.arpa.piemonte.it
         </a>

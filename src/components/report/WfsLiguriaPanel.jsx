@@ -828,7 +828,7 @@ export default function WfsLiguriaPanel({ query, onComplete }) {
               </>
             )}
             {wfsData.geocoding_error && (
-              <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.6rem', color: '#7A7268', fontStyle: 'italic' }}>
+              <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.6rem', color: '#B33A2A' }}>
                 ⚠ Posizione non disponibile per questa analisi
               </span>
             )}

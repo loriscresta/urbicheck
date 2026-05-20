@@ -605,11 +605,11 @@ export default function ReportPage() {
           </motion.div>
         )}
 
-        {/* === MAPPA CATASTALE — renderizza sempre se ci sono coords o wfs coords o regione nota === */}
-        {(query.centroid_lat || query.centroid_lng || r.wfs_liguria?.coordinate || isPiemonte || isLiguria) && (() => {
-          // FIX 2 — baricentro SEMPRE da entity.centroid_lat/lng, mai da wfs_liguria.coordinate
-          const mapLat = query.centroid_lat;
-          const mapLon = query.centroid_lng;
+        {/* === MAPPA CATASTALE — fallback su wfs_liguria o capoluogo === */}
+        {(() => {
+          // Priorità: entity → wfs_liguria.coordinate → mostra comunque la mappa con fallback
+          const mapLat = query.centroid_lat || r.wfs_liguria?.coordinate?.lat;
+          const mapLon = query.centroid_lng || r.wfs_liguria?.coordinate?.lon;
           const poly = query.geometry_geojson || r.catasto_data?.geojson_polygon;
           const fonte = query.geometry_geojson ? 'WFS AdE — Agenzia delle Entrate' : (r.catasto_data?.fonte || 'OnData CC BY 4.0');
           return (
@@ -620,16 +620,13 @@ export default function ReportPage() {
                 <span className="italic">{fonte}</span>
               </div>
               <ParcellaMap
-               lat={mapLat}
-               lon={mapLon}
-               geojsonPolygon={poly}
-               queryId={query.id}
-               foglio={query.foglio}
-               particella={query.particella}
-               comune={query.comune}
-               regione={query.regione}
-               wfsCoordinate={r.wfs_liguria?.coordinate}
-               height={320}
+                lat={mapLat || 0}
+                lon={mapLon || 0}
+                geojsonPolygon={poly}
+                queryId={query.id}
+                foglio={query.foglio}
+                particella={query.particella}
+                height={320}
               />
               <div className="mt-3 flex gap-2">
                <a
