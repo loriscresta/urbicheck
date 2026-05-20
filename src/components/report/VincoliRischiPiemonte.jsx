@@ -292,18 +292,51 @@ function FerroviaCard({ data }) {
   );
 }
 
+// ── Vincoli PRG Mosaicatura ──
+function VincoliPRGCard({ vincoli }) {
+  if (!vincoli?.length) return null;
+  const gravityConfig = {
+    alto:  { cls: "bg-red-100 text-red-800 border-red-200",    text: "text-red-800" },
+    medio: { cls: "bg-orange-100 text-orange-800 border-orange-200", text: "text-orange-800" },
+    info:  { cls: "bg-gray-100 text-gray-700 border-gray-300", text: "text-gray-700" },
+  };
+  return (
+    <div className="rounded border border-primary/30 bg-primary/5 p-4 col-span-1 md:col-span-2">
+      <div className="flex items-center gap-2 mb-3">
+        <Building2 className="w-4 h-4 text-primary shrink-0" />
+        <p className="text-[10px] font-bold uppercase tracking-widest text-primary">Vincoli PRG rilevati dalla Mosaicatura Regionale</p>
+      </div>
+      <div className="space-y-2">
+        {vincoli.map((v, i) => {
+          const cfg = gravityConfig[v.gravita] || gravityConfig.info;
+          return (
+            <div key={i} className="flex items-start gap-2">
+              <Badge className={`text-[9px] shrink-0 mt-0.5 border ${cfg.cls}`}>{v.gravita?.toUpperCase() || "INFO"}</Badge>
+              <div>
+                {v.codice && <span className="text-xs font-bold text-foreground">[{v.codice}] </span>}
+                <span className={`text-xs ${cfg.text}`}>{v.descrizione}</span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <p className="text-[10px] text-muted-foreground italic mt-3">Fonte: Mosaicatura PRG — Regione Piemonte (shapefile BDTRE)</p>
+    </div>
+  );
+}
+
 // ── Main ──
 export default function VincoliRischiPiemonte({ query }) {
-  // Legge i dati già calcolati server-side da wfsLiguria
   const wfsData = query?.report_data?.wfs_liguria;
   const risultati = wfsData?.risultati;
+  const comuneNome = query?.comune;
+  const centroidLat = query?.centroid_lat;
+  const centroidLon = query?.centroid_lng;
 
-  if (!risultati) {
-    // Dati non ancora disponibili — il WfsLiguriaPanel sotto mostrerà il loader
-    return null;
-  }
+  if (!risultati) return null;
 
   const vincolo_lacustre = risultati?.vincoli_paesaggistici_ope_legis?.vincolo_lacustre;
+  const vincoliPRG = risultati?.vincoli_prg?.length > 0 ? risultati.vincoli_prg : null;
 
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
@@ -314,10 +347,11 @@ export default function VincoliRischiPiemonte({ query }) {
       </div>
       <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-3 bg-card">
         <SismicaCard data={risultati?.sismica} />
-        <PaiFraneCard data={risultati?.pai_rischio_idrogeologico} />
+        <PaiFraneCard data={risultati?.pai_rischio_idrogeologico} comuneNome={comuneNome} centroidLat={centroidLat} centroidLon={centroidLon} />
         {vincolo_lacustre && <LagoCard data={vincolo_lacustre} />}
         <CorsiAcquaCard data={risultati?.vincolo_corsi_acqua} />
         <FerroviaCard data={risultati?.vincolo_ferroviario} />
+        {vincoliPRG && <VincoliPRGCard vincoli={vincoliPRG} />}
       </div>
     </motion.div>
   );
