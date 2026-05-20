@@ -1,175 +1,83 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef } from "react";
 
-export default function ParcellaMap({ query, foglio, particella, height = 420 }) {
-  const mapDivRef = useRef(null);
+export default function ParcellaMap({ query }) {
+  const lat = parseFloat(query?.centroid_lat) || null;
+  const lon = parseFloat(query?.centroid_lng) || null;
+  const foglio = query?.foglio || '';
+  const particella = query?.particella || '';
+  const geomJson = query?.geometry_geojson || null;
+  const hasCoords = lat && lon && lat > 0 && lon > 0;
+
+  const mapContainerRef = useRef(null);
   const leafletMapRef = useRef(null);
-  const [mapReady, setMapReady] = useState(false);
-  const [wfsOk, setWfsOk] = useState(false);
-  const [polygonSource, setPolygonSource] = useState(null);
 
-  const lat = parseFloat(query?.centroid_lat);
-  const lon = parseFloat(query?.centroid_lng);
-  const validCoords = !isNaN(lat) && !isNaN(lon) && lat !== 0 && lon !== 0;
-
-  // Init mappa
   useEffect(() => {
-    if (!validCoords || !mapDivRef.current || leafletMapRef.current) return;
+    if (!hasCoords || !mapContainerRef.current) return;
+    if (leafletMapRef.current) { leafletMapRef.current.remove(); leafletMapRef.current = null; }
 
-    const init = () => {
+    const initMap = () => {
       const L = window.L;
-      if (!mapDivRef.current || leafletMapRef.current) return;
+      if (!L) return;
 
-      const map = L.map(mapDivRef.current, {
-        center: [lat, lon],
-        zoom: 17,
-        zoomControl: true,
-        scrollWheelZoom: false,
-      });
+      const map = L.map(mapContainerRef.current).setView([lat, lon], 17);
       leafletMapRef.current = map;
 
-      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-        attribution: "© OpenStreetMap",
-        maxZoom: 21,
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap contributors'
       }).addTo(map);
 
-      L.tileLayer.wms("https://wms.cartografia.agenziaentrate.gov.it/inspire/wms/ows", {
-        layers: "CP.CadastralParcel",
-        format: "image/png",
+      L.tileLayer.wms('https://wms.cartografia.agenziaentrate.gov.it/inspire/wms/ows', {
+        layers: 'CP.CadastralParcel',
+        format: 'image/png',
         transparent: true,
-        version: "1.3.0",
-        opacity: 0.7,
-        attribution: "© Agenzia delle Entrate",
-        maxZoom: 21,
+        opacity: 0.65
       }).addTo(map);
 
-      // Disegna geometry_geojson se disponibile
-      const geom = query?.geometry_geojson;
-      if (geom && geom.geometry && geom.geometry.coordinates) {
-        const layer = L.geoJSON(geom, {
-          style: { color: '#c0392b', weight: 3, fillColor: '#e74c3c', fillOpacity: 0.35, dashArray: null },
+      if (geomJson && geomJson.geometry) {
+        const geomLayer = L.geoJSON(geomJson, {
+          style: { color: '#c0392b', weight: 3, fillColor: '#e74c3c', fillOpacity: 0.4 }
         }).addTo(map);
-        try { map.fitBounds(layer.getBounds(), { maxZoom: 18, padding: [40, 40] }); } catch (_e) {}
-        setPolygonSource('osm');
+        map.fitBounds(geomLayer.getBounds(), { maxZoom: 18, padding: [40, 40] });
+      } else {
+        L.circleMarker([lat, lon], { radius: 9, color: '#c0392b', fillColor: '#e74c3c', fillOpacity: 0.85, weight: 2 }).addTo(map);
       }
-
-      L.circleMarker([lat, lon], {
-        radius: 8,
-        color: "#c0392b",
-        fillColor: "#e74c3c",
-        fillOpacity: 0.8,
-        weight: 2,
-      })
-        .addTo(map)
-        .bindPopup(`📍 Foglio ${foglio || "—"}, Particella ${particella || "—"}`);
-
-      setMapReady(true);
     };
 
     if (window.L) {
-      init();
+      initMap();
     } else {
       if (!document.querySelector('link[href*="leaflet"]')) {
-        const link = document.createElement("link");
-        link.rel = "stylesheet";
-        link.href = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
+        const link = document.createElement('link');
+        link.rel = 'stylesheet';
+        link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
         document.head.appendChild(link);
       }
-      const script = document.createElement("script");
-      script.src = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
-      script.onload = init;
+      const script = document.createElement('script');
+      script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+      script.onload = initMap;
       document.head.appendChild(script);
     }
 
-    return () => {
-      if (leafletMapRef.current) {
-        leafletMapRef.current.remove();
-        leafletMapRef.current = null;
-      }
-    };
+    return () => { if (leafletMapRef.current) { leafletMapRef.current.remove(); leafletMapRef.current = null; } };
   }, [lat, lon]);
 
-  // WFS BBOX — carica poligoni dopo che la mappa è pronta
-  useEffect(() => {
-    if (!mapReady || !leafletMapRef.current || !lat || !lon) return;
-    const map = leafletMapRef.current;
-    const L = window.L;
-
-    (async () => {
-      try {
-        const d = 0.0018;
-        const url = `https://wfs.cartografia.agenziaentrate.gov.it/inspire/wfs/ows?SERVICE=WFS&VERSION=2.0.0&REQUEST=GetFeature&TYPENAMES=CP:CadastralParcel&BBOX=${lon - d},${lat - d},${lon + d},${lat + d},EPSG:4326&SRSNAME=EPSG:4326&outputFormat=application/json&COUNT=30`;
-        const ctrl = new AbortController();
-        setTimeout(() => ctrl.abort(), 8000);
-        const res = await fetch(url, { signal: ctrl.signal });
-        if (!res.ok) return;
-        const data = await res.json();
-        if (!data.features?.length) return;
-
-        let best = null, minD = Infinity;
-        data.features.forEach(f => {
-          const coords = f.geometry?.type === "Polygon"
-            ? f.geometry.coordinates[0]
-            : f.geometry?.coordinates?.[0]?.[0];
-          if (!coords?.length) return;
-          const avgLon = coords.reduce((s, c) => s + c[0], 0) / coords.length;
-          const avgLat = coords.reduce((s, c) => s + c[1], 0) / coords.length;
-          const dd = (avgLon - lon) ** 2 + (avgLat - lat) ** 2;
-          if (dd < minD) { minD = dd; best = f; }
-        });
-
-        L.geoJSON({ type: "FeatureCollection", features: data.features }, {
-          style: { color: "#94a3b8", weight: 1, fillColor: "#e2e8f0", fillOpacity: 0.2 },
-        }).addTo(map);
-
-        if (best) {
-          const hl = L.geoJSON(best, {
-            style: { color: "#c0392b", weight: 3, fillColor: "#e74c3c", fillOpacity: 0.45 },
-          }).addTo(map);
-          try { map.fitBounds(hl.getBounds(), { maxZoom: 18, padding: [40, 40] }); } catch (_e) {}
-          setWfsOk(true);
-        }
-      } catch (_e) { /* fallback silenzioso */ }
-    })();
-  }, [mapReady, lat, lon]);
-
-  if (!validCoords) {
-    return (
-      <div style={{ border: "1px solid #C4BAA8", background: "#F4EFE6", padding: "1rem 1.25rem" }}>
-        <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: "0.7rem", color: "#7A7268" }}>
-          📍 Posizione non disponibile — Foglio {foglio || "—"}, Particella {particella || "—"}
-        </p>
-      </div>
-    );
-  }
+  if (!hasCoords) return (
+    <div className="p-4 text-gray-500">
+      <p>📍 Posizione non disponibile — Foglio {foglio}, Particella {particella}</p>
+      <a href="https://geoportale.cartografia.agenziaentrate.gov.it" target="_blank" className="text-blue-600 text-sm">Vedi su Geoportale AdE →</a>
+    </div>
+  );
 
   return (
-    <div style={{ border: "1px solid #C4BAA8", overflow: "hidden" }}>
-      <div style={{
-        padding: "4px 10px",
-        background: "#F4EFE6",
-        borderBottom: "1px solid #C4BAA8",
-        fontFamily: "'IBM Plex Mono', monospace",
-        fontSize: "0.58rem",
-        color: "#7A7268",
-      }}>
-        📍 WGS84: {lat.toFixed(6)}, {lon.toFixed(6)} &nbsp;|&nbsp; OnData CC BY 4.0
+    <div className="space-y-2">
+      <p className="text-sm text-gray-600">📍 WGS84: {lat?.toFixed(5)}, {lon?.toFixed(5)} &nbsp; <span className="italic">OnData CC BY 4.0</span></p>
+      <div ref={mapContainerRef} style={{ height: '420px', width: '100%', borderRadius: '8px', border: '1px solid #e5e7eb' }} />
+      <div className="text-xs text-gray-400">
+        {geomJson ? `📐 Footprint edificio (OSM) — ` : ''}{`Foglio ${foglio}, Part. ${particella} | © Leaflet | © OpenStreetMap | © Agenzia delle Entrate`}
       </div>
-      <div ref={mapDivRef} style={{ height, width: "100%" }} />
-      <div style={{
-        padding: "5px 10px",
-        borderTop: "1px solid #C4BAA8",
-        background: "#F4EFE6",
-        fontFamily: "'IBM Plex Mono', monospace",
-        fontSize: "0.56rem",
-        color: "#7A7268",
-      }}>
-        {polygonSource === 'osm'
-          ? `📐 Footprint edificio (OSM) — perimetro catastale esatto su WFS AdE | Foglio ${foglio}, Part. ${particella}`
-          : wfsOk
-          ? `✓ Poligono AdE — Foglio ${foglio}, Part. ${particella}`
-          : `Foglio ${foglio}, Part. ${particella} | © Leaflet | © OpenStreetMap | © Agenzia delle Entrate`
-        }
-      </div>
+      <a href={`https://geoportale.cartografia.agenziaentrate.gov.it/age-inspire/srv/ita/catalog.search`} target="_blank" className="text-blue-600 text-sm">
+        🔗 Vedi su Geoportale AdE → (Foglio {foglio}, Part. {particella})
+      </a>
     </div>
   );
 }
