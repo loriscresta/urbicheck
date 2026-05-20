@@ -1,75 +1,61 @@
 /**
  * ParcellaMap — mappa Leaflet per particella catastale
- * Tenta WFS AdE BBOX browser-side; fallback WMS tiles + marker puntuale.
+ * Coordinate da query.centroid_lat / query.centroid_lng
  */
 import React, { useEffect, useRef, useState } from "react";
 
 const ADE_GEOPORTALE_URL = "https://www.agenziaentrate.gov.it/portale/web/guest/schede/fabbricatiterreni/consultazione-cartografia-catastale/servizio-consultazione-cartografia";
 
-async function loadWFSParcelBBOX(map, L, centroLat, centroLon) {
+async function loadWFSParcel(map, L, centroLat, centroLon) {
   try {
     const delta = 0.0018;
-    const minLon = (centroLon - delta).toFixed(7);
-    const maxLon = (centroLon + delta).toFixed(7);
-    const minLat = (centroLat - delta).toFixed(7);
-    const maxLat = (centroLat + delta).toFixed(7);
-
-    const url = `https://wfs.cartografia.agenziaentrate.gov.it/inspire/wfs/ows?SERVICE=WFS&VERSION=2.0.0&REQUEST=GetFeature&TYPENAMES=CP:CadastralParcel&BBOX=${minLon},${minLat},${maxLon},${maxLat},EPSG:4326&SRSNAME=EPSG:4326&outputFormat=application/json&COUNT=30`;
-
+    const url = `https://wfs.cartografia.agenziaentrate.gov.it/inspire/wfs/ows?SERVICE=WFS&VERSION=2.0.0&REQUEST=GetFeature&TYPENAMES=CP:CadastralParcel&BBOX=${centroLon - delta},${centroLat - delta},${centroLon + delta},${centroLat + delta},EPSG:4326&SRSNAME=EPSG:4326&outputFormat=application/json&COUNT=30`;
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 8000);
+    setTimeout(() => controller.abort(), 8000);
     const res = await fetch(url, { signal: controller.signal });
-    clearTimeout(timeout);
-
     if (!res.ok) return false;
     const data = await res.json();
     if (!data.features || data.features.length === 0) return false;
 
-    // Trova la feature più vicina al centroide
-    let closestFeature = null;
-    let minDist = Infinity;
+    let closestFeature = null, minDist = Infinity;
     data.features.forEach(f => {
       if (f.geometry) {
         const coords = f.geometry.type === 'Polygon'
           ? f.geometry.coordinates[0]
-          : f.geometry.coordinates[0][0];
-        if (coords && coords.length > 0) {
+          : (f.geometry.coordinates[0] || [])[0] || [];
+        if (coords.length > 0) {
           const avgLon = coords.reduce((s, c) => s + c[0], 0) / coords.length;
           const avgLat = coords.reduce((s, c) => s + c[1], 0) / coords.length;
-          const dist = Math.pow(avgLon - centroLon, 2) + Math.pow(avgLat - centroLat, 2);
-          if (dist < minDist) { minDist = dist; closestFeature = f; }
+          const d = Math.pow(avgLon - centroLon, 2) + Math.pow(avgLat - centroLat, 2);
+          if (d < minDist) { minDist = d; closestFeature = f; }
         }
       }
     });
 
-    // Disegna tutte le particelle in grigio chiaro
     L.geoJSON({ type: 'FeatureCollection', features: data.features }, {
       style: { color: '#94a3b8', weight: 1, fillColor: '#cbd5e1', fillOpacity: 0.15 },
     }).addTo(map);
 
-    // Evidenzia la particella più vicina
     if (closestFeature) {
-      const highlight = L.geoJSON(closestFeature, {
+      const hl = L.geoJSON(closestFeature, {
         style: { color: '#c0392b', weight: 3, fillColor: '#e74c3c', fillOpacity: 0.4 },
       }).addTo(map);
-      try { map.fitBounds(highlight.getBounds(), { maxZoom: 18, padding: [40, 40] }); } catch (_e) {}
-      return true;
+      try { map.fitBounds(hl.getBounds(), { maxZoom: 18, padding: [40, 40] }); } catch (_e) {}
     }
-  } catch (_e) {}
-  return false;
+    return true;
+  } catch (_e) { return false; }
 }
 
-export default function ParcellaMap({ lat, lon, geojsonPolygon, foglio, particella, height = 280 }) {
+export default function ParcellaMap({ lat, lon, foglio, particella, height = 420 }) {
   const mapRef = useRef(null);
   const leafletMapRef = useRef(null);
   const wfsCalledRef = useRef(false);
-  const [wfsStatus, setWfsStatus] = useState(null); // null | 'success' | 'fallback'
+  const [wfsOk, setWfsOk] = useState(null); // null | true | false
 
-  const polyGeom = geojsonPolygon?.type === 'Feature' ? geojsonPolygon?.geometry : geojsonPolygon;
-  const hasDbPolygon = polyGeom?.type === 'Polygon' || polyGeom?.type === 'MultiPolygon';
+  const validCoords = lat && lon && !isNaN(lat) && !isNaN(lon) && (lat !== 0 || lon !== 0);
 
   useEffect(() => {
-    if (!lat || !lon || !mapRef.current) return;
+    if (!validCoords || !mapRef.current) return;
     if (leafletMapRef.current) return;
 
     const loadLeaflet = () => new Promise((resolve) => {
@@ -92,7 +78,7 @@ export default function ParcellaMap({ lat, lon, geojsonPolygon, foglio, particel
 
       const map = L.map(mapRef.current, {
         center: [lat, lon],
-        zoom: 18,
+        zoom: 17,
         zoomControl: true,
         scrollWheelZoom: false,
       });
@@ -100,56 +86,37 @@ export default function ParcellaMap({ lat, lon, geojsonPolygon, foglio, particel
 
       // OSM base
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+        attribution: '© OpenStreetMap',
         maxZoom: 21,
       }).addTo(map);
 
-      // WMS catastale AdE — visibile solo a zoom >= 16
-      const wmsLayer = L.tileLayer.wms('https://wms.cartografia.agenziaentrate.gov.it/inspire/wms', {
+      // WMS AdE catastale
+      L.tileLayer.wms('https://wms.cartografia.agenziaentrate.gov.it/inspire/wms/ows', {
         layers: 'CP.CadastralParcel',
         format: 'image/png',
         transparent: true,
         version: '1.3.0',
-        opacity: 0.6,
+        opacity: 0.7,
         attribution: '© Agenzia delle Entrate',
         maxZoom: 21,
-      });
-      const toggleWms = () => {
-        if (map.getZoom() >= 16) {
-          if (!map.hasLayer(wmsLayer)) wmsLayer.addTo(map);
-        } else {
-          if (map.hasLayer(wmsLayer)) map.removeLayer(wmsLayer);
-        }
-      };
-      map.on('zoomend', toggleWms);
-      toggleWms();
+      }).addTo(map);
 
-      // Marker centroide (sempre)
+      // Marker cerchio rosso centroide
       const icon = L.divIcon({
         className: '',
-        html: `<div style="width:12px;height:12px;background:#1A3A6B;border:2px solid #B33A2A;border-radius:50%;box-shadow:0 2px 6px rgba(0,0,0,0.4);"></div>`,
-        iconSize: [12, 12], iconAnchor: [6, 6],
+        html: `<div style="width:14px;height:14px;background:#e74c3c;border:2.5px solid white;border-radius:50%;box-shadow:0 2px 6px rgba(0,0,0,0.45);"></div>`,
+        iconSize: [14, 14], iconAnchor: [7, 7],
       });
       L.marker([lat, lon], { icon })
         .addTo(map)
-        .bindPopup(`📍 Foglio ${foglio}, Particella ${particella}`);
+        .bindPopup(`📍 Foglio ${foglio}, Particella ${particella}<br/>${lat.toFixed(5)}, ${lon.toFixed(5)}`);
 
-      // Poligono dal DB se presente
-      if (hasDbPolygon) {
-        const layer = L.geoJSON(polyGeom, {
-          style: { color: '#1A3A6B', weight: 2.5, fillColor: '#1A3A6B', fillOpacity: 0.30 },
-        }).addTo(map);
-        try { map.fitBounds(layer.getBounds(), { padding: [40, 40], maxZoom: 20 }); } catch (_e) {}
-        setWfsStatus('success');
-        return;
-      }
-
-      // Tenta WFS BBOX
+      // WFS poligono vettoriale
       if (!wfsCalledRef.current) {
         wfsCalledRef.current = true;
-        loadWFSParcelBBOX(map, L, lat, lon)
-          .then(ok => setWfsStatus(ok ? 'success' : 'fallback'))
-          .catch(() => setWfsStatus('fallback'));
+        loadWFSParcel(map, L, lat, lon)
+          .then(ok => setWfsOk(ok))
+          .catch(() => setWfsOk(false));
       }
     });
 
@@ -161,41 +128,61 @@ export default function ParcellaMap({ lat, lon, geojsonPolygon, foglio, particel
     };
   }, [lat, lon]);
 
-  if (!lat || !lon) return (
-    <div style={{ border: '1px solid #C4BAA8', background: '#F4EFE6', padding: '1rem 1.25rem' }}>
-      <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.7rem', color: '#7A7268' }}>
-        📍 Posizione non disponibile{foglio && particella ? ` — Foglio ${foglio}, Particella ${particella}` : ''}
-      </p>
-    </div>
-  );
+  if (!validCoords) {
+    return (
+      <div style={{ border: '1px solid #C4BAA8', background: '#F4EFE6', padding: '1rem 1.25rem' }}>
+        <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.7rem', color: '#7A7268' }}>
+          📍 Posizione non disponibile
+          {foglio && particella ? ` — Foglio ${foglio}, Particella ${particella}` : ''}
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div style={{ border: '1px solid #C4BAA8', overflow: 'hidden' }}>
+      {/* Intestazione coordinate */}
+      <div style={{
+        padding: '4px 10px',
+        background: '#F4EFE6',
+        borderBottom: '1px solid #C4BAA8',
+        fontFamily: "'IBM Plex Mono', monospace",
+        fontSize: '0.58rem',
+        color: '#7A7268',
+      }}>
+        📍 WGS84: {lat?.toFixed(5)}, {lon?.toFixed(5)} &nbsp;|&nbsp; OnData CC BY 4.0
+      </div>
+
+      {/* Mappa */}
       <div ref={mapRef} style={{ height, width: '100%' }} />
+
+      {/* Footer */}
       <div style={{
         padding: '5px 10px',
         borderTop: '1px solid #C4BAA8',
         background: '#F4EFE6',
         fontFamily: "'IBM Plex Mono', monospace",
-        fontSize: '0.58rem',
+        fontSize: '0.56rem',
         color: '#7A7268',
         display: 'flex',
         alignItems: 'center',
-        gap: '0.5rem',
+        justifyContent: 'space-between',
         flexWrap: 'wrap',
+        gap: '0.5rem',
       }}>
-        {wfsStatus === 'success'
-          ? `✓ Poligono catastale AdE — Foglio ${foglio}, Part. ${particella}`
-          : wfsStatus === 'fallback'
-            ? <>
-                <span>Foglio {foglio}, Part. {particella} — Poligono non disponibile</span>
-                <a href={ADE_GEOPORTALE_URL} target="_blank" rel="noopener noreferrer"
-                  style={{ color: '#1A3A6B' }}>
-                  → Geoportale AdE
-                </a>
-              </>
-            : `Foglio ${foglio}, Part. ${particella} — caricamento poligono…`
-        }
+        <span>
+          Foglio {foglio}, Part. {particella}
+          {wfsOk === true && ' | ✓ Poligono WFS AdE'}
+          {' | © Leaflet | © OpenStreetMap | © Agenzia delle Entrate'}
+        </span>
+        <a
+          href={ADE_GEOPORTALE_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{ color: '#1A3A6B', whiteSpace: 'nowrap' }}
+        >
+          🔗 Vedi su Geoportale AdE → (Foglio {foglio}, Part. {particella})
+        </a>
       </div>
     </div>
   );
