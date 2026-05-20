@@ -605,8 +605,8 @@ export default function ReportPage() {
           </motion.div>
         )}
 
-        {/* === MAPPA CATASTALE — usa SEMPRE centroid_lat/lng dall'entity (fonte autoritativa) === */}
-        {(query.centroid_lat || query.centroid_lng) && (() => {
+        {/* === MAPPA CATASTALE — renderizza sempre se ci sono coords o wfs coords o regione nota === */}
+        {(query.centroid_lat || query.centroid_lng || r.wfs_liguria?.coordinate || isPiemonte || isLiguria) && (() => {
           // FIX 2 — baricentro SEMPRE da entity.centroid_lat/lng, mai da wfs_liguria.coordinate
           const mapLat = query.centroid_lat;
           const mapLon = query.centroid_lng;
@@ -626,6 +626,9 @@ export default function ReportPage() {
                queryId={query.id}
                foglio={query.foglio}
                particella={query.particella}
+               comune={query.comune}
+               regione={query.regione}
+               wfsCoordinate={r.wfs_liguria?.coordinate}
                height={320}
               />
               <div className="mt-3 flex gap-2">

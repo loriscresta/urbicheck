@@ -106,12 +106,18 @@ function wgs84ToEpsg3003(lon, lat) {
 }
 
 // ============================================================
-// GEOCODING
+// GEOCODING — Nominatim OSM con fallback robusto
 // ============================================================
+const CAPOLUOGHI_FALLBACK = {
+  piemonte: { lat: 45.0703, lon: 7.6869 },
+  liguria:  { lat: 44.4056, lon: 8.9463 },
+};
+
 async function geocodeAddress(indirizzo, comune, provincia, regione) {
   const regioneLabel = regione || 'Italy';
-  // Pulisci l'indirizzo: rimuovi designatori di piano (Piano T, Piano R, Piano 1...) e interni
-  // Es. "CORSO MONFERRATO n. 103 Piano T" → "CORSO MONFERRATO n. 103"
+  const regioneLower = regioneLabel.toLowerCase();
+
+  // Pulisci l'indirizzo: rimuovi designatori di piano e interni
   const indirizzoClean = indirizzo
     ? indirizzo
         .replace(/\s+[Pp]iano\s+(?:[TtRrSsBb]|[0-9]+)\b.*/i, '')
@@ -120,14 +126,51 @@ async function geocodeAddress(indirizzo, comune, provincia, regione) {
         .replace(/\s+[Ss]cala\s+\w+.*/i, '')
         .trim()
     : null;
-  const q = indirizzoClean
-    ? `${indirizzoClean}, ${comune}, ${provincia}, ${regioneLabel}, Italy`
-    : `${comune}, ${provincia}, ${regioneLabel}, Italy`;
-  const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=1`;
-  const res = await fetchWithTimeout(url, { headers: { 'User-Agent': 'URBICHECK/1.0 (info@urbicheck.it)' } }, 10000);
-  const data = await res.json();
-  if (!data.length) throw new Error(`Geocoding: nessun risultato per "${q}"`);
-  return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) };
+
+  const headers = { 'User-Agent': 'URBICHECK/1.0 (info@urbicheck.it)', 'Accept': 'application/json' };
+
+  // Tentativo 1: indirizzo completo
+  if (indirizzoClean) {
+    try {
+      const q = `${indirizzoClean}, ${comune}, ${regioneLabel}, Italy`;
+      const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=1&addressdetails=1`;
+      const res = await fetchWithTimeout(url, { headers }, 12000);
+      const text = await res.text();
+      if (text.trim().startsWith('[')) {
+        const data = JSON.parse(text);
+        if (data.length > 0) return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) };
+      }
+    } catch (_e) { /* fallthrough */ }
+    await sleep(300);
+  }
+
+  // Tentativo 2: solo comune + regione
+  try {
+    const url = `https://nominatim.openstreetmap.org/search?city=${encodeURIComponent(comune)}&state=${encodeURIComponent(regioneLabel)}&country=Italy&format=json&limit=1`;
+    const res = await fetchWithTimeout(url, { headers }, 12000);
+    const text = await res.text();
+    if (text.trim().startsWith('[')) {
+      const data = JSON.parse(text);
+      if (data.length > 0) return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) };
+    }
+  } catch (_e) { /* fallthrough */ }
+
+  // Tentativo 3: query semplice comune
+  try {
+    const q = `${comune}, Italy`;
+    const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=1`;
+    const res = await fetchWithTimeout(url, { headers }, 10000);
+    const text = await res.text();
+    if (text.trim().startsWith('[')) {
+      const data = JSON.parse(text);
+      if (data.length > 0) return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) };
+    }
+  } catch (_e) { /* fallthrough */ }
+
+  // Fallback finale: capoluogo di regione
+  const fallback = CAPOLUOGHI_FALLBACK[regioneLower] || CAPOLUOGHI_FALLBACK.piemonte;
+  console.warn(`Geocoding fallback capoluogo per ${comune} (${regioneLabel})`);
+  return { lat: fallback.lat, lon: fallback.lon };
 }
 
 // ============================================================
@@ -715,11 +758,11 @@ Deno.serve(async (req) => {
           wfs_liguria: risultato,
         },
       };
-      // Aggiorna centroid solo se ora disponibile e prima era null
-      if (finalCentroidLat !== null && !qRef?.centroid_lat) {
+      // Aggiorna SEMPRE centroid se ora disponibile
+      if (finalCentroidLat !== null) {
         updatePayload.centroid_lat = finalCentroidLat;
       }
-      if (finalCentroidLon !== null && !qRef?.centroid_lng) {
+      if (finalCentroidLon !== null) {
         updatePayload.centroid_lng = finalCentroidLon;
       }
       await base44.asServiceRole.entities.CadastralQuery.update(query_id, updatePayload);
