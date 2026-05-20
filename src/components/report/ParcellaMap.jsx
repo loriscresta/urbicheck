@@ -5,6 +5,7 @@ export default function ParcellaMap({ query, foglio, particella, height = 420 })
   const leafletMapRef = useRef(null);
   const [mapReady, setMapReady] = useState(false);
   const [wfsOk, setWfsOk] = useState(false);
+  const [polygonSource, setPolygonSource] = useState(null);
 
   const lat = parseFloat(query?.centroid_lat);
   const lon = parseFloat(query?.centroid_lng);
@@ -40,6 +41,16 @@ export default function ParcellaMap({ query, foglio, particella, height = 420 })
         attribution: "© Agenzia delle Entrate",
         maxZoom: 21,
       }).addTo(map);
+
+      // Disegna geometry_geojson se disponibile
+      const geom = query?.geometry_geojson;
+      if (geom && geom.geometry && geom.geometry.coordinates) {
+        const layer = L.geoJSON(geom, {
+          style: { color: '#c0392b', weight: 3, fillColor: '#e74c3c', fillOpacity: 0.35, dashArray: null },
+        }).addTo(map);
+        try { map.fitBounds(layer.getBounds(), { maxZoom: 18, padding: [40, 40] }); } catch (_e) {}
+        setPolygonSource('osm');
+      }
 
       L.circleMarker([lat, lon], {
         radius: 8,
@@ -152,7 +163,9 @@ export default function ParcellaMap({ query, foglio, particella, height = 420 })
         fontSize: "0.56rem",
         color: "#7A7268",
       }}>
-        {wfsOk
+        {polygonSource === 'osm'
+          ? `📐 Footprint edificio (OSM) — perimetro catastale esatto su WFS AdE | Foglio ${foglio}, Part. ${particella}`
+          : wfsOk
           ? `✓ Poligono AdE — Foglio ${foglio}, Part. ${particella}`
           : `Foglio ${foglio}, Part. ${particella} | © Leaflet | © OpenStreetMap | © Agenzia delle Entrate`
         }
