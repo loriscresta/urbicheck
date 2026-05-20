@@ -637,10 +637,7 @@ export default function ReportPage() {
                 <span className="italic">{fonte}</span>
               </div>
               <ParcellaMap
-                lat={mapLat || 0}
-                lon={mapLon || 0}
-                geojsonPolygon={poly}
-                queryId={query.id}
+                query={query}
                 foglio={query.foglio}
                 particella={query.particella}
                 height={320}
