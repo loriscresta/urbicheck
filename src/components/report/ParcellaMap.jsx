@@ -1,22 +1,25 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 
 export default function ParcellaMap({ query, foglio, particella, height = 420 }) {
-  const mapRef = useRef(null);
+  const mapDivRef = useRef(null);
   const leafletMapRef = useRef(null);
+  const [mapReady, setMapReady] = useState(false);
+  const [wfsOk, setWfsOk] = useState(false);
 
-  const lat = query?.centroid_lat || null;
-  const lon = query?.centroid_lng || null;
-  const validCoords = lat && lon && Number(lat) !== 0 && Number(lon) !== 0;
+  const lat = parseFloat(query?.centroid_lat);
+  const lon = parseFloat(query?.centroid_lng);
+  const validCoords = !isNaN(lat) && !isNaN(lon) && lat !== 0 && lon !== 0;
 
+  // Init mappa
   useEffect(() => {
-    if (!validCoords || !mapRef.current || leafletMapRef.current) return;
+    if (!validCoords || !mapDivRef.current || leafletMapRef.current) return;
 
     const init = () => {
       const L = window.L;
-      if (!mapRef.current || leafletMapRef.current) return;
+      if (!mapDivRef.current || leafletMapRef.current) return;
 
-      const map = L.map(mapRef.current, {
-        center: [Number(lat), Number(lon)],
+      const map = L.map(mapDivRef.current, {
+        center: [lat, lon],
         zoom: 17,
         zoomControl: true,
         scrollWheelZoom: false,
@@ -38,7 +41,7 @@ export default function ParcellaMap({ query, foglio, particella, height = 420 })
         maxZoom: 21,
       }).addTo(map);
 
-      L.circleMarker([Number(lat), Number(lon)], {
+      L.circleMarker([lat, lon], {
         radius: 8,
         color: "#c0392b",
         fillColor: "#e74c3c",
@@ -47,6 +50,8 @@ export default function ParcellaMap({ query, foglio, particella, height = 420 })
       })
         .addTo(map)
         .bindPopup(`📍 Foglio ${foglio || "—"}, Particella ${particella || "—"}`);
+
+      setMapReady(true);
     };
 
     if (window.L) {
@@ -72,6 +77,50 @@ export default function ParcellaMap({ query, foglio, particella, height = 420 })
     };
   }, [lat, lon]);
 
+  // WFS BBOX — carica poligoni dopo che la mappa è pronta
+  useEffect(() => {
+    if (!mapReady || !leafletMapRef.current || !lat || !lon) return;
+    const map = leafletMapRef.current;
+    const L = window.L;
+
+    (async () => {
+      try {
+        const d = 0.0018;
+        const url = `https://wfs.cartografia.agenziaentrate.gov.it/inspire/wfs/ows?SERVICE=WFS&VERSION=2.0.0&REQUEST=GetFeature&TYPENAMES=CP:CadastralParcel&BBOX=${lon - d},${lat - d},${lon + d},${lat + d},EPSG:4326&SRSNAME=EPSG:4326&outputFormat=application/json&COUNT=30`;
+        const ctrl = new AbortController();
+        setTimeout(() => ctrl.abort(), 8000);
+        const res = await fetch(url, { signal: ctrl.signal });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!data.features?.length) return;
+
+        let best = null, minD = Infinity;
+        data.features.forEach(f => {
+          const coords = f.geometry?.type === "Polygon"
+            ? f.geometry.coordinates[0]
+            : f.geometry?.coordinates?.[0]?.[0];
+          if (!coords?.length) return;
+          const avgLon = coords.reduce((s, c) => s + c[0], 0) / coords.length;
+          const avgLat = coords.reduce((s, c) => s + c[1], 0) / coords.length;
+          const dd = (avgLon - lon) ** 2 + (avgLat - lat) ** 2;
+          if (dd < minD) { minD = dd; best = f; }
+        });
+
+        L.geoJSON({ type: "FeatureCollection", features: data.features }, {
+          style: { color: "#94a3b8", weight: 1, fillColor: "#e2e8f0", fillOpacity: 0.2 },
+        }).addTo(map);
+
+        if (best) {
+          const hl = L.geoJSON(best, {
+            style: { color: "#c0392b", weight: 3, fillColor: "#e74c3c", fillOpacity: 0.45 },
+          }).addTo(map);
+          try { map.fitBounds(hl.getBounds(), { maxZoom: 18, padding: [40, 40] }); } catch (_e) {}
+          setWfsOk(true);
+        }
+      } catch (_e) { /* fallback silenzioso */ }
+    })();
+  }, [mapReady, lat, lon]);
+
   if (!validCoords) {
     return (
       <div style={{ border: "1px solid #C4BAA8", background: "#F4EFE6", padding: "1rem 1.25rem" }}>
@@ -92,9 +141,9 @@ export default function ParcellaMap({ query, foglio, particella, height = 420 })
         fontSize: "0.58rem",
         color: "#7A7268",
       }}>
-        📍 WGS84: {Number(lat).toFixed(6)}, {Number(lon).toFixed(6)} &nbsp;|&nbsp; OnData CC BY 4.0
+        📍 WGS84: {lat.toFixed(6)}, {lon.toFixed(6)} &nbsp;|&nbsp; OnData CC BY 4.0
       </div>
-      <div ref={mapRef} style={{ height, width: "100%" }} />
+      <div ref={mapDivRef} style={{ height, width: "100%" }} />
       <div style={{
         padding: "5px 10px",
         borderTop: "1px solid #C4BAA8",
@@ -103,7 +152,10 @@ export default function ParcellaMap({ query, foglio, particella, height = 420 })
         fontSize: "0.56rem",
         color: "#7A7268",
       }}>
-        Foglio {foglio}, Part. {particella} | © Leaflet | © OpenStreetMap | © Agenzia delle Entrate
+        {wfsOk
+          ? `✓ Poligono AdE — Foglio ${foglio}, Part. ${particella}`
+          : `Foglio ${foglio}, Part. ${particella} | © Leaflet | © OpenStreetMap | © Agenzia delle Entrate`
+        }
       </div>
     </div>
   );
