@@ -40,6 +40,13 @@ export default function ParcellaMap({ query }) {
         map.fitBounds(geomLayer.getBounds(), { maxZoom: 18, padding: [40, 40] });
       } else {
         L.circleMarker([lat, lon], { radius: 9, color: '#c0392b', fillColor: '#e74c3c', fillOpacity: 0.85, weight: 2 }).addTo(map);
+        const geomData = query?.geometry_geojson;
+        if (geomData?.geometry?.coordinates) {
+          const geomLayer = L.geoJSON(geomData, {
+            style: { color: '#c0392b', weight: 3, fillColor: '#e74c3c', fillOpacity: 0.4 }
+          }).addTo(map);
+          map.fitBounds(geomLayer.getBounds(), { maxZoom: 18, padding: [30, 30] });
+        }
       }
     };
 
