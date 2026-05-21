@@ -20,6 +20,7 @@ import { asyncBufferFromUrl, parquetReadObjects } from 'npm:hyparquet@1';
 import { compressors } from 'npm:hyparquet-compressors@1';
 
 const WFS_ADE_BASE = 'https://wfs.cartografia.agenziaentrate.gov.it/inspire/wfs/ows';
+const WMS_ADE_BASE = 'https://wms.cartografia.agenziaentrate.gov.it/inspire/wms/ows';
 const ONDATA_BASE = 'https://raw.githubusercontent.com/ondata/dati_catastali/main/S_0000_ITALIA/anagrafica';
 
 // Mappa regione → file parquet OnData
@@ -120,7 +121,64 @@ async function queryOnDataParquet(regioneFile, codiceBelfiore, foglio, particell
   return { risultati, debugFirstRow };
 }
 
-// ── STEP 2: WFS AdE con bbox precisa — JSON output + browser headers ──
+// ── STEP 2a: WMS GetFeatureInfo — usa subdomain WMS (diverso da WFS, meno protetto da Akamai) ──
+async function searchWmsFeatureInfo(lat, lon) {
+  // delta ~100m — piccolo per centrare bene il pixel sul centroide
+  const delta  = 0.001;
+  const minLat = (lat - delta).toFixed(7);
+  const maxLat = (lat + delta).toFixed(7);
+  const minLon = (lon - delta).toFixed(7);
+  const maxLon = (lon + delta).toFixed(7);
+
+  // WMS 1.3.0 + EPSG:4326: BBOX = minLat,minLon,maxLat,maxLon (asse lat prima)
+  // I=128, J=128 → pixel centrale = nostro centroide
+  const url = `${WMS_ADE_BASE}?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetFeatureInfo` +
+    `&LAYERS=CP.CadastralParcel&QUERY_LAYERS=CP.CadastralParcel` +
+    `&INFO_FORMAT=application%2Fjson` +
+    `&I=128&J=128&WIDTH=256&HEIGHT=256` +
+    `&CRS=EPSG:4326&BBOX=${minLat},${minLon},${maxLat},${maxLon}`;
+
+  try {
+    const res = await fetchWithTimeout(url, {
+      headers: {
+        'Accept': 'application/json, text/plain, */*',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        'Accept-Language': 'it-IT,it;q=0.9,en;q=0.8',
+        'Referer': 'https://geoportale.cartografia.agenziaentrate.gov.it/',
+      }
+    }, 15000);
+
+    if (!res.ok) {
+      console.warn(`WMS GetFeatureInfo HTTP ${res.status}`);
+      return null;
+    }
+
+    const raw = await res.text();
+    let data;
+    try { data = JSON.parse(raw); } catch (_e) {
+      console.warn('WMS GetFeatureInfo non-JSON response (probabilmente XML/errore)');
+      return null;
+    }
+
+    const features = data.features || [];
+    if (!features.length) return null;
+
+    // Il primo feature dovrebbe essere quello centrato — prendi quello con geometria
+    const feature = features.find(f => f.geometry?.coordinates) || features[0];
+    if (!feature?.geometry) return null;
+
+    console.log('WMS GetFeatureInfo OK — feature:', feature.id, feature.properties?.label);
+    return {
+      geojson_polygon: feature.geometry,
+      inspire_id: feature.id || feature.properties?.gml_id || feature.properties?.inspireId,
+    };
+  } catch (e) {
+    console.warn('WMS GetFeatureInfo error:', e.message);
+    return null;
+  }
+}
+
+// ── STEP 2b: WFS AdE con bbox precisa — JSON output + browser headers ──
 async function searchWfsAde(lat, lon, codiceBelfiore, foglio, particella, sezione = '') {
   const foglioNorm = String(foglio).padStart(4, '0');
   const particellaStr = String(particella);
@@ -396,8 +454,15 @@ Deno.serve(async (req) => {
   const { lat, lon } = rigaScelta;
   console.log(`OnData OK: ${rigaScelta.id} lat=${lat} lon=${lon} sezione=${rigaScelta.sezione} (${sezioniTrovate.length} sezioni)`);
 
-  // ── STEP 2: WFS AdE ──
-  const wfsResult = await searchWfsAde(lat, lon, codiceBelfiore, foglio, particella, rigaScelta.sezione);
+  // ── STEP 2: Geometria — prova WMS GetFeatureInfo (subdomain WMS), poi WFS ──
+  console.log('STEP 2: tentativo WMS GetFeatureInfo...');
+  let wfsResult = await searchWmsFeatureInfo(lat, lon);
+  if (wfsResult?.geojson_polygon) {
+    console.log('WMS GetFeatureInfo: poligono ottenuto!');
+  } else {
+    console.log('WMS GetFeatureInfo: nessun poligono, provo WFS...');
+    wfsResult = await searchWfsAde(lat, lon, codiceBelfiore, foglio, particella, rigaScelta.sezione);
+  }
 
   // ── Centroide finale ──
   // Preferenza: baricentro poligono WFS (più accurato) > coordinate OnData (fallback)
