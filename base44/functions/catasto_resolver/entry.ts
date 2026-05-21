@@ -19,7 +19,7 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 import { asyncBufferFromUrl, parquetReadObjects } from 'npm:hyparquet@1';
 import { compressors } from 'npm:hyparquet-compressors@1';
 
-const WFS_ADE_BASE = 'https://wfs.cartografia.agenziaentrate.gov.it/inspire/wfs/owfs01.php';
+const WFS_ADE_BASE = 'https://wfs.cartografia.agenziaentrate.gov.it/inspire/wfs/ows';
 const ONDATA_BASE = 'https://raw.githubusercontent.com/ondata/dati_catastali/main/S_0000_ITALIA/anagrafica';
 
 // Mappa regione → file parquet OnData
@@ -120,50 +120,75 @@ async function queryOnDataParquet(regioneFile, codiceBelfiore, foglio, particell
   return { risultati, debugFirstRow };
 }
 
-// ── STEP 2: WFS AdE con bbox precisa ──
+// ── STEP 2: WFS AdE con bbox precisa — JSON output + browser headers ──
 async function searchWfsAde(lat, lon, codiceBelfiore, foglio, particella, sezione = '') {
   const foglioNorm = String(foglio).padStart(4, '0');
   const particellaStr = String(particella);
   const particellaInt = parseInt(particellaStr, 10);
-  const delta = 0.0002;
+  const delta = 0.0015; // ~150m bbox
 
-  const bbox = `${lat - delta},${lon - delta},${lat + delta},${lon + delta}`;
-  const url = `${WFS_ADE_BASE}?language=ita&SERVICE=WFS&VERSION=2.0.0&TYPENAMES=CP:CadastralParcel&SRSNAME=urn:ogc:def:crs:EPSG::6706&BBOX=${bbox}&REQUEST=GetFeature&COUNT=20`;
+  const minLon = (lon - delta).toFixed(7);
+  const minLat = (lat - delta).toFixed(7);
+  const maxLon = (lon + delta).toFixed(7);
+  const maxLat = (lat + delta).toFixed(7);
+
+  // Usa endpoint standard ows + JSON + headers browser-like per evitare blocco Akamai
+  const url = `${WFS_ADE_BASE}?service=WFS&version=2.0.0&request=GetFeature` +
+    `&typeNames=CP:CadastralParcel&outputFormat=application%2Fjson` +
+    `&BBOX=${minLon},${minLat},${maxLon},${maxLat},EPSG:4326&COUNT=30`;
 
   try {
     const res = await fetchWithTimeout(url, {
-      headers: { 'Accept': 'application/xml, text/xml', 'User-Agent': 'URBICHECK/1.0' }
+      headers: {
+        'Accept': 'application/json, text/plain, */*',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        'Accept-Language': 'it-IT,it;q=0.9,en;q=0.8',
+        'Referer': 'https://geoportale.cartografia.agenziaentrate.gov.it/',
+        'Origin': 'https://geoportale.cartografia.agenziaentrate.gov.it',
+      }
     }, 15000);
-    if (!res.ok) return null;
-    const xml = await res.text();
+    if (!res.ok) {
+      console.warn(`WFS AdE HTTP ${res.status}`);
+      return null;
+    }
+    const data = await res.json();
+    const features = data.features || [];
+    if (!features.length) return null;
 
-    const featurePattern = /<CP:CadastralParcel[^>]*gml:id="([^"]*)"[^>]*>([\s\S]*?)<\/CP:CadastralParcel>/g;
-    let match;
-    let bestMatch = null;
-
-    while ((match = featurePattern.exec(xml)) !== null) {
-      const gmlId = match[1];
-      const featureContent = match[2];
-
-      const parts = gmlId.split('.');
-      const lastPart = parts[parts.length - 1];
-      const keyPart = parts[parts.length - 2] || '';
-
-      const particMatch = lastPart === particellaStr || parseInt(lastPart, 10) === particellaInt;
-      if (!particMatch) continue;
-      if (!keyPart.toUpperCase().startsWith(codiceBelfiore.toUpperCase())) continue;
-
-      const polygon = extractPolygon(featureContent);
-      if (!polygon) continue;
-
-      const hasFoglio = keyPart.includes(foglioNorm) || keyPart.includes(String(parseInt(foglioNorm, 10)));
-      const hasSezione = !sezione || keyPart.toUpperCase().includes(sezione.toUpperCase());
-
-      if (hasFoglio && hasSezione) { bestMatch = { geojson_polygon: polygon, inspire_id: gmlId }; break; }
-      else if (!bestMatch && hasFoglio) { bestMatch = { geojson_polygon: polygon, inspire_id: gmlId }; }
+    // Cerca la feature per foglio+particella nel campo label o nationalCadastralReference
+    let matched = null;
+    for (const f of features) {
+      const label = String(
+        f.properties?.label || f.properties?.LABEL ||
+        f.properties?.nationalCadastralReference || ''
+      ).toUpperCase();
+      const pMatch = label.includes(`/${particellaStr}`) ||
+        label.includes(`/${particellaStr.padStart(5, '0')}`) ||
+        label === particellaStr;
+      const fMatch = label.includes(`${foglioNorm}/`) ||
+        label.includes(`${parseInt(foglioNorm, 10)}/`);
+      if (pMatch && fMatch) { matched = f; break; }
+      if (!matched && pMatch) matched = f;
     }
 
-    return bestMatch;
+    // Fallback: feature più vicina al centroide
+    if (!matched) {
+      let minDist = Infinity;
+      for (const f of features) {
+        const ring = f.geometry?.coordinates?.[0];
+        if (!ring?.length) continue;
+        const cLat = ring.reduce((s, c) => s + c[1], 0) / ring.length;
+        const cLon = ring.reduce((s, c) => s + c[0], 0) / ring.length;
+        const d = Math.hypot(cLat - lat, cLon - lon);
+        if (d < minDist) { minDist = d; matched = f; }
+      }
+    }
+
+    if (!matched) return null;
+    return {
+      geojson_polygon: matched.geometry,
+      inspire_id: matched.id || matched.properties?.gml_id || matched.properties?.inspireId,
+    };
   } catch (e) {
     console.warn('WFS AdE error:', e.message);
     return null;
