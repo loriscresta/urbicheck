@@ -90,7 +90,6 @@ export default function ReportPage() {
   const [showAttiForm, setShowAttiForm] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
 
-  // Fetch current user for role check
   useEffect(() => {
     base44.auth.me().then(u => setCurrentUser(u)).catch(() => {});
   }, []);
@@ -103,7 +102,6 @@ export default function ReportPage() {
     queryFn: async () => {
       const queries = await base44.entities.CadastralQuery.filter({ id });
       const q = queries[0];
-      // Carica ComuneItalia per zona sismica (Piemonte)
       if (q?.comune_id) {
         base44.entities.ComuneItalia.filter({ id: q.comune_id })
           .then(res => { if (res[0]) setComuneRecord(res[0]); })
@@ -114,7 +112,6 @@ export default function ReportPage() {
   });
 
   const handleDownloadPDF = async () => {
-    // Gate PDF — solo se paid=true
     if (query?.paid !== true) {
       toast({ title: "Scheda non sbloccata", description: "Sblocca prima la scheda completa.", variant: "destructive" });
       return;
@@ -143,8 +140,6 @@ export default function ReportPage() {
     );
   }
 
-  // ── PAYMENT GATE IMPERMEABILE — nessuna eccezione, nessun bypass ──────────
-  // paid=true è l'UNICO gate autoritativo. status="completed" NON è sufficiente.
   if (query.paid !== true) {
     return (
       <PaymentGate
@@ -161,7 +156,6 @@ export default function ReportPage() {
   const r = query.report_data || {};
   const isAsta = query.finalita === "asta_giudiziaria";
 
-  // NTA lookup locale — stesso oggetto di IndiciEdiliziSection
   const INDICI_NTA_LOCAL = {
     "Alessandria": { IF: "2.0 m³/m²", Hmax: "10.5 m (≈ 3 piani)" },
     "Torino":      { IF: "2.0 m³/m²", Hmax: "14.5 m (≈ 4 piani)" },
@@ -178,17 +172,13 @@ export default function ReportPage() {
   };
   const ntaLocal = INDICI_NTA_LOCAL[query.comune] || null;
 
-  // Dati sismici reali da WFS (override sull'AI che può sbagliare)
   const isPiemonte = (query.regione || '').toLowerCase().includes('piemonte');
   const isLiguria = (query.regione || '').toLowerCase().includes('liguria');
   const wfsRis = r.wfs_liguria?.risultati;
   const wfsSismica = wfsRis?.sismica;
 
-  // PROBLEMA 3 FIX — usa dati WFS reali per tutti i vincoli, fallback su AI
-  // Vincolo Sismico
   let vincoloSismicoEffettivo;
   if (wfsSismica) {
-    // Dati reali dal WFS (Liguria o Piemonte)
     const zonaLabel = `Zona ${wfsSismica.zona}`;
     vincoloSismicoEffettivo = {
       presente: true,
@@ -196,13 +186,11 @@ export default function ReportPage() {
       dettagli: `${zonaLabel} — ${wfsSismica.descrizione || ''}. ${wfsSismica.nota || ''} Rif: ${wfsSismica.riferimento_normativo || ''}`,
     };
   } else if (isPiemonte) {
-    // Piemonte senza WFS: zona 3 per default (legge)
     vincoloSismicoEffettivo = { presente: true, zona: 'Zona 3 — Media sismicità — DGR n.6-887/2019', dettagli: 'Zona 3 — Media sismicità — DGR n.6-887/2019. Applicare NTC 2018.' };
   } else {
     vincoloSismicoEffettivo = r.vincoli?.vincolo_sismico || { presente: false };
   }
 
-  // Vincolo Idraulico/Idrogeologico — preferisci dati PAI reali da WFS
   const wfsPai = wfsRis?.pai_rischio_idrogeologico;
   const paiFranePresenti = wfsPai && (wfsPai.features_totali > 0 || wfsPai.dati?.some(d => d.trovato));
   let vincoloIdraulicoEffettivo;
@@ -216,7 +204,6 @@ export default function ReportPage() {
     vincoloIdraulicoEffettivo = r.vincoli?.vincolo_idraulico || { presente: false };
   }
 
-  // Vincolo Paesaggistico — preferisci dati WFS ope legis
   const wfsVincoliPaesaggistici = wfsRis?.vincoli_paesaggistici_ope_legis;
   const wfsPaesaggisticoVincoli = wfsVincoliPaesaggistici?.vincoli?.filter(v => v.livello === 'APPLICABILE') || [];
   let vincoloPaesaggisticoEffettivo;
@@ -233,7 +220,6 @@ export default function ReportPage() {
     vincoloPaesaggisticoEffettivo = r.vincoli?.vincolo_paesaggistico || { presente: false };
   }
 
-  // Vincolo Corsi Acqua — da WFS Overpass
   const wfsCorsiAcqua = wfsRis?.vincolo_corsi_acqua;
   const corsiAcquaTrovati = wfsCorsiAcqua?.dati?.filter(d => d.trovato) || [];
   let vincoloCorsiAcquaEffettivo;
@@ -248,7 +234,6 @@ export default function ReportPage() {
     vincoloCorsiAcquaEffettivo = null;
   }
 
-  // Vincolo Ferroviario — da WFS Overpass
   const wfsFerroviario = wfsRis?.vincolo_ferroviario;
   const ferrorieTrovate = wfsFerroviario?.dati?.filter(d => d.trovato) || [];
   let vincoloFerroviarioEffettivo;
@@ -262,6 +247,7 @@ export default function ReportPage() {
   } else {
     vincoloFerroviarioEffettivo = null;
   }
+
   const FIN_FINALITA = ["investimento", "sviluppo_immobiliare", "asta_giudiziaria"];
   const showFinancial = FIN_FINALITA.includes(query.finalita) || r.fin_data?.prezzo_acquisto;
   const finData = r.fin_data || {};
@@ -273,7 +259,6 @@ export default function ReportPage() {
     "Alto": "bg-red-50 text-red-700 border-red-200",
   };
 
-  // Avviso multi-sezione catastale
   const sezioniDisponibili = r.catasto_data?.sezioni_disponibili || [];
   const hasMultiSezioni = sezioniDisponibili.length > 1 && !query.sezione_catastale;
 
@@ -338,7 +323,7 @@ export default function ReportPage() {
         </div>
       </motion.div>
 
-      {/* ===== AVVISO MULTI-SEZIONE CATASTALE ===== */}
+      {/* AVVISO MULTI-SEZIONE CATASTALE */}
       {hasMultiSezioni && (
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
           className="mb-6 rounded-xl border-2 border-amber-400 bg-amber-50 p-5">
@@ -364,15 +349,11 @@ export default function ReportPage() {
         </motion.div>
       )}
 
-      {/* Scheda pagata — nessun banner unlock */}
-
       <div className="space-y-6">
-        {/* === SEMPRE VISIBILI === */}
 
         {/* Tipologia immobile / Dati Catastali */}
         {r.dati_catastali && (
           <ReportSection icon={Building2} title="Tipologia Immobile" delay={0.02}>
-            {/* Se visura caricata, usa sempre i dati reali dall'entity (non il testo generico AI) */}
             <DataRow
               label="Categoria catastale"
               value={query.visura_uploaded && query.categoria_catastale
@@ -387,20 +368,14 @@ export default function ReportPage() {
                 ? `${query.superficie_mq} mq`
                 : r.dati_catastali.consistenza}
             />
-            <DataRow
-              label="Classe"
-              value={query.classe_catastale || r.dati_catastali.classe}
-            />
+            <DataRow label="Classe" value={query.classe_catastale || r.dati_catastali.classe} />
             <DataRow
               label="Rendita Catastale"
               value={query.rendita_catastale != null
                 ? `€${Number(query.rendita_catastale).toFixed(2)}`
                 : r.dati_catastali.rendita_catastale}
             />
-            <DataRow
-              label="Zona Censuaria"
-              value={query.zona_censuaria || r.dati_catastali.zona_censuaria}
-            />
+            <DataRow label="Zona Censuaria" value={query.zona_censuaria || r.dati_catastali.zona_censuaria} />
             {r.dati_catastali.microzona && !/verificare su visura/i.test(r.dati_catastali.microzona) && (
               <DataRow label="Microzona" value={r.dati_catastali.microzona} />
             )}
@@ -435,7 +410,7 @@ export default function ReportPage() {
           </ReportSection>
         )}
 
-        {/* Vincoli — PROBLEMA 3 FIX: usa dati WFS reali se disponibili, fallback su AI */}
+        {/* Vincoli */}
         {(r.vincoli || wfsRis) && (
           <ReportSection icon={Shield} title="Vincoli Principali" delay={0.06}>
             {wfsRis && (
@@ -467,11 +442,9 @@ export default function ReportPage() {
                 dettagli={vincoloPaesaggisticoEffettivo.dettagli}
                 extra={vincoloPaesaggisticoEffettivo.tipo}
               />
-              {/* Vincolo Archeologico solo da AI */}
               {r.vincoli?.vincolo_archeologico && (
                 <VincoloCard label="Vincolo Archeologico" presente={r.vincoli.vincolo_archeologico.presente} dettagli={r.vincoli.vincolo_archeologico.dettagli} />
               )}
-              {/* Vincoli infrastrutturali da WFS Overpass */}
               {vincoloCorsiAcquaEffettivo && (
                 <VincoloCard label="Corsi d'Acqua (art.142)" presente={vincoloCorsiAcquaEffettivo.presente} dettagli={vincoloCorsiAcquaEffettivo.dettagli} />
               )}
@@ -490,12 +463,10 @@ export default function ReportPage() {
           </ReportSection>
         )}
 
-        {/* === SOLO SCHEDA COMPLETA === */}
-
         {/* Indici Edilizi */}
         <IndiciEdiliziSection indici={r.indici_edilizi} comune={query.comune} wfsZonaUrbanistica={r.wfs_liguria?.risultati?.zona_urbanistica} delay={0.08} />
 
-        {/* === VINCOLI E RISCHI — PIEMONTE (solo se regione Piemonte, dati da wfs_liguria) === */}
+        {/* Vincoli e Rischi Piemonte */}
         {isPiemonte && query.report_data?.wfs_liguria && (
           <VincoliRischiPiemonte query={query} />
         )}
@@ -567,7 +538,7 @@ export default function ReportPage() {
           </ReportSection>
         )}
 
-        {/* Sezione speciale Asta Giudiziaria */}
+        {/* Sezione Asta Giudiziaria */}
         {isAsta && (
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.16 }}
             className="rounded-xl border-2 border-amber-300 bg-amber-50 p-6">
@@ -587,7 +558,6 @@ export default function ReportPage() {
             )}
           </motion.div>
         )}
-
 
         {/* Accesso agli Atti */}
         {r.accesso_atti && (
@@ -609,7 +579,7 @@ export default function ReportPage() {
           </ReportSection>
         )}
 
-        {/* Analisi Finanziaria & Due Diligence */}
+        {/* Analisi Finanziaria */}
         {showFinancial && (
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.18 }}>
             <div className="flex items-center gap-3 mb-3">
@@ -622,36 +592,36 @@ export default function ReportPage() {
           </motion.div>
         )}
 
-        {/* === MAPPA CATASTALE — fallback su wfs_liguria o capoluogo === */}
+        {/* ── MAPPA CATASTALE ──────────────────────────────────────────────────
+            ParcellaMap legge centroid_lat/lng dal DB e mostra le coordinate
+            internamente — NON duplichiamo la riga coordinate qui.
+            Passiamo geometry_geojson unificata (entity DB + catasto_data fallback).
+        ─────────────────────────────────────────────────────────────────────── */}
         {(() => {
-          // Priorità: entity → wfs_liguria.coordinate → mostra comunque la mappa con fallback
-          const mapLat = query.centroid_lat || r.wfs_liguria?.coordinate?.lat;
-          const mapLon = query.centroid_lng || r.wfs_liguria?.coordinate?.lon;
-          const poly = query.geometry_geojson || r.catasto_data?.geojson_polygon;
-          const fonte = query.geometry_geojson ? 'WFS AdE — Agenzia delle Entrate' : (r.catasto_data?.fonte || 'OnData CC BY 4.0');
+          const poly = query.geometry_geojson || r.catasto_data?.geojson_polygon || null;
           return (
             <ReportSection icon={MapPin} title="Mappa Particella Catastale" delay={0.05}>
-              <div className="mb-2 flex flex-wrap gap-4 text-xs text-muted-foreground">
-                <span>📍 WGS84: {mapLat?.toFixed(5)}, {mapLon?.toFixed(5)}</span>
-                {r.catasto_data?.inspire_id && <span>INSPIRE ID: {r.catasto_data.inspire_id}</span>}
-                <span className="italic">{fonte}</span>
-              </div>
+              {r.catasto_data?.inspire_id && (
+                <div className="mb-2 text-xs text-muted-foreground">
+                  INSPIRE ID: {r.catasto_data.inspire_id}
+                </div>
+              )}
               <ParcellaMap
-                query={query}
+                query={{ ...query, geometry_geojson: poly }}
                 foglio={query.foglio}
                 particella={query.particella}
                 height={320}
               />
               <div className="mt-3 flex gap-2">
-               <a
-                 href="https://www.agenziaentrate.gov.it/portale/web/guest/schede/fabbricatiterreni/consultazione-cartografia-catastale/servizio-di-consultazione-della-cartografia-catastale"
-                 target="_blank"
-                 rel="noopener noreferrer"
-                 className="text-xs text-primary hover:underline flex items-center gap-1"
-               >
-                 Vedi su Geoportale AdE →
-               </a>
-               <span className="text-xs text-muted-foreground italic">(Foglio {query.foglio}, Part. {query.particella})</span>
+                <a
+                  href="https://www.agenziaentrate.gov.it/portale/web/guest/schede/fabbricatiterreni/consultazione-cartografia-catastale/servizio-di-consultazione-della-cartografia-catastale"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs text-primary hover:underline flex items-center gap-1"
+                >
+                  Vedi su Geoportale AdE →
+                </a>
+                <span className="text-xs text-muted-foreground italic">(Foglio {query.foglio}, Part. {query.particella})</span>
               </div>
             </ReportSection>
           );
@@ -698,9 +668,7 @@ export default function ReportPage() {
         )}
       </div>
 
-
-
-      {/* === WFS ANALISI PANEL (Liguria + Piemonte) === */}
+      {/* WFS ANALISI PANEL */}
       {(['Liguria','Piemonte'].includes(query.regione) || (query.regione || '').toLowerCase().includes('piemonte') || (query.regione || '').toLowerCase().includes('liguria')) && (
         <WfsLiguriaPanel
           query={query}
@@ -714,34 +682,34 @@ export default function ReportPage() {
       {/* Download PDF + Servizi Aggiuntivi */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}
         className="mt-8 p-6 rounded-xl border border-border bg-card">
-          <div className="flex flex-col sm:flex-row gap-3 mb-6">
-            {currentUser?.role === 'admin' ? (
-              <Button variant="outline" className="gap-2" onClick={handleDownloadPDF} disabled={isDownloadingPDF}>
-                {isDownloadingPDF ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-                Scarica PDF completo
-              </Button>
-            ) : (
-              <div className="flex items-center gap-2 px-4 py-2 text-sm" style={{ border: '1px solid #C4BAA8', color: '#7A7268', fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.72rem' }}>
-                📄 PDF disponibile — funzionalità in arrivo
-              </div>
-            )}
-          </div>
-          <h3 className="font-semibold mb-1">Servizi Aggiuntivi (opzionali)</h3>
-          <p className="text-sm text-muted-foreground mb-4">Servizi extra a pagamento separato, non inclusi nella scheda base.</p>
-          <div className="flex flex-col sm:flex-row gap-3">
-            <Button className="gap-2" style={{ background: '#1e3a5f' }} onClick={async () => {
-              let comuneRecord = null;
-              if (query.comune_id) {
-                const results = await base44.entities.ComuneItalia.filter({ id: query.comune_id });
-                comuneRecord = results[0] || null;
-              }
-              setComunePrefill(comuneRecord);
-              setShowAttiForm(true);
-            }}>
-              <FileSearch className="w-4 h-4" />
-              Richiedi Accesso Atti — €4,90
+        <div className="flex flex-col sm:flex-row gap-3 mb-6">
+          {currentUser?.role === 'admin' ? (
+            <Button variant="outline" className="gap-2" onClick={handleDownloadPDF} disabled={isDownloadingPDF}>
+              {isDownloadingPDF ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+              Scarica PDF completo
             </Button>
-          </div>
+          ) : (
+            <div className="flex items-center gap-2 px-4 py-2 text-sm" style={{ border: '1px solid #C4BAA8', color: '#7A7268', fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.72rem' }}>
+              📄 PDF disponibile — funzionalità in arrivo
+            </div>
+          )}
+        </div>
+        <h3 className="font-semibold mb-1">Servizi Aggiuntivi (opzionali)</h3>
+        <p className="text-sm text-muted-foreground mb-4">Servizi extra a pagamento separato, non inclusi nella scheda base.</p>
+        <div className="flex flex-col sm:flex-row gap-3">
+          <Button className="gap-2" style={{ background: '#1e3a5f' }} onClick={async () => {
+            let comuneRecord = null;
+            if (query.comune_id) {
+              const results = await base44.entities.ComuneItalia.filter({ id: query.comune_id });
+              comuneRecord = results[0] || null;
+            }
+            setComunePrefill(comuneRecord);
+            setShowAttiForm(true);
+          }}>
+            <FileSearch className="w-4 h-4" />
+            Richiedi Accesso Atti — €4,90
+          </Button>
+        </div>
       </motion.div>
 
       {/* Form Accesso Atti */}
