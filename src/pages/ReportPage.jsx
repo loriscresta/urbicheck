@@ -612,17 +612,6 @@ export default function ReportPage() {
                 particella={query.particella}
                 height={320}
               />
-              <div className="mt-3 flex gap-2">
-                <a
-                  href="https://www.agenziaentrate.gov.it/portale/web/guest/schede/fabbricatiterreni/consultazione-cartografia-catastale/servizio-di-consultazione-della-cartografia-catastale"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-xs text-primary hover:underline flex items-center gap-1"
-                >
-                  Vedi su Geoportale AdE →
-                </a>
-                <span className="text-xs text-muted-foreground italic">(Foglio {query.foglio}, Part. {query.particella})</span>
-              </div>
             </ReportSection>
           );
         })()}
