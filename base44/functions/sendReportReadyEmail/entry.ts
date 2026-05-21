@@ -5,7 +5,7 @@ const APP_URL = Deno.env.get('APP_URL') || 'https://urbicheck.base44.app';
 function buildEmailHtml({ userName, comune, foglio, particella, score, elementi, queryId }) {
   const scoreColor = score >= 7 ? '#059669' : score >= 5 ? '#d97706' : '#dc2626';
   const scoreLabel = score >= 7 ? 'Basso Rischio' : score >= 5 ? 'Rischio Medio' : 'Alto Rischio';
-  const reportUrl = `${APP_URL}/report/${queryId}`;
+  const reportUrl = APP_URL;
 
   const elementiHtml = (elementi || []).map(e => `
     <tr>
