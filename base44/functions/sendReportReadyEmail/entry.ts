@@ -1,6 +1,6 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 
-const APP_URL = Deno.env.get('APP_BASE_URL') || 'https://urbicheck.base44.app';
+const APP_URL = Deno.env.get('APP_URL') || 'https://urbicheck.base44.app';
 
 function buildEmailHtml({ userName, comune, foglio, particella, score, elementi, queryId }) {
   const scoreColor = score >= 7 ? '#059669' : score >= 5 ? '#d97706' : '#dc2626';
