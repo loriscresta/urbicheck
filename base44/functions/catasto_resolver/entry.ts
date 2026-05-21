@@ -9,6 +9,8 @@
  * STEP 2: WFS AdE con bbox ±0.0002 intorno alle coordinate OnData
  *
  * STEP 3: Salva su CadastralQuery
+ *   FIX: centroid_lat/lng aggiornato SOLO se WFS dà un poligono (dato accurato)
+ *        oppure se il record non ha ancora coordinate — NON sovrascrivere con OnData-only
  *
  * INPUT: { nome_comune, regione, foglio, particella, sezione?, codice_belfiore?, query_id? }
  */
@@ -63,7 +65,6 @@ async function queryOnDataParquet(regioneFile, codiceBelfiore, foglio, particell
     url,
     requestInit: { headers: { 'User-Agent': 'URBICHECK/1.0' } }
   });
-  // Leggi solo le 6 colonne necessarie per ridurre memoria e fetch size
   const rows = await parquetReadObjects({
     file,
     compressors,
@@ -79,7 +80,6 @@ async function queryOnDataParquet(regioneFile, codiceBelfiore, foglio, particell
 
   for (const row of rows) {
     if (!debugFirstRow) {
-      // Log first row safe (BigInt → string)
       debugFirstRow = Object.fromEntries(
         Object.entries(row).map(([k, v]) => [k, typeof v === 'bigint' ? v.toString() : v])
       );
@@ -87,8 +87,6 @@ async function queryOnDataParquet(regioneFile, codiceBelfiore, foglio, particell
       console.log('Parquet first row:', JSON.stringify(debugFirstRow));
     }
 
-    // Struttura colonne posizionali: 0=id, 1=belfiore, 2=foglio(4dig), 3=particella, 4=x, 5=y
-    // Colonne reali: INSPIREID_LOCALID, comune, foglio, particella, x, y
     const idField = String(row.INSPIREID_LOCALID || row.id || row.ID || row['0'] || '');
     const belfCol = String(row.comune || row.belfiore || row.COMUNE || row['1'] || '');
     const foglioCol = String(row.foglio || row.FOGLIO || row['2'] || '');
@@ -101,18 +99,14 @@ async function queryOnDataParquet(regioneFile, codiceBelfiore, foglio, particell
 
     if (!idField || !isFinite(xField) || !isFinite(yField)) continue;
 
-    // Filtra per belfiore (colonna "comune" contiene il codice Belfiore)
     const belfMatch = belfCol.toUpperCase() === codiceBelfiore.toUpperCase() ||
       belfCol.toUpperCase().startsWith(codiceBelfiore.toUpperCase());
     if (!belfMatch) continue;
 
-    // Match foglio e particella
     const foglioMatch = foglioCol === foglioNorm || parseInt(foglioCol, 10) === parseInt(foglioNorm, 10);
     const partMatch = partCol === particellaStr || parseInt(partCol, 10) === particellaInt;
     if (!foglioMatch || !partMatch) continue;
 
-    // Estrai sezione dall'id (INSPIREID_LOCALID): es "IT.AGE.PLA.G605B000800.507"
-    // La sezione è il char subito dopo il belfiore nell'ultimo segmento dopo PLA.
     let sezione = '';
     const plaIdx = idField.toUpperCase().indexOf('.' + codiceBelfiore.toUpperCase());
     if (plaIdx !== -1) {
@@ -231,7 +225,6 @@ Deno.serve(async (req) => {
 
   // ── Codice Belfiore + Regione da ComuneItalia ──
   let codiceBelfiore = belfioreDiretto || queryRecord?.codice_comune_catasto;
-  // ── FIX: estrai regione dal DB quando non è nel payload (es. flusso visura) ──
   let regione_da_db = '';
   if ((!codiceBelfiore || !regione) && nome_comune) {
     try {
@@ -254,7 +247,7 @@ Deno.serve(async (req) => {
   }
   codiceBelfiore = String(codiceBelfiore).trim().toUpperCase();
 
-  // ── File regionale — FIX: fallback su regione_da_db quando non è nel payload ──
+  // ── File regionale ──
   const regioneName = regione || queryRecord?.regione || regione_da_db || '';
   const regioneFile = REGIONE_FILE[regioneName] ||
     Object.entries(REGIONE_FILE).find(([k]) => k.toLowerCase().includes(regioneName.toLowerCase()))?.[1];
@@ -288,32 +281,27 @@ Deno.serve(async (req) => {
   }
 
   // ── Scegli sezione ──
-  // sezione può essere INSPIRE (1 char: A, B, C) o codice SISTER/AdE (2+ chars: PL, RM, NA)
   let rigaScelta = null;
   let sezioneSisterNonTrovata = false;
 
   if (sezione) {
     const sezUpper = sezione.toUpperCase().trim();
     if (sezUpper.length === 1) {
-      // Sezione INSPIRE diretta — cerca match esatto
       const filtered = sezioniTrovate.filter(r => r.sezione.toUpperCase() === sezUpper);
       rigaScelta = filtered[0] || sezioniTrovate[0];
     } else {
-      // Codice SISTER/AdE (2+ chars) — non esiste nel parquet INSPIRE, restituiamo tutte le opzioni
       const filtered = sezioniTrovate.filter(r => r.sezione.toUpperCase() === sezUpper);
       if (filtered.length) {
         rigaScelta = filtered[0];
       } else {
-        // Non trovata esatta: segnala e restituisce tutte le opzioni per la scelta utente
         sezioneSisterNonTrovata = true;
       }
     }
   }
 
-  // Se non c'è sezione o se la sezione era a 1 char senza match, usa prima riga
   if (!rigaScelta) rigaScelta = sezioniTrovate[0];
 
-  // Se abbiamo più sezioni e un indirizzo, tentiamo geocoding per trovare quella più vicina
+  // Geocoding solo per scegliere fra sezioni multiple — NON modifica le coordinate finali
   if (sezioniTrovate.length > 1 && indirizzo_immobile && !sezioneSisterNonTrovata) {
     try {
       const geocodeQuery = encodeURIComponent(`${indirizzo_immobile}, ${nome_comune || queryRecord?.comune || ''}, Italy`);
@@ -325,7 +313,6 @@ Deno.serve(async (req) => {
         if (geocodeData[0]) {
           const gLat = parseFloat(geocodeData[0].lat);
           const gLon = parseFloat(geocodeData[0].lon);
-          // Trova la sezione più vicina all'indirizzo geocodificato
           let minDist = Infinity;
           for (const r of sezioniTrovate) {
             const d = Math.sqrt(Math.pow(r.lat - gLat, 2) + Math.pow(r.lon - gLon, 2));
@@ -339,9 +326,8 @@ Deno.serve(async (req) => {
     }
   }
 
-  // Se sezione SISTER non trovata e più opzioni disponibili: salva tutto e segnala all'utente
+  // Se sezione SISTER non trovata e più opzioni: salva tutto e segnala all'utente
   if (sezioneSisterNonTrovata && sezioniTrovate.length > 0) {
-    // Arricchisci le opzioni con reverse geocoding (best-effort)
     const opzioniArricchite = await Promise.all(sezioniTrovate.map(async (r) => {
       let zona = null;
       try {
@@ -388,8 +374,8 @@ Deno.serve(async (req) => {
   // ── STEP 2: WFS AdE ──
   const wfsResult = await searchWfsAde(lat, lon, codiceBelfiore, foglio, particella, rigaScelta.sezione);
 
-  // ── STEP 3: Salva ──
-  // Centroide SEMPRE dal poligono WFS (baricentro) se disponibile — sovrascrive OnData
+  // ── Centroide finale ──
+  // Preferenza: baricentro poligono WFS (più accurato) > coordinate OnData (fallback)
   let finalLat = lat, finalLon = lon;
   let centroideFonte = 'ondata_only';
   if (wfsResult?.geojson_polygon) {
@@ -413,17 +399,41 @@ Deno.serve(async (req) => {
     calcolato_il: new Date().toISOString(),
   };
 
+  // ── STEP 3: Salva ──
   if (queryRecord) {
     try {
+      // ── FIX: aggiorna centroid_lat/lng SOLO se:
+      //   1. il dato viene dal poligono WFS (baricentro accurato), oppure
+      //   2. il record non ha ancora coordinate impostate
+      // NON sovrascrivere coordinate esistenti con dati OnData-only (meno precisi)
+      const centroideGiaPresente = !!(queryRecord.centroid_lat && queryRecord.centroid_lng);
+      const haCentroideWfs = centroideFonte === 'ade_wfs_baricentro';
+
       await base44.entities.CadastralQuery.update(query_id, {
-        centroid_lat: finalLat,
-        centroid_lng: finalLon,
+        ...(haCentroideWfs || !centroideGiaPresente ? {
+          centroid_lat: finalLat,
+          centroid_lng: finalLon,
+        } : {}),
         geometry_geojson: wfsResult?.geojson_polygon || undefined,
         codice_comune_catasto: codiceBelfiore,
         fonte_dati_catastali: 'catastomappe',
-        // FIX: scrivi regione su DB se mancante (es. flusso visura) — serve a wfsLiguria
+        // scrivi regione su DB se mancante (es. flusso visura) — serve a wfsLiguria
         ...(regioneName && !queryRecord.regione ? { regione: regioneName } : {}),
         report_data: { ...(queryRecord.report_data || {}), catasto_data },
       });
     } catch (saveErr) {
-      consol
+      console.error('CadastralQuery update error:', saveErr.message);
+    }
+  }
+
+  return Response.json({
+    success: true,
+    lat: finalLat,
+    lon: finalLon,
+    fonte: centroideFonte,
+    inspire_id: wfsResult?.inspire_id || rigaScelta.id,
+    sezioni: sezioniTrovate.length,
+    wfs_polygon: !!wfsResult?.geojson_polygon,
+    catasto_data,
+  });
+});
