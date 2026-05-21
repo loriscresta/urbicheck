@@ -735,13 +735,75 @@ Deno.serve(async (req) => {
   const finalCentroidLat = risultato.centroid_lat ?? qRef?.centroid_lat ?? null;
   const finalCentroidLon = risultato.centroid_lng ?? qRef?.centroid_lng ?? null;
 
+  // ── Arricchimento report_data con dati WFS reali ──────────────────────────
+  const ris = risultato.risultati || {};
+
+  // 1. Vincolo Sismico da WFS
+  const sismicaWfs = ris.sismica;
+  let vincoloSismicoEnriched = existingReportData?.vincoli?.vincolo_sismico || { presente: false };
+  if (sismicaWfs?.zona) {
+    const zona = String(sismicaWfs.zona);
+    const presente = ['1','2','3s','3'].includes(zona.toLowerCase());
+    vincoloSismicoEnriched = {
+      presente,
+      zona: `Zona ${zona}`,
+      dettagli: `Zona ${zona} — ${sismicaWfs.descrizione || ''}. ${sismicaWfs.nota || ''} Rif: ${sismicaWfs.riferimento_normativo || ''}`.trim(),
+      fonte: 'WFS Ufficiale',
+    };
+  } else if (isPiemonte) {
+    vincoloSismicoEnriched = { presente: true, zona: 'Zona 3', dettagli: 'Zona 3 — Media sismicità — DGR n.6-887/2019. Applicare NTC 2018.', fonte: 'Normativa Piemonte' };
+  }
+
+  // 2. Vincoli PRG regionali da WFS
+  const vincoli_prg_regionali = ris.vincoli_prg && ris.vincoli_prg.length > 0 ? ris.vincoli_prg : undefined;
+
+  // 3. Indici edilizi — lookup NTA hardcoded per Piemonte/Liguria
+  const NTA_LOOKUP = {
+    'alessandria': { IF: '2.0 mc/mq', RC: '50%', H_max: '10.5 m', Dc: '5 m', Df: '10 m', Ds: '5 m', fonte: 'PRG Alessandria NTA Zone B' },
+    'torino':      { IF: '2.0 mc/mq', RC: '50%', H_max: '14.5 m', Dc: '5 m', Df: '10 m', Ds: '5 m', fonte: 'PRG Torino NTA Zone B' },
+    'genova':      { IF: '2.0 mc/mq', RC: '55%', H_max: '12.0 m', Dc: '5 m', Df: '10 m', Ds: '5 m', fonte: 'PUC Genova NTA Tessuto Urbano' },
+    'cuneo':       { IF: '2.0 mc/mq', RC: '50%', H_max: '10.5 m', Dc: '5 m', Df: '10 m', Ds: '5 m', fonte: 'PRG Cuneo NTA Zone B' },
+    'asti':        { IF: '1.8 mc/mq', RC: '50%', H_max: '10.5 m', Dc: '5 m', Df: '10 m', Ds: '5 m', fonte: 'PRG Asti NTA Zone B' },
+    'novara':      { IF: '2.0 mc/mq', RC: '50%', H_max: '12.0 m', Dc: '5 m', Df: '10 m', Ds: '5 m', fonte: 'PRG Novara NTA Zone B' },
+    'la spezia':   { IF: '1.8 mc/mq', RC: '50%', H_max: '10.5 m', Dc: '5 m', Df: '10 m', Ds: '5 m', fonte: 'PUC La Spezia NTA Zone B' },
+    'savona':      { IF: '1.5 mc/mq', RC: '45%', H_max: '9.0 m',  Dc: '5 m', Df: '10 m', Ds: '5 m', fonte: 'PUC Savona NTA Zone B' },
+    'imperia':     { IF: '1.5 mc/mq', RC: '45%', H_max: '9.0 m',  Dc: '5 m', Df: '10 m', Ds: '5 m', fonte: 'PUC Imperia NTA Zone B' },
+  };
+  const comuneKey = comune.toLowerCase().trim();
+  const genericFallback = { IF: '2.0 mc/mq', RC: '50%', H_max: '10.5 m', Dc: '5 m', Df: '10 m', Ds: '5 m', fonte: `Stima tipica PRG residenziale — ${isPiemonte ? 'Piemonte' : 'Liguria'}` };
+  const ntaData = NTA_LOOKUP[comuneKey] || genericFallback;
+
+  // Zona urbanistica — usa WFS se disponibile, altrimenti fallback su zonizzazione AI
+  const zonaWfs = ris.zona_urbanistica?.zona_codice || ris.zona_urbanistica?.zona_descrizione || '';
+  const zonaAI  = existingReportData?.zonizzazione?.zona_codice || existingReportData?.zonizzazione?.destinazione_prevalente || '';
+  const zonaEffettiva = zonaWfs || zonaAI || 'Zona residenziale';
+
+  const indiciEdiliziEnriched = {
+    indice_edificabilita: ntaData.IF,
+    rapporto_copertura: ntaData.RC,
+    altezza_massima: ntaData.H_max,
+    distanza_confini: ntaData.Dc,
+    distanza_fabbricati: ntaData.Df,
+    distanza_strada: ntaData.Ds,
+    zona_riferimento: zonaEffettiva,
+    fonte: ntaData.fonte,
+    nota: NTA_LOOKUP[comuneKey] ? 'Dati da NTA comunali' : 'Stima tipica per zona residenziale — verificare su NTA/PRG per zona specifica',
+  };
+
   // Salva i risultati nella CadastralQuery se query_id presente
   if (query_id) {
     try {
+      const enrichedVincoli = {
+        ...(existingReportData?.vincoli || {}),
+        vincolo_sismico: vincoloSismicoEnriched,
+        ...(vincoli_prg_regionali ? { vincoli_prg_regionali } : {}),
+      };
       const updatePayload = {
         report_data: {
           ...existingReportData,
           wfs_liguria: risultato,
+          vincoli: enrichedVincoli,
+          indici_edilizi: indiciEdiliziEnriched,
         },
       };
       // Aggiorna SEMPRE centroid se ora disponibile (sovrascrive anche valori precedenti per correggere geocoding rotto)

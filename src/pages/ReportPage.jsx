@@ -464,7 +464,7 @@ export default function ReportPage() {
         )}
 
         {/* Indici Edilizi */}
-        <IndiciEdiliziSection indici={r.indici_edilizi} comune={query.comune} wfsZonaUrbanistica={r.wfs_liguria?.risultati?.zona_urbanistica} delay={0.08} />
+        <IndiciEdiliziSection indici={r.indici_edilizi} comune={query.comune} regione={query.regione} query={query} wfsZonaUrbanistica={r.wfs_liguria?.risultati?.zona_urbanistica} delay={0.08} />
 
         {/* Vincoli e Rischi Piemonte */}
         {isPiemonte && query.report_data?.wfs_liguria && (

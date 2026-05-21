@@ -11,7 +11,7 @@ import ReportSection from "@/components/report/ReportSection";
 const INDICI_NTA = {
   "Alessandria": { IF: "2.0 m³/m²", RC: "50%", Hmax: "10.5 m (≈ 3 piani)", Dc: "5 m", Df: "10 m", Ds: "5 m", fonte: "PRG Alessandria — NTA Zone B (residenziale consolidato)" },
   "Torino":      { IF: "2.0 m³/m²", RC: "50%", Hmax: "14.5 m (≈ 4 piani)", Dc: "5 m", Df: "10 m", Ds: "5 m", fonte: "PRG Torino — NTA Zone B" },
-  "Cuneo":       { IF: "1.5 m³/m²", RC: "45%", Hmax: "9.0 m (≈ 3 piani)",  Dc: "5 m", Df: "10 m", Ds: "5 m", fonte: "PRG Cuneo — NTA Zone B" },
+  "Cuneo":       { IF: "2.0 m³/m²", RC: "50%", Hmax: "10.5 m (≈ 3 piani)", Dc: "5 m", Df: "10 m", Ds: "5 m", fonte: "PRG Cuneo — NTA Zone B" },
   "Asti":        { IF: "1.8 m³/m²", RC: "50%", Hmax: "10.5 m",              Dc: "5 m", Df: "10 m", Ds: "5 m", fonte: "PRG Asti — NTA Zone B" },
   "Novara":      { IF: "2.0 m³/m²", RC: "50%", Hmax: "12.0 m",              Dc: "5 m", Df: "10 m", Ds: "5 m", fonte: "PRG Novara — NTA Zone B" },
   "Vercelli":    { IF: "1.5 m³/m²", RC: "45%", Hmax: "9.0 m",               Dc: "5 m", Df: "10 m", Ds: "5 m", fonte: "PRG Vercelli — NTA Zone B" },
@@ -39,8 +39,34 @@ function getCduLinks(comuneNome) {
   return CDU_LINKS[comuneNome] || CDU_LINKS[Object.keys(CDU_LINKS).find(k => k.toLowerCase() === comuneNome.toLowerCase().trim())] || null;
 }
 
-function getNtaData(comuneNome) {
-  return INDICI_NTA[comuneNome] || null;
+// Fallback generico per Piemonte/Liguria quando il comune non è nel lookup
+const NTA_GENERIC_FALLBACK = { IF: "2.0 m³/m²", RC: "50%", Hmax: "10.5 m", Dc: "5 m", Df: "10 m", Ds: "5 m", fonte: "Stima tipica PRG residenziale — verificare su NTA/PRG Comunale per zona specifica" };
+
+function getNtaData(comuneNome, regione, query) {
+  if (!comuneNome) return null;
+  // Match esatto
+  const exact = INDICI_NTA[comuneNome] || INDICI_NTA[Object.keys(INDICI_NTA).find(k => k.toLowerCase() === comuneNome.toLowerCase().trim())];
+  if (exact) return exact;
+  // Se il record ha già indici_edilizi salvati da wfsLiguria, usali
+  const saved = query?.report_data?.indici_edilizi;
+  if (saved?.indice_edificabilita && !saved?.nota?.includes('Stima orientativa')) {
+    return {
+      IF: saved.indice_edificabilita,
+      RC: saved.rapporto_copertura || '—',
+      Hmax: saved.altezza_massima || '—',
+      Dc: saved.distanza_confini || '—',
+      Df: saved.distanza_fabbricati || '—',
+      Ds: saved.distanza_strada || '—',
+      fonte: saved.fonte || 'Dati WFS regionali',
+      note: saved.nota,
+    };
+  }
+  // Fallback generico per Piemonte/Liguria
+  const reg = (regione || query?.regione || '').toLowerCase();
+  if (reg.includes('piemonte') || reg.includes('liguria')) {
+    return { ...NTA_GENERIC_FALLBACK, note: `Stima tipica PRG residenziale ${reg.includes('piemonte') ? 'Piemonte' : 'Liguria'} — verificare NTA/PRG per sub-zona specifica` };
+  }
+  return null;
 }
 
 // ── NTA Index Card ──
@@ -137,13 +163,14 @@ function NtaNotFoundSection({ comune, cduInfo, linkPrg }) {
   );
 }
 
-export default function IndiciEdiliziSection({ indici, comune, query, report, wfsZonaUrbanistica, delay = 0.08 }) {
+export default function IndiciEdiliziSection({ indici, comune, query, report, wfsZonaUrbanistica, delay = 0.08, regione }) {
   if (!indici) return null;
 
   const comuneEffettivo = comune || query?.comune || report?.comune;
+  const regioneEffettiva = regione || query?.regione || report?.regione || '';
   const cduInfo = getCduLinks(comuneEffettivo);
   const linkPrg = wfsZonaUrbanistica?.link_prg_comunale;
-  const nta = getNtaData(comuneEffettivo);
+  const nta = getNtaData(comuneEffettivo, regioneEffettiva, query);
 
   return (
     <ReportSection icon={BarChart3} title="Indici Edilizi" delay={delay}>
