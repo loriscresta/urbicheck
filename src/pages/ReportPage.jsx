@@ -728,12 +728,14 @@ export default function ReportPage() {
 
       {/* Disclaimer */}
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.35 }}
-        className="mt-6 p-4 rounded-lg bg-muted/50 border border-border">
-        <p className="text-[11px] text-muted-foreground leading-relaxed">
-          <strong>Disclaimer:</strong> Le informazioni contenute in questo report sono generate a scopo informativo e operativo.
-          Si consiglia sempre di verificare i dati presso gli uffici competenti. Urbicheck non sostituisce la consulenza di un
-          professionista abilitato (geometra, architetto, ingegnere). I dati urbanistici possono variare in base ad aggiornamenti
-          normativi successivi alla data di generazione del report.
+        className="mt-6 p-4 rounded-lg border-2 border-amber-300 bg-amber-50 flex items-start gap-3">
+        <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+        <p className="text-[11px] text-amber-900 leading-relaxed">
+          <strong>⚠️ Questo report ha valore esclusivamente informativo e non costituisce parere professionale o certificazione urbanistica.</strong>{" "}
+          Verificare i dati presso gli uffici tecnici comunali prima di assumere qualsiasi decisione tecnica, legale o economica.
+          I dati urbanistici possono variare in base ad aggiornamenti normativi successivi alla data di generazione del report.
+          UrbiCheck non sostituisce la consulenza di un professionista abilitato (geometra, architetto, ingegnere). —{" "}
+          <a href="/termini-e-condizioni" className="underline hover:text-amber-700">Termini e Condizioni</a>
         </p>
       </motion.div>
 

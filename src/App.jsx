@@ -16,11 +16,20 @@ import AppLayout from '@/components/layout/AppLayout';
 import WaitlistPage from '@/pages/WaitlistPage';
 import DevPanel from '@/pages/DevPanel';
 import AdminPage from '@/pages/AdminPage';
+import PrivacyPolicy from '@/pages/PrivacyPolicy';
+import TerminiCondizioni from '@/pages/TerminiCondizioni';
+import CookieBanner from '@/components/CookieBanner';
+
+const LegalRoutes = (
+  <>
+    <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+    <Route path="/termini-e-condizioni" element={<TerminiCondizioni />} />
+  </>
+);
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, isAuthenticated, navigateToLogin } = useAuth();
 
-  // Show loading spinner while checking app public settings or auth
   if (isLoadingPublicSettings || isLoadingAuth) {
     return (
       <div className="fixed inset-0 flex items-center justify-center bg-background">
@@ -32,55 +41,61 @@ const AuthenticatedApp = () => {
     );
   }
 
-  // Handle authentication errors
   if (authError) {
     if (authError.type === 'user_not_registered') {
       return <UserNotRegisteredError />;
     } else if (authError.type === 'auth_required') {
-      // Show landing for unauthenticated
       return (
-        <Routes>
-          <Route path="/" element={<LandingPage />} />
-          <Route path="/waitlist" element={<WaitlistPage />} />
-          <Route path="*" element={<LandingPage />} />
-        </Routes>
+        <>
+          <CookieBanner />
+          <Routes>
+            <Route path="/" element={<LandingPage />} />
+            <Route path="/waitlist" element={<WaitlistPage />} />
+            {LegalRoutes}
+            <Route path="*" element={<LandingPage />} />
+          </Routes>
+        </>
       );
     }
   }
 
-  // Not authenticated - show landing
   if (!isAuthenticated) {
     return (
-      <Routes>
-        <Route path="/" element={<LandingPage />} />
-        <Route path="/waitlist" element={<WaitlistPage />} />
-        <Route path="*" element={<LandingPage />} />
-      </Routes>
+      <>
+        <CookieBanner />
+        <Routes>
+          <Route path="/" element={<LandingPage />} />
+          <Route path="/waitlist" element={<WaitlistPage />} />
+          {LegalRoutes}
+          <Route path="*" element={<LandingPage />} />
+        </Routes>
+      </>
     );
   }
 
-  // Render the main app for authenticated users
   return (
-    <Routes>
-      <Route path="/" element={<LandingPage />} />
-      <Route path="/waitlist" element={<WaitlistPage />} />
-      <Route element={<AppLayout />}>
-        <Route path="/dashboard" element={<ErrorBoundary><Dashboard /></ErrorBoundary>} />
-        <Route path="/search" element={<ErrorBoundary><SearchPage /></ErrorBoundary>} />
-        <Route path="/report/:id" element={<ErrorBoundary><ReportPage /></ErrorBoundary>} />
-        <Route path="/history" element={<ErrorBoundary><HistoryPage /></ErrorBoundary>} />
-        <Route path="/credits" element={<ErrorBoundary><CreditsPage /></ErrorBoundary>} />
+    <>
+      <CookieBanner />
+      <Routes>
+        <Route path="/" element={<LandingPage />} />
+        <Route path="/waitlist" element={<WaitlistPage />} />
+        {LegalRoutes}
+        <Route element={<AppLayout />}>
+          <Route path="/dashboard" element={<ErrorBoundary><Dashboard /></ErrorBoundary>} />
+          <Route path="/search" element={<ErrorBoundary><SearchPage /></ErrorBoundary>} />
+          <Route path="/report/:id" element={<ErrorBoundary><ReportPage /></ErrorBoundary>} />
+          <Route path="/history" element={<ErrorBoundary><HistoryPage /></ErrorBoundary>} />
+          <Route path="/credits" element={<ErrorBoundary><CreditsPage /></ErrorBoundary>} />
           <Route path="/dev" element={<ErrorBoundary><DevPanel /></ErrorBoundary>} />
           <Route path="/admin" element={<ErrorBoundary><AdminPage /></ErrorBoundary>} />
-      </Route>
-      <Route path="*" element={<PageNotFound />} />
-    </Routes>
+        </Route>
+        <Route path="*" element={<PageNotFound />} />
+      </Routes>
+    </>
   );
 };
 
-
 function App() {
-
   return (
     <Router>
       <AuthProvider>

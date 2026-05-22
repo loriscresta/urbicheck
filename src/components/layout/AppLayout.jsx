@@ -185,10 +185,19 @@ export default function AppLayout() {
       </div>
 
       {/* Main Content */}
-      <main className="flex-1 lg:overflow-y-auto">
-        <div className="pt-16 lg:pt-0">
+      <main className="flex-1 lg:overflow-y-auto flex flex-col">
+        <div className="flex-1 pt-16 lg:pt-0">
           <Outlet />
         </div>
+        <footer className="border-t border-border/30 px-6 py-4" style={{ background: 'rgba(26,58,107,0.04)', fontFamily: "'IBM Plex Mono', monospace" }}>
+          <div className="flex flex-wrap items-center justify-between gap-2 text-[10px] text-muted-foreground">
+            <span>© 2026 UrbiCheck — Dell'Aria Claudia Giuseppina | P.IVA 02655840060</span>
+            <div className="flex gap-4">
+              <Link to="/privacy-policy" className="hover:text-foreground transition-colors">Privacy Policy</Link>
+              <Link to="/termini-e-condizioni" className="hover:text-foreground transition-colors">Termini e Condizioni</Link>
+            </div>
+          </div>
+        </footer>
       </main>
     </div>
   );
