@@ -7,7 +7,10 @@ import { Button } from "@/components/ui/button";
 import { motion } from "framer-motion";
 import ParcellaMap from "@/components/report/ParcellaMap";
 
-const PRICE = 9.90;
+const BETA_MODE = true;
+const BETA_PRICE = 2.99;
+const FULL_PRICE = 9.90;
+const PRICE = BETA_MODE ? BETA_PRICE : FULL_PRICE;
 
 function PreviewPanel({ query }) {
   const r = query.report_data || {};
@@ -109,7 +112,7 @@ function PreviewPanel({ query }) {
           <div className="absolute inset-0 flex items-center justify-center bg-background/70 backdrop-blur-[2px]">
             <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-white border border-border shadow text-sm font-semibold text-foreground">
               <Lock className="w-4 h-4 text-muted-foreground" />
-              Sblocca il report completo — €9,90
+              {`Sblocca il report completo — €${PRICE.toFixed(2)}${BETA_MODE ? ' (prezzo beta)' : ''}`}
             </div>
           </div>
         </div>
@@ -239,7 +242,14 @@ export default function PaymentGate({ query, onPaid }) {
               <p className="font-bold text-emerald-900 text-lg">Sblocca la scheda completa</p>
               <p className="text-sm text-emerald-700">Accesso immediato a tutti i dati urbanistici</p>
             </div>
-            <span className="ml-auto text-2xl font-black text-emerald-800">€9,90</span>
+            <div className="ml-auto text-right">
+              <span className="text-2xl font-black text-emerald-800">€{PRICE.toFixed(2)}</span>
+              {BETA_MODE && (
+                <p className="text-xs text-emerald-600 mt-0.5">
+                  <span className="line-through text-gray-400">€{FULL_PRICE.toFixed(2)}</span> prezzo beta
+                </p>
+              )}
+            </div>
           </div>
 
           <ul className="text-sm text-emerald-800 space-y-1 mb-5 pl-2">
@@ -249,6 +259,7 @@ export default function PaymentGate({ query, onPaid }) {
             <li>✓ Pratiche necessarie (SCIA, PdC…)</li>
             <li>✓ Analisi finanziaria & OMI</li>
             <li>✓ Download PDF certificato</li>
+            {BETA_MODE && <li className="text-emerald-600 font-semibold">🎁 Prezzo beta: €2,99 invece di €9,90</li>}
           </ul>
 
           <div className="flex items-center justify-between text-sm text-emerald-700 mb-4 p-3 bg-white/60 rounded-lg">
@@ -277,7 +288,7 @@ export default function PaymentGate({ query, onPaid }) {
             >
               {isProcessing
                 ? <><Loader2 className="w-4 h-4 animate-spin mr-2" /> Elaborazione pagamento…</>
-                : <><Unlock className="w-4 h-4 mr-2" /> Sblocca scheda completa — €9,90</>
+                : <><Unlock className="w-4 h-4 mr-2" /> Sblocca scheda — €{PRICE.toFixed(2)}{BETA_MODE ? ' (beta)' : ''}</>
               }
             </Button>
           ) : (

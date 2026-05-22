@@ -15,6 +15,24 @@ Deno.serve(async (req) => {
     const user_email = user.email;
     const user_name = user.name || user.full_name || '';
 
+    // ── 5 report gratuiti di benvenuto (solo se non esistono già crediti) ──
+    const WELCOME_CREDITS = 49.50;
+    const existingCredits = await base44.asServiceRole.entities.UserCredits.filter({ user_email });
+    if (existingCredits.length === 0) {
+      await base44.asServiceRole.entities.UserCredits.create({
+        user_email,
+        balance: WELCOME_CREDITS,
+        total_spent: 0,
+        total_queries: 0,
+      });
+      await base44.asServiceRole.entities.CreditTransaction.create({
+        user_email,
+        type: 'purchase',
+        amount: WELCOME_CREDITS,
+        description: '🎁 5 report gratuiti di benvenuto — periodo beta',
+      });
+    }
+
     if (!user_email) return Response.json({ error: 'user_email required' }, { status: 400 });
 
     const firstName = (user_name || 'Utente').split(' ')[0];
@@ -83,8 +101,8 @@ Deno.serve(async (req) => {
                   <table cellpadding="0" cellspacing="0"><tr>
                     <td style="width:40px;vertical-align:top;font-size:20px;">💳</td>
                     <td style="vertical-align:top;padding-left:12px;">
-                      <p style="margin:0 0 4px;font-family:'Courier New',monospace;font-size:13px;font-weight:700;color:#1e3a5f;">€9,90 — Pay per report</p>
-                      <p style="margin:0;font-family:Georgia,serif;font-size:13px;color:#64748b;line-height:1.5;">Nessun abbonamento. Paghi solo quello che usi.</p>
+                      <p style="margin:0 0 4px;font-family:'Courier New',monospace;font-size:13px;font-weight:700;color:#10b981;">🎁 5 report gratuiti — già accreditati!</p>
+                      <p style="margin:0;font-family:Georgia,serif;font-size:13px;color:#64748b;line-height:1.5;">Abbiamo accreditato €49,50 sul tuo saldo. Durante la beta ogni report costa solo €2,99.</p>
                     </td>
                   </tr></table>
                 </td>
