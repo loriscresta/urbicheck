@@ -179,6 +179,7 @@ export default function PaymentGate({ query, onPaid }) {
       await base44.entities.CadastralQuery.update(query.id, {
         paid: true,
         status: "completed",
+        cost: PRICE,
       });
 
       if (user.role === "admin") {

@@ -16,7 +16,11 @@ Deno.serve(async (req) => {
     const user_name = user.name || user.full_name || '';
 
     // ── 5 report gratuiti di benvenuto (solo se non esistono già crediti) ──
-    const WELCOME_CREDITS = 49.50;
+    const BETA_MODE = true;
+    const BETA_PRICE = 2.99;
+    const FULL_REPORT_PRICE = 9.90;
+    const REPORT_PRICE = BETA_MODE ? BETA_PRICE : FULL_REPORT_PRICE;
+    const WELCOME_CREDITS = parseFloat((REPORT_PRICE * 5).toFixed(2));
     const existingCredits = await base44.asServiceRole.entities.UserCredits.filter({ user_email });
     if (existingCredits.length === 0) {
       await base44.asServiceRole.entities.UserCredits.create({
