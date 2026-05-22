@@ -19,6 +19,15 @@ const fetchWithTimeout = (url, options = {}, ms = 15000) =>
 // ── sleep helper ──
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
+// ── Haversine distance in metres ──
+function haversineM(lat1, lon1, lat2, lon2) {
+  const R = 6371000;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
 // ============================================================
 // DATASET STATICI — LIGURIA
 // ============================================================
@@ -160,6 +169,48 @@ async function geocodeAddress(indirizzo, comune, provincia, regione) {
 }
 
 // ============================================================
+// VINCOLO COSTIERO — Overpass coastline entro 350m (solo Liguria)
+// Art.142 c.1 lett. a) D.Lgs 42/2004
+// ============================================================
+async function queryCoastlineOverpass(lat, lon) {
+  const q = `[out:json][timeout:15];\nway(around:350,${lat},${lon})[natural=coastline];\nout geom;`;
+  const MIRRORS = [
+    'https://overpass-api.de/api/interpreter',
+    'https://overpass.osm.ch/api/interpreter',
+    'https://lz4.overpass-api.de/api/interpreter',
+  ];
+  const NOTE = 'Verificare anche la fascia di rispetto di eventuali porti e aree marine protette.';
+  for (const endpoint of MIRRORS) {
+    try {
+      const res = await fetchWithTimeout(endpoint, {
+        method: 'POST', body: q, headers: { 'Content-Type': 'text/plain' },
+      }, 18000);
+      const data = await res.json();
+      const elements = data.elements || [];
+      if (elements.length === 0) {
+        return { presente: false, note: NOTE };
+      }
+      let minDist = Infinity;
+      for (const el of elements) {
+        for (const node of (el.geometry || [])) {
+          const d = haversineM(lat, lon, node.lat, node.lon);
+          if (d < minDist) minDist = d;
+        }
+      }
+      return {
+        presente: true,
+        distanza_m: Math.round(minDist),
+        riferimento_normativo: 'Art.142 c.1 lett. a) D.Lgs 42/2004',
+        fascia_tutela: '300m dalla battigia del mare',
+        fonte: 'OpenStreetMap / Overpass API',
+        note: NOTE,
+      };
+    } catch (_e) { /* try next mirror */ }
+  }
+  return { presente: null, fonte_ok: false, note: `Non verificabile (Overpass API non raggiungibile). ${NOTE}` };
+}
+
+// ============================================================
 // PAI via WFS Regione Liguria (EPSG:3003)
 // ============================================================
 const PAI_LAYERS_LIGURIA = [
@@ -183,6 +234,34 @@ async function queryPAILiguria(x3003, y3003) {
       }
     } catch (_e) {
       results.push({ layer: layer.label, trovato: false, errore: 'WFS non raggiungibile' });
+    }
+  }
+  return results;
+}
+
+// ============================================================
+// PAI via WFS ARPA Liguria (geoportal.arpal.liguria.it)
+// Layer: PARI:carto_frane + PARI:carto_allagamenti
+// ============================================================
+async function queryPAIArpaLiguria(lat, lon) {
+  const margin = 0.002;
+  const bbox = `${lon - margin},${lat - margin},${lon + margin},${lat + margin}`;
+  const layers = [
+    { typeName: 'PARI:carto_frane',       label: 'Rischio frane (ARPA Liguria)' },
+    { typeName: 'PARI:carto_allagamenti', label: 'Rischio allagamenti (ARPA Liguria)' },
+  ];
+  const results = [];
+  for (const layer of layers) {
+    try {
+      const url = `https://geoportal.arpal.liguria.it/geoserver/wfs?service=WFS&version=1.1.0&request=GetFeature` +
+        `&typeName=${layer.typeName}&outputFormat=application/json&BBOX=${bbox},EPSG:4326&maxFeatures=20`;
+      const res = await fetchWithTimeout(url, {}, 15000);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const json = await res.json();
+      const count = (json.features || []).length;
+      results.push({ layer: layer.label, trovato: count > 0, features_count: count, fonte_ok: true, fonte: 'ARPA Liguria WFS' });
+    } catch (_e) {
+      results.push({ layer: layer.label, trovato: false, fonte_ok: false, fonte: 'ARPA Liguria WFS', nota: 'Verifica manuale su geoportal.arpal.liguria.it — Piano di Bacino Liguria' });
     }
   }
   return results;
@@ -242,6 +321,54 @@ async function queryPAIPiemonte(lat, lon) {
     }
   }
   return results;
+}
+
+// ============================================================
+// ZONA URBANISTICA LIGURIA via WMS Geoportale Regione
+// Layer: Territorio:PTR_ambiti_urbanistici
+// ============================================================
+async function queryZonaUrbanisticaLiguria(lat, lon, comune, provincia) {
+  const margin = 0.005;
+  const bbox = `${lon - margin},${lat - margin},${lon + margin},${lat + margin}`;
+  const WMS = 'https://geoportal.regione.liguria.it/geoserver/Territorio/wms';
+  const url = `${WMS}?SERVICE=WMS&VERSION=1.1.1&REQUEST=GetFeatureInfo` +
+    `&LAYERS=Territorio:PTR_ambiti_urbanistici&QUERY_LAYERS=Territorio:PTR_ambiti_urbanistici` +
+    `&BBOX=${bbox}&WIDTH=101&HEIGHT=101&X=50&Y=50` +
+    `&SRS=EPSG:4326&INFO_FORMAT=application/json&FEATURE_COUNT=5`;
+  const isGenova = comune.toLowerCase().includes('genova');
+  const fallback = {
+    disponibile: false,
+    messaggio: isGenova
+      ? 'Piano Urbanistico Comunale (PUC) Genova 2015 — richiedere CDU al Comune'
+      : `Piano Urbanistico Comunale (PUC) ${comune} — richiedere Certificato Urbanistico al Comune`,
+    link_comune: isGenova
+      ? 'https://www.comune.genova.it/servizi/urbanistica'
+      : `https://www.google.com/search?q=PUC+${encodeURIComponent(comune)}+${encodeURIComponent(provincia)}+certificato+urbanistico`,
+    link_geoportale: 'https://geoportale.regione.liguria.it',
+    azione_consigliata: 'Richiedere il Certificato Urbanistico (CU) al Comune.',
+  };
+  try {
+    const res = await fetchWithTimeout(url, {}, 15000);
+    const text = await res.text();
+    let parsed = null;
+    try { parsed = JSON.parse(text); } catch (_e) {}
+    if (parsed?.features?.length > 0) {
+      const props = parsed.features[0].properties;
+      return {
+        disponibile: true,
+        zona_codice: props.CODICE || props.codice || props.TIPO || null,
+        destinazione_uso: props.DESCRIZIONE || props.descrizione || props.TIPOLOGIA || 'Zona rilevata',
+        messaggio: `PTR Liguria: ${props.DESCRIZIONE || props.TIPOLOGIA || 'zona rilevata'}`,
+        fonte: 'WMS Geoportale Regione Liguria — PTR_ambiti_urbanistici',
+        fonte_ok: true,
+        link_geoportale: 'https://geoportale.regione.liguria.it',
+        azione_consigliata: 'Richiedere il Certificato Urbanistico (CU) al Comune per il PUC di dettaglio.',
+      };
+    }
+    return { ...fallback, fonte: 'WMS Geoportale Regione Liguria (nessun dato PTR per questo punto)', fonte_ok: true };
+  } catch (_e) {
+    return { ...fallback, fonte: 'WMS Geoportale Regione Liguria (non raggiungibile)', fonte_ok: false };
+  }
 }
 
 // ============================================================
@@ -366,7 +493,9 @@ out skel qt;`;
 async function runAnalisiLiguria({ comune, provincia, indirizzo, comuneLower, prefill_lat, prefill_lon }) {
   let lat = prefill_lat || null, lon = prefill_lon || null, x3003 = null, y3003 = null, geocodingError = null;
   let pai = [{ layer: 'Rischio idrogeologico', trovato: false, errore: 'Non eseguito' }, { layer: 'Rischio idraulico', trovato: false, errore: 'Non eseguito' }];
+  let paiArpa = [];
   let overpassResult = { railways: [], waterways: [], lakes: [], overpass_ok: false };
+  let coastlineResult = { presente: null, note: 'Non verificato' };
 
   if (lat === null) {
     try {
@@ -380,25 +509,49 @@ async function runAnalisiLiguria({ comune, provincia, indirizzo, comuneLower, pr
     const proj = wgs84ToEpsg3003(lon, lat);
     x3003 = proj.x; y3003 = proj.y;
     try {
-      [pai, overpassResult] = await Promise.all([
+      [pai, paiArpa, overpassResult, coastlineResult] = await Promise.all([
         queryPAILiguria(x3003, y3003),
+        queryPAIArpaLiguria(lat, lon),
         queryOverpass(lat, lon, false),
+        queryCoastlineOverpass(lat, lon),
       ]);
     } catch (_e) {}
   }
 
   const { railways, waterways, overpass_ok } = overpassResult;
 
+  // PAI combinato: usa ARPA Liguria se disponibile, altrimenti M450 Liguria WFS
+  const paiArpaOk = paiArpa.some(r => r.fonte_ok);
+  const paiFinal = paiArpaOk ? paiArpa : pai;
+  const paiFinalOk = paiArpaOk || pai.some(r => !r.errore);
+  const paiFinalLink = paiArpaOk ? 'https://geoportal.arpal.liguria.it' : 'https://pai.ambienteinliguria.it';
+  const paiFinalMetodo = paiArpaOk
+    ? 'WFS ARPA Liguria (geoportal.arpal.liguria.it) — Piano di Bacino Liguria (PARI).'
+    : 'WFS ufficiale Regione Liguria — Piano di Bacino Stralcio (M450).';
+
+  // Zona urbanistica Liguria
+  let zona_urbanistica = {
+    disponibile: false,
+    messaggio: 'La zonizzazione urbanistica non è disponibile. Richiedere CU al Comune.',
+    link_geoportale: 'https://geoportale.regione.liguria.it',
+    azione_consigliata: 'Richiedere il Certificato Urbanistico (CU) presso lo Sportello Unico del Comune.',
+  };
+  if (lat !== null) {
+    zona_urbanistica = await queryZonaUrbanisticaLiguria(lat, lon, comune, provincia);
+  }
+
   // Vincoli ope legis
   const vincoli_paesaggistici = [];
   if (COMUNI_COSTIERI_LIGURIA.has(comuneLower)) {
+    const distanza = coastlineResult.distanza_m ? ` (circa ${coastlineResult.distanza_m}m dalla costa)` : '';
     vincoli_paesaggistici.push({
       tipo: 'Territori costieri',
-      livello: 'APPLICABILE',
+      livello: (coastlineResult.presente === false) ? 'DA_VERIFICARE' : 'APPLICABILE',
       riferimento_normativo: 'Art.142 c.1 lett. a) D.Lgs 42/2004',
       fascia_tutela: '300m dalla battigia del mare',
-      fonte: 'Analisi logica — comune costiero',
-      descrizione: "Il comune è classificato costiero. La legge impone il vincolo paesaggistico nella fascia di 300m dalla battigia. La distanza esatta del lotto dal mare deve essere verificata da un tecnico.",
+      distanza_costa_m: coastlineResult.distanza_m || null,
+      fonte: 'Analisi logica + OpenStreetMap (Overpass API)',
+      descrizione: `Il comune è classificato costiero${distanza}. Il vincolo paesaggistico nella fascia di 300m dalla battigia deve essere verificato da un tecnico abilitato.`,
       link: 'https://liguriavincoli.it',
     });
   }
@@ -418,15 +571,16 @@ async function runAnalisiLiguria({ comune, provincia, indirizzo, comuneLower, pr
     }
   }
 
-  // Sismica
-  let zona_sismica, descrizione_sismica, riferimento_normativo_sismica;
+  // Sismica Liguria
+  let zona_sismica, descrizione_sismica;
   if (SISMICA_LIGURIA_ZONA2.has(comuneLower)) {
-    zona_sismica = 2; descrizione_sismica = "Alta sismicità — applicazione integrale NTC 2018"; riferimento_normativo_sismica = 'OPCM 3274/2003 — DGR Liguria 1362/2010';
+    zona_sismica = 2; descrizione_sismica = 'Alta sismicità — applicazione integrale NTC 2018';
   } else if (SISMICA_LIGURIA_ZONA4.has(comuneLower)) {
-    zona_sismica = 4; descrizione_sismica = 'Bassa sismicità'; riferimento_normativo_sismica = 'OPCM 3274/2003 — DGR Liguria 1362/2010';
+    zona_sismica = 4; descrizione_sismica = 'Bassa sismicità';
   } else {
-    zona_sismica = 3; descrizione_sismica = 'Media sismicità — NTC 2018'; riferimento_normativo_sismica = 'OPCM 3274/2003 — DGR Liguria 1362/2010';
+    zona_sismica = 3; descrizione_sismica = 'Media sismicità — NTC 2018';
   }
+  const riferimento_normativo_sismica = 'OPCM 3274/2003 — classificazione vigente Regione Liguria';
 
   const ferrovie = railways.length > 0
     ? railways.map(r => ({ trovato: true, nome: r.nome, tipo_infrastruttura: r.tipo, operatore: r.operatore, livello: 'VERIFICA_NECESSARIA', riferimento_normativo: 'DPR 11 luglio 1980 n.753', fascia_rispetto: "30m dall'asse del binario (art.49)", fonte: 'OpenStreetMap / Overpass API', descrizione: `Rilevata ferrovia (${r.nome}) entro 250m. Il DPR 753/1980 vieta nuove costruzioni entro 30m dall'asse del binario.` }))
@@ -436,38 +590,40 @@ async function runAnalisiLiguria({ comune, provincia, indirizzo, comuneLower, pr
     ? waterways.map(w => ({ trovato: true, nome: w.nome, tipo: w.tipo, livello: w.tipo === 'river' ? 'POSSIBILE_VINCOLO_ALTO' : 'POSSIBILE_VINCOLO_DA_VERIFICARE', riferimento_normativo: 'Art.142 c.1 lett. c) D.Lgs 42/2004', fascia_tutela: '150m dal ciglio di sponda', fonte: 'OpenStreetMap / Overpass API', descrizione: w.tipo === 'river' ? `Rilevato fiume (${w.nome}) entro 250m. Alta probabilità di vincolo. Verificare con Catasto delle Acque Regione Liguria.` : `Rilevato corso d'acqua (${w.nome}) entro 250m. Se iscritto nelle acque pubbliche, si applica il vincolo di 150m.` }))
     : [{ trovato: false, nota: geocodingError ? 'Non verificabile (geocoding fallito).' : !overpass_ok ? "Non verificabile (Overpass API non raggiungibile — verificare su liguriavincoli.it)." : "Nessun corso d'acqua rilevato entro 250m dal punto analizzato." }];
 
-  const zona_urbanistica = {
-    disponibile: false,
-    messaggio: 'La zonizzazione urbanistica non è disponibile tramite WFS regionale. Ogni Comune gestisce il proprio PRG/PUC.',
-    link_geoportale: `https://geoportale.regione.liguria.it/geonetwork/srv/ita/catalog.search#/search?any=${encodeURIComponent(comune)}`,
-    link_comune: `https://www.google.com/search?q=PRG+PUC+${encodeURIComponent(comune)}+${encodeURIComponent(provincia)}+pianificazione+urbanistica`,
-    azione_consigliata: 'Richiedere il Certificato Urbanistico (CU) presso lo Sportello Unico del Comune.',
-  };
+
 
   return {
     coordinate: lat !== null ? { lat, lon, x_gauss_boaga: x3003, y_gauss_boaga: y3003 } : null,
     geocoding_error: geocodingError || null,
     centroid_lat: lat,
     centroid_lng: lon,
+    regione_analisi: 'Liguria',
     risultati: {
       vincoli_paesaggistici_ope_legis: {
-        metodologia: 'Analisi logica basata su classificazione del comune.',
+        metodologia: 'Analisi logica ope legis art.142 D.Lgs 42/2004 + verifica Overpass API.',
         vincoli: vincoli_paesaggistici.length > 0 ? vincoli_paesaggistici : [{ livello: 'NESSUN_VINCOLO_RILEVATO', nota: 'Nessun vincolo paesaggistico ope legis rilevato per questo comune.' }],
+        vincolo_costiero: coastlineResult,
         nota_foreste_boschi: 'Il vincolo boschivo (art.142 lett.g) richiede verifica puntuale con il tecnico.',
         link_verifica_ufficiale: 'https://liguriavincoli.it',
       },
       vincolo_corsi_acqua: { metodologia: 'Rilevamento tramite OpenStreetMap (Overpass API).', dati: corsi_acqua_vincolo, fonte_ok: overpass_ok },
       vincolo_ferroviario: { metodologia: 'Rilevamento tramite OpenStreetMap (Overpass API).', dati: ferrovie, fonte_ok: overpass_ok },
-      pai_rischio_idrogeologico: { metodologia: 'WFS ufficiale Regione Liguria — Piano di Bacino Stralcio (M450).', dati: pai, link_pai: 'https://pai.ambienteinliguria.it' },
+      pai_rischio_idrogeologico: {
+        metodologia: paiFinalMetodo,
+        dati: paiFinal,
+        fonte_ok: paiFinalOk,
+        link_pai: paiFinalLink,
+        nota: !paiFinalOk ? 'Verifica manuale su geoportal.arpal.liguria.it — Piano di Bacino Liguria' : null,
+      },
       sismica: { zona: zona_sismica, descrizione: descrizione_sismica, riferimento_normativo: riferimento_normativo_sismica, nota: 'Per verifiche strutturali applicare NTC 2018 con spettri sito-dipendenti.' },
       zona_urbanistica,
     },
     link_utili: {
       geoportale_liguria: 'https://geoportale.regione.liguria.it',
       liguriavincoli: 'https://liguriavincoli.it',
-      pai: 'https://pai.ambienteinliguria.it',
+      arpal: 'https://geoportal.arpal.liguria.it',
     },
-    note_salvataggio: `WFS Liguria completato il ${new Date().toLocaleDateString('it-IT')}. Vincoli: ${vincoli_paesaggistici.length}, PAI trovati: ${pai.filter(p => p.trovato).length}.`,
+    note_salvataggio: `WFS Liguria completato il ${new Date().toLocaleDateString('it-IT')}. Vincoli: ${vincoli_paesaggistici.length}, PAI (ARPA): ${paiArpa.filter(p => p.trovato).length}, Costa: ${coastlineResult.presente === true ? `${coastlineResult.distanza_m}m` : coastlineResult.presente === false ? 'no' : 'n/d'}.`,
   };
 }
 
