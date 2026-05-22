@@ -10,7 +10,6 @@ import ParcellaMap from "@/components/report/ParcellaMap";
 const BETA_MODE = true;
 const BETA_PRICE = 2.99;
 const FULL_PRICE = 9.90;
-const PRICE = BETA_MODE ? BETA_PRICE : FULL_PRICE;
 
 function PreviewPanel({ query }) {
   const r = query.report_data || {};
@@ -112,7 +111,7 @@ function PreviewPanel({ query }) {
           <div className="absolute inset-0 flex items-center justify-center bg-background/70 backdrop-blur-[2px]">
             <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-white border border-border shadow text-sm font-semibold text-foreground">
               <Lock className="w-4 h-4 text-muted-foreground" />
-              {`Sblocca il report completo — €${PRICE.toFixed(2)}${BETA_MODE ? ' (prezzo beta)' : ''}`}
+              {`Sblocca il report completo — €${FULL_PRICE.toFixed(2)}${BETA_MODE ? ' (prezzo beta)' : ''}`}
             </div>
           </div>
         </div>
@@ -138,78 +137,25 @@ export default function PaymentGate({ query, onPaid }) {
   const handlePay = async () => {
     setError("");
     setIsProcessing(true);
-
     try {
-      const user = await base44.auth.me();
-
-      // Rate limiting: max 10 query_charge per 24h (tutti gli utenti)
-      const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
-      const recentTx = await base44.entities.CreditTransaction.filter(
-        { user_email: user.email, type: "query_charge" }, "-created_date", 50
-      );
-      const last24h = recentTx.filter(tx => new Date(tx.created_date) > yesterday);
-      if (last24h.length >= 10) {
-        setError("Limite giornaliero raggiunto (10 report/giorno). Riprova domani.");
+      const { chargeReport } = await import('@/functions/chargeReport');
+      const result = await chargeReport({ query_id: query.id });
+      if (result?.data?.error === 'insufficient_credits') {
+        setError(`Saldo insufficiente (€${(result.data.balance || 0).toFixed(2)} disponibili). Servono €${FULL_PRICE.toFixed(2)}.`);
         setIsProcessing(false);
         return;
       }
-
-      const creditsList = await base44.entities.UserCredits.filter({ user_email: user.email });
-      const currentCredits = creditsList[0];
-      if (!currentCredits || currentCredits.balance < PRICE) {
-        setError(`Saldo insufficiente (€${(currentCredits?.balance || 0).toFixed(2)} disponibili). Servono €${PRICE.toFixed(2)}.`);
-        setIsProcessing(false);
-        return;
-      }
-
-      await base44.entities.CreditTransaction.create({
-        user_email: user.email,
-        type: "query_charge",
-        amount: -PRICE,
-        description: `Scheda completa: ${query.comune} — F.${query.foglio} P.${query.particella}`,
-        query_id: query.id,
-      });
-
-      await base44.entities.UserCredits.update(currentCredits.id, {
-        balance: currentCredits.balance - PRICE,
-        total_spent: (currentCredits.total_spent || 0) + PRICE,
-        total_queries: (currentCredits.total_queries || 0) + 1,
-      });
-
-      await base44.entities.CadastralQuery.update(query.id, {
-        paid: true,
-        status: "completed",
-        cost: PRICE,
-      });
-
-      if (user.role === "admin") {
-        setTimeout(async () => {
-          try {
-            const latestCredits = await base44.entities.UserCredits.filter({ user_email: user.email });
-            const latest = latestCredits[0];
-            if (latest) {
-              await base44.entities.UserCredits.update(latest.id, { balance: latest.balance + PRICE });
-              await base44.entities.CreditTransaction.create({
-                user_email: user.email, type: "refund", amount: +PRICE,
-                description: `[DEV MODE] Auto-refund — ${query.comune} F.${query.foglio} P.${query.particella}`,
-                query_id: query.id,
-              });
-            }
-          } catch (_e) {}
-        }, 60000);
-      }
-
       await refetchCredits();
       onPaid();
-
     } catch (err) {
-      setError("Errore durante il pagamento. Riprova.");
+      console.error('handlePay error:', err);
+      setError('Errore durante il pagamento. Riprova.');
       setIsProcessing(false);
     }
   };
 
   const balance = credits?.balance || 0;
-  const hasFunds = balance >= PRICE;
+  const hasFunds = balance >= FULL_PRICE;
 
   return (
     <div className="p-6 lg:p-10 max-w-2xl mx-auto">
@@ -244,10 +190,10 @@ export default function PaymentGate({ query, onPaid }) {
               <p className="text-sm text-emerald-700">Accesso immediato a tutti i dati urbanistici</p>
             </div>
             <div className="ml-auto text-right">
-              <span className="text-2xl font-black text-emerald-800">€{PRICE.toFixed(2)}</span>
+              <span className="text-2xl font-black text-emerald-800">€{FULL_PRICE.toFixed(2)}</span>
               {BETA_MODE && (
                 <p className="text-xs text-emerald-600 mt-0.5">
-                  <span className="line-through text-gray-400">€{FULL_PRICE.toFixed(2)}</span> prezzo beta
+                  Accesso completo
                 </p>
               )}
             </div>
@@ -269,7 +215,7 @@ export default function PaymentGate({ query, onPaid }) {
               Saldo disponibile
             </span>
             <span className={`font-bold ${hasFunds ? "text-emerald-700" : "text-red-600"}`}>
-              €{balance.toFixed(2)}
+              €{balance.toFixed(2)}{!hasFunds && BETA_MODE && ` — ricarica per sbloccare`}
             </span>
           </div>
 
@@ -289,7 +235,7 @@ export default function PaymentGate({ query, onPaid }) {
             >
               {isProcessing
                 ? <><Loader2 className="w-4 h-4 animate-spin mr-2" /> Elaborazione pagamento…</>
-                : <><Unlock className="w-4 h-4 mr-2" /> Sblocca scheda — €{PRICE.toFixed(2)}{BETA_MODE ? ' (beta)' : ''}</>
+                : <><Unlock className="w-4 h-4 mr-2" /> Sblocca scheda — €{FULL_PRICE.toFixed(2)}</>
               }
             </Button>
           ) : (
