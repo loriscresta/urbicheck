@@ -913,17 +913,40 @@ Deno.serve(async (req) => {
   // 2. Vincoli PRG regionali da WFS
   const vincoli_prg_regionali = ris.vincoli_prg && ris.vincoli_prg.length > 0 ? ris.vincoli_prg : undefined;
 
-  // 3. Indici edilizi — lookup NTA hardcoded per Piemonte/Liguria
+  // 3. Indici edilizi — lookup NTA v1.1 (2026-05-22) per Piemonte/Liguria
+  // Valori da "Zona residenziale" (PRG/PUC zona B consolidata) — 21 comuni coperti.
   const NTA_LOOKUP = {
-    'alessandria': { IF: '2.0 mc/mq', RC: '50%', H_max: '10.5 m', Dc: '5 m', Df: '10 m', Ds: '5 m', fonte: 'PRG Alessandria NTA Zone B' },
-    'torino':      { IF: '2.0 mc/mq', RC: '50%', H_max: '14.5 m', Dc: '5 m', Df: '10 m', Ds: '5 m', fonte: 'PRG Torino NTA Zone B' },
-    'genova':      { IF: '2.0 mc/mq', RC: '55%', H_max: '12.0 m', Dc: '5 m', Df: '10 m', Ds: '5 m', fonte: 'PUC Genova NTA Tessuto Urbano' },
-    'cuneo':       { IF: '2.0 mc/mq', RC: '50%', H_max: '10.5 m', Dc: '5 m', Df: '10 m', Ds: '5 m', fonte: 'PRG Cuneo NTA Zone B' },
-    'asti':        { IF: '1.8 mc/mq', RC: '50%', H_max: '10.5 m', Dc: '5 m', Df: '10 m', Ds: '5 m', fonte: 'PRG Asti NTA Zone B' },
-    'novara':      { IF: '2.0 mc/mq', RC: '50%', H_max: '12.0 m', Dc: '5 m', Df: '10 m', Ds: '5 m', fonte: 'PRG Novara NTA Zone B' },
-    'la spezia':   { IF: '1.8 mc/mq', RC: '50%', H_max: '10.5 m', Dc: '5 m', Df: '10 m', Ds: '5 m', fonte: 'PUC La Spezia NTA Zone B' },
-    'savona':      { IF: '1.5 mc/mq', RC: '45%', H_max: '9.0 m',  Dc: '5 m', Df: '10 m', Ds: '5 m', fonte: 'PUC Savona NTA Zone B' },
-    'imperia':     { IF: '1.5 mc/mq', RC: '45%', H_max: '9.0 m',  Dc: '5 m', Df: '10 m', Ds: '5 m', fonte: 'PUC Imperia NTA Zone B' },
+    // Piemonte
+    'alessandria':             { IF: '2.0 mc/mq', RC: '50%', H_max: '10.5 m', Dc: '5 m', Df: '10 m', Ds: '5 m', fonte: 'PRG Alessandria — NTA Zone B' },
+    'torino':                  { IF: '2.0 mc/mq', RC: '50%', H_max: '14.5 m', Dc: '5 m', Df: '10 m', Ds: '5 m', fonte: 'PRG Torino 1995 — NTA Zone 2.2' },
+    'cuneo':                   { IF: '2.0 mc/mq', RC: '50%', H_max: '10.5 m', Dc: '5 m', Df: '10 m', Ds: '5 m', fonte: 'PRG Cuneo — NTA Zone B' },
+    'asti':                    { IF: '2.0 mc/mq', RC: '50%', H_max: '10.5 m', Dc: '5 m', Df: '10 m', Ds: '5 m', fonte: 'PRG Asti — NTA Zone B' },
+    'novara':                  { IF: '2.0 mc/mq', RC: '50%', H_max: '10.5 m', Dc: '5 m', Df: '10 m', Ds: '5 m', fonte: 'PRG Novara — NTA Zone B2' },
+    'vercelli':                { IF: '1.8 mc/mq', RC: '50%', H_max: '10.5 m', Dc: '5 m', Df: '10 m', Ds: '5 m', fonte: 'PRG Vercelli — NTA Zone B' },
+    'biella':                  { IF: '2.0 mc/mq', RC: '50%', H_max: '10.5 m', Dc: '5 m', Df: '10 m', Ds: '5 m', fonte: 'PRG Biella — NTA Zone B' },
+    'verbania':                { IF: '1.5 mc/mq', RC: '45%', H_max: '9.0 m',  Dc: '5 m', Df: '10 m', Ds: '5 m', fonte: 'PRG Verbania — NTA Zone B' },
+    // Liguria — Capoluoghi
+    'genova':                  { IF: '2.0 mc/mq', RC: '55%', H_max: '12.0 m', Dc: '5 m', Df: '10 m', Ds: '5 m', fonte: 'PUC Genova 2015 — NTA Tessuto Urbano' },
+    'la spezia':               { IF: '2.0 mc/mq', RC: '50%', H_max: '10.5 m', Dc: '5 m', Df: '10 m', Ds: '5 m', fonte: 'PUC La Spezia — NTA Zone residenziale' },
+    'savona':                  { IF: '2.0 mc/mq', RC: '50%', H_max: '10.5 m', Dc: '5 m', Df: '10 m', Ds: '5 m', fonte: 'PRG Savona — NTA Zone B' },
+    'imperia':                 { IF: '1.8 mc/mq', RC: '50%', H_max: '10.5 m', Dc: '5 m', Df: '10 m', Ds: '5 m', fonte: 'PRG Imperia — NTA Zone B' },
+    // Liguria — Comuni Levante
+    'lavagna':                 { IF: '1.5 mc/mq', RC: '50%', H_max: '10.5 m', Dc: '5 m', Df: '10 m', Ds: '5 m', fonte: 'PRG Lavagna — NTA Zone B' },
+    'chiavari':                { IF: '2.0 mc/mq', RC: '50%', H_max: '12.0 m', Dc: '5 m', Df: '10 m', Ds: '5 m', fonte: 'PUC Chiavari — NTA Zone B' },
+    'rapallo':                 { IF: '1.5 mc/mq', RC: '45%', H_max: '10.5 m', Dc: '5 m', Df: '10 m', Ds: '5 m', fonte: 'PUC Rapallo — NTA Zone B' },
+    'santa margherita ligure': { IF: '1.5 mc/mq', RC: '45%', H_max: '9.0 m',  Dc: '5 m', Df: '10 m', Ds: '5 m', fonte: 'PUC Santa Margherita Ligure — NTA Zone B' },
+    'sestri levante':          { IF: '1.5 mc/mq', RC: '45%', H_max: '9.0 m',  Dc: '5 m', Df: '10 m', Ds: '5 m', fonte: 'PUC Sestri Levante — NTA Zone B' },
+    'recco':                   { IF: '1.5 mc/mq', RC: '45%', H_max: '9.0 m',  Dc: '5 m', Df: '10 m', Ds: '5 m', fonte: 'PRG Recco — NTA Zone B' },
+    // Liguria — Comuni Ponente
+    'albenga':                 { IF: '2.0 mc/mq', RC: '50%', H_max: '10.5 m', Dc: '5 m', Df: '10 m', Ds: '5 m', fonte: 'PRG Albenga — NTA Zone B' },
+    'finale ligure':           { IF: '1.5 mc/mq', RC: '45%', H_max: '9.0 m',  Dc: '5 m', Df: '10 m', Ds: '5 m', fonte: 'PRG Finale Ligure — NTA Zone B' },
+    'sanremo':                 { IF: '2.0 mc/mq', RC: '50%', H_max: '12.0 m', Dc: '5 m', Df: '10 m', Ds: '5 m', fonte: 'PUC Sanremo — NTA Zone B' },
+    'san remo':                { IF: '2.0 mc/mq', RC: '50%', H_max: '12.0 m', Dc: '5 m', Df: '10 m', Ds: '5 m', fonte: 'PUC Sanremo — NTA Zone B' },
+    'bordighera':              { IF: '1.5 mc/mq', RC: '45%', H_max: '9.0 m',  Dc: '5 m', Df: '10 m', Ds: '5 m', fonte: 'PRG Bordighera — NTA Zone B' },
+    // Liguria — La Spezia / Val di Magra
+    'lerici':                  { IF: '1.5 mc/mq', RC: '45%', H_max: '9.0 m',  Dc: '5 m', Df: '10 m', Ds: '5 m', fonte: 'PUC Lerici — NTA Zone B' },
+    'sarzana':                 { IF: '2.0 mc/mq', RC: '50%', H_max: '10.5 m', Dc: '5 m', Df: '10 m', Ds: '5 m', fonte: 'PRG Sarzana — NTA Zone B' },
+    'ventimiglia':             { IF: '1.5 mc/mq', RC: '45%', H_max: '9.0 m',  Dc: '5 m', Df: '10 m', Ds: '5 m', fonte: 'PRG Ventimiglia — NTA Zone B' },
   };
   const comuneKey = comune.toLowerCase().trim();
   const genericFallback = { IF: '2.0 mc/mq', RC: '50%', H_max: '10.5 m', Dc: '5 m', Df: '10 m', Ds: '5 m', fonte: `Stima tipica PRG residenziale — ${isPiemonte ? 'Piemonte' : 'Liguria'}` };

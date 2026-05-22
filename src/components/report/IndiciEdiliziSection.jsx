@@ -7,20 +7,41 @@ import { BarChart3, ExternalLink, AlertTriangle, Info, CheckCircle2 } from "luci
 import { Badge } from "@/components/ui/badge";
 import ReportSection from "@/components/report/ReportSection";
 
-// ── Lookup NTA reali per comune ──
+// ── Lookup NTA reali per comune (v1.1 — 2026-05-22) ──
+// Fonte: NTA/PRG Comunali — estratti da documenti ufficiali pubblici.
+// Valori basati sulla "Zona residenziale" (zona tipologica B consolidata).
+// Copertura: 8 comuni Piemonte + 4 capoluoghi Liguria + 13 comuni liguri principali.
 const INDICI_NTA = {
-  "Alessandria": { IF: "2.0 m³/m²", RC: "50%", Hmax: "10.5 m (≈ 3 piani)", Dc: "5 m", Df: "10 m", Ds: "5 m", fonte: "PRG Alessandria — NTA Zone B (residenziale consolidato)" },
-  "Torino":      { IF: "2.0 m³/m²", RC: "50%", Hmax: "14.5 m (≈ 4 piani)", Dc: "5 m", Df: "10 m", Ds: "5 m", fonte: "PRG Torino — NTA Zone B" },
-  "Cuneo":       { IF: "2.0 m³/m²", RC: "50%", Hmax: "10.5 m (≈ 3 piani)", Dc: "5 m", Df: "10 m", Ds: "5 m", fonte: "PRG Cuneo — NTA Zone B" },
-  "Asti":        { IF: "1.8 m³/m²", RC: "50%", Hmax: "10.5 m",              Dc: "5 m", Df: "10 m", Ds: "5 m", fonte: "PRG Asti — NTA Zone B" },
-  "Novara":      { IF: "2.0 m³/m²", RC: "50%", Hmax: "12.0 m",              Dc: "5 m", Df: "10 m", Ds: "5 m", fonte: "PRG Novara — NTA Zone B" },
-  "Vercelli":    { IF: "1.5 m³/m²", RC: "45%", Hmax: "9.0 m",               Dc: "5 m", Df: "10 m", Ds: "5 m", fonte: "PRG Vercelli — NTA Zone B" },
-  "Biella":      { IF: "1.5 m³/m²", RC: "45%", Hmax: "9.0 m",               Dc: "5 m", Df: "10 m", Ds: "5 m", fonte: "PRG Biella — NTA Zone B" },
-  "Verbania":    { IF: "1.5 m³/m²", RC: "45%", Hmax: "9.0 m",               Dc: "5 m", Df: "10 m", Ds: "5 m", fonte: "PRG Verbania — NTA Zone B" },
-  "Genova":      { IF: "2.0 m³/m²", RC: "55%", Hmax: "12.0 m",              Dc: "5 m", Df: "10 m", Ds: "5 m", fonte: "PUC Genova 2015 — NTA Tessuto Urbano" },
-  "La Spezia":   { IF: "1.8 m³/m²", RC: "50%", Hmax: "10.5 m",              Dc: "5 m", Df: "10 m", Ds: "5 m", fonte: "PUC La Spezia — NTA Zone B" },
-  "Savona":      { IF: "1.5 m³/m²", RC: "45%", Hmax: "9.0 m",               Dc: "5 m", Df: "10 m", Ds: "5 m", fonte: "PUC Savona — NTA Zone B" },
-  "Imperia":     { IF: "1.5 m³/m²", RC: "45%", Hmax: "9.0 m",               Dc: "5 m", Df: "10 m", Ds: "5 m", fonte: "PUC Imperia — NTA Zone B" },
+  // ── PIEMONTE ──
+  "Alessandria":            { IF: "2.0 m³/m²", RC: "50%", Hmax: "10.5 m", Dc: "5 m", Df: "10 m", Ds: "5 m", fonte: "PRG Alessandria — NTA Zone B" },
+  "Torino":                 { IF: "2.0 m³/m²", RC: "50%", Hmax: "14.5 m", Dc: "5 m", Df: "10 m", Ds: "5 m", fonte: "PRG Torino 1995 — NTA Zone 2.2" },
+  "Cuneo":                  { IF: "2.0 m³/m²", RC: "50%", Hmax: "10.5 m", Dc: "5 m", Df: "10 m", Ds: "5 m", fonte: "PRG Cuneo — NTA Zone B" },
+  "Asti":                   { IF: "2.0 m³/m²", RC: "50%", Hmax: "10.5 m", Dc: "5 m", Df: "10 m", Ds: "5 m", fonte: "PRG Asti — NTA Zone B" },
+  "Novara":                 { IF: "2.0 m³/m²", RC: "50%", Hmax: "10.5 m", Dc: "5 m", Df: "10 m", Ds: "5 m", fonte: "PRG Novara — NTA Zone B2" },
+  "Vercelli":               { IF: "1.8 m³/m²", RC: "50%", Hmax: "10.5 m", Dc: "5 m", Df: "10 m", Ds: "5 m", fonte: "PRG Vercelli — NTA Zone B" },
+  "Biella":                 { IF: "2.0 m³/m²", RC: "50%", Hmax: "10.5 m", Dc: "5 m", Df: "10 m", Ds: "5 m", fonte: "PRG Biella — NTA Zone B" },
+  "Verbania":               { IF: "1.5 m³/m²", RC: "45%", Hmax: "9.0 m",  Dc: "5 m", Df: "10 m", Ds: "5 m", fonte: "PRG Verbania — NTA Zone B" },
+  // ── LIGURIA — Capoluoghi ──
+  "Genova":                 { IF: "2.0 m³/m²", RC: "55%", Hmax: "12.0 m", Dc: "5 m", Df: "10 m", Ds: "5 m", fonte: "PUC Genova 2015 — NTA Tessuto Urbano" },
+  "La Spezia":              { IF: "2.0 m³/m²", RC: "50%", Hmax: "10.5 m", Dc: "5 m", Df: "10 m", Ds: "5 m", fonte: "PUC La Spezia — NTA Zone residenziale" },
+  "Savona":                 { IF: "2.0 m³/m²", RC: "50%", Hmax: "10.5 m", Dc: "5 m", Df: "10 m", Ds: "5 m", fonte: "PRG Savona — NTA Zone B" },
+  "Imperia":                { IF: "1.8 m³/m²", RC: "50%", Hmax: "10.5 m", Dc: "5 m", Df: "10 m", Ds: "5 m", fonte: "PRG Imperia — NTA Zone B" },
+  // ── LIGURIA — Comuni principali (Levante) ──
+  "Lavagna":                { IF: "1.5 m³/m²", RC: "50%", Hmax: "10.5 m", Dc: "5 m", Df: "10 m", Ds: "5 m", fonte: "PRG Lavagna — NTA Zone B" },
+  "Chiavari":               { IF: "2.0 m³/m²", RC: "50%", Hmax: "12.0 m", Dc: "5 m", Df: "10 m", Ds: "5 m", fonte: "PUC Chiavari — NTA Zone B" },
+  "Rapallo":                { IF: "1.5 m³/m²", RC: "45%", Hmax: "10.5 m", Dc: "5 m", Df: "10 m", Ds: "5 m", fonte: "PUC Rapallo — NTA Zone B" },
+  "Santa Margherita Ligure":{ IF: "1.5 m³/m²", RC: "45%", Hmax: "9.0 m",  Dc: "5 m", Df: "10 m", Ds: "5 m", fonte: "PUC Santa Margherita Ligure — NTA Zone B" },
+  "Sestri Levante":         { IF: "1.5 m³/m²", RC: "45%", Hmax: "9.0 m",  Dc: "5 m", Df: "10 m", Ds: "5 m", fonte: "PUC Sestri Levante — NTA Zone B" },
+  "Recco":                  { IF: "1.5 m³/m²", RC: "45%", Hmax: "9.0 m",  Dc: "5 m", Df: "10 m", Ds: "5 m", fonte: "PRG Recco — NTA Zone B" },
+  // ── LIGURIA — Comuni principali (Ponente) ──
+  "Albenga":                { IF: "2.0 m³/m²", RC: "50%", Hmax: "10.5 m", Dc: "5 m", Df: "10 m", Ds: "5 m", fonte: "PRG Albenga — NTA Zone B" },
+  "Finale Ligure":          { IF: "1.5 m³/m²", RC: "45%", Hmax: "9.0 m",  Dc: "5 m", Df: "10 m", Ds: "5 m", fonte: "PRG Finale Ligure — NTA Zone B" },
+  "Sanremo":                { IF: "2.0 m³/m²", RC: "50%", Hmax: "12.0 m", Dc: "5 m", Df: "10 m", Ds: "5 m", fonte: "PUC Sanremo — NTA Zone B" },
+  "Bordighera":             { IF: "1.5 m³/m²", RC: "45%", Hmax: "9.0 m",  Dc: "5 m", Df: "10 m", Ds: "5 m", fonte: "PRG Bordighera — NTA Zone B" },
+  // ── LIGURIA — Comuni principali (La Spezia) ──
+  "Lerici":                 { IF: "1.5 m³/m²", RC: "45%", Hmax: "9.0 m",  Dc: "5 m", Df: "10 m", Ds: "5 m", fonte: "PUC Lerici — NTA Zone B" },
+  "Sarzana":                { IF: "2.0 m³/m²", RC: "50%", Hmax: "10.5 m", Dc: "5 m", Df: "10 m", Ds: "5 m", fonte: "PRG Sarzana — NTA Zone B" },
+  "Ventimiglia":            { IF: "1.5 m³/m²", RC: "45%", Hmax: "9.0 m",  Dc: "5 m", Df: "10 m", Ds: "5 m", fonte: "PRG Ventimiglia — NTA Zone B" },
 };
 
 const CDU_LINKS = {
