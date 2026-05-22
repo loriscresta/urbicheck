@@ -118,6 +118,24 @@ const LIGURIA_PROVINCE_MAP = {
   "Vessalico":"Imperia","Villa Faraldi":"Imperia",
 };
 
+// ── Mappa sigla provincia → capoluogo (espandibile a tutte le regioni) ──────
+const PROVINCE_CAPOLUOGHI = {
+  // PIEMONTE
+  'AL': { capoluogo: 'Alessandria', regione: 'Piemonte' },
+  'AT': { capoluogo: 'Asti',        regione: 'Piemonte' },
+  'BI': { capoluogo: 'Biella',      regione: 'Piemonte' },
+  'CN': { capoluogo: 'Cuneo',       regione: 'Piemonte' },
+  'NO': { capoluogo: 'Novara',      regione: 'Piemonte' },
+  'TO': { capoluogo: 'Torino',      regione: 'Piemonte' },
+  'VB': { capoluogo: 'Verbania',    regione: 'Piemonte' },
+  'VC': { capoluogo: 'Vercelli',    regione: 'Piemonte' },
+  // LIGURIA
+  'GE': { capoluogo: 'Genova',      regione: 'Liguria' },
+  'SV': { capoluogo: 'Savona',      regione: 'Liguria' },
+  'IM': { capoluogo: 'Imperia',     regione: 'Liguria' },
+  'SP': { capoluogo: 'La Spezia',   regione: 'Liguria' },
+};
+
 const CDU_LINKS = {
   "Alessandria": "https://www.comune.alessandria.it/servizi/certificato-destinazione-urbanistica",
   "Torino":      "https://www.comune.torino.it/suapps/sportello/sportello.shtml",
@@ -146,16 +164,27 @@ function extractZonaWfs(query) {
   return match ? match[0].trim() : null;
 }
 
-// ── 3-level cascade (async per AI) ─────────────────────────────────────────
+// ── Lookup sigla provincia: prima da query, poi da ComuneItalia ─────────────
+async function getSiglaProvincia(comune, regione, query) {
+  if (query?.sigla_provincia) return query.sigla_provincia;
+  try {
+    const filter = { nome: comune };
+    if (regione) filter.regione = regione;
+    const results = await base44.entities.ComuneItalia.filter(filter, null, 1);
+    return results[0]?.sigla_provincia || null;
+  } catch (_e) { return null; }
+}
+
+// ── 4-level cascade (async per AI) ─────────────────────────────────────────
 async function resolveNta(comune, regione, query) {
-  // Livello 1 — lookup diretto
+  // Tier 1 — lookup diretto
   const direct = findInNta(comune);
   if (direct) {
     const zonaWfs = extractZonaWfs(query);
     return { ...direct, fonte_tipo: 'diretta', nomeZona: 'Zona residenziale', zonaWfs, disclaimer: null, capoluogo: null };
   }
 
-  // Livello 2 — fallback provinciale (solo Liguria)
+  // Tier 1.5a — fallback da mappa provinciale Liguria (lookup statico)
   const reg = (regione || '').toLowerCase();
   if (reg.includes('liguria')) {
     const capoluogo = LIGURIA_PROVINCE_MAP[comune] ||
@@ -174,7 +203,25 @@ async function resolveNta(comune, regione, query) {
     }
   }
 
-  // Livello 3 — stima AI
+  // Tier 1.5b — lookup dinamico via ComuneItalia → PROVINCE_CAPOLUOGHI
+  const sigla = await getSiglaProvincia(comune, regione, query);
+  if (sigla) {
+    const entry = PROVINCE_CAPOLUOGHI[sigla.toUpperCase()];
+    if (entry) {
+      const provincial = findInNta(entry.capoluogo);
+      if (provincial) {
+        return {
+          ...provincial,
+          fonte_tipo: 'provinciale',
+          nomeZona: 'Zona residenziale (stima provinciale)',
+          capoluogo: entry.capoluogo,
+          disclaimer: `⚠️ Indici stimati su base provinciale (${sigla}) — Il comune di ${comune} non è ancora nel database NTA specifico. Verificare obbligatoriamente con le NTA o CDU del Comune.`,
+        };
+      }
+    }
+  }
+
+  // Tier 2 — stima AI
   const regioneLabel = regione || 'Italia';
   try {
     const aiResult = await base44.integrations.Core.InvokeLLM({
@@ -207,7 +254,7 @@ async function resolveNta(comune, regione, query) {
         fonte_tipo: 'ai_stima',
         nomeZona: 'Zona residenziale (stima AI)',
         capoluogo: null,
-        disclaimer: `⚠️ ATTENZIONE: Indici generati da intelligenza artificiale per il comune di ${comune}. Questi valori sono puramente indicativi e potrebbero non corrispondere al PRG/PUC vigente. Verificare obbligatoriamente con il CDU ufficiale del Comune o con un tecnico abilitato prima di qualsiasi decisione urbanistica.`,
+        disclaimer: `⚠️ Indici generati da intelligenza artificiale per il comune di ${comune}. Questi valori sono puramente indicativi. Richiedere le NTA ufficiali o il CDU al Comune prima di qualsiasi decisione urbanistica.`,
       };
     }
   } catch (_e) { /* AI fallita */ }
