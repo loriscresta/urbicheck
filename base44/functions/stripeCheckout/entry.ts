@@ -4,9 +4,9 @@ import Stripe from 'npm:stripe@14.21.0';
 const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY"));
 
 const PACKAGES = {
-  'price_1TYBwfRUwkdZTXPk1lJgONVo': { credits: 49.50,  reports: 5,  label: 'Starter — 5 Report' },
-  'price_1TYBwfRUwkdZTXPkqXMDedsx': { credits: 133.50, reports: 15, label: 'Professional — 15 Report' },
-  'price_1TYBwfRUwkdZTXPkIqVkBof8': { credits: 395.00, reports: 50, label: 'Agency — 50 Report' },
+  'price_1TZrnJLyFVq8L2LAyYXq0y8u': { credits: 25,  label: 'Starter — €25 crediti' },
+  'price_1TZrnJLyFVq8L2LAKICk86H0': { credits: 55,  label: 'Pro — €55 crediti' },
+  'price_1TZrnJLyFVq8L2LAnQJOOnOR': { credits: 99,  label: 'Business — €99 crediti' },
 };
 
 Deno.serve(async (req) => {

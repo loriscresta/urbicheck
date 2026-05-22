@@ -139,6 +139,18 @@ export default function PaymentGate({ query, onPaid }) {
     try {
       const user = await base44.auth.me();
 
+      // Rate limiting: max 10 query_charge per 24h (tutti gli utenti)
+      const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      const recentTx = await base44.entities.CreditTransaction.filter(
+        { user_email: user.email, type: "query_charge" }, "-created_date", 50
+      );
+      const last24h = recentTx.filter(tx => new Date(tx.created_date) > yesterday);
+      if (last24h.length >= 10) {
+        setError("Limite giornaliero raggiunto (10 report/giorno). Riprova domani.");
+        setIsProcessing(false);
+        return;
+      }
+
       const creditsList = await base44.entities.UserCredits.filter({ user_email: user.email });
       const currentCredits = creditsList[0];
       if (!currentCredits || currentCredits.balance < PRICE) {
