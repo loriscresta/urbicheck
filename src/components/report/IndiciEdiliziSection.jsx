@@ -1,47 +1,121 @@
 /**
- * IndiciEdiliziSection — mostra indici edilizi con lookup NTA reali per comune.
- * Se il comune è nel DB NTA, mostra valori reali. Altrimenti mostra CDU link.
+ * IndiciEdiliziSection v2.0 — Lookup NTA a 3 livelli di fallback:
+ *   1. Lookup diretto per comune (DB NTA v1.1)
+ *   2. Fallback provinciale Liguria (capoluogo di provincia)
+ *   3. Stima AI per comuni non coperti
  */
-import React from "react";
-import { BarChart3, ExternalLink, AlertTriangle, Info, CheckCircle2 } from "lucide-react";
+import React, { useState, useEffect } from "react";
+import { BarChart3, ExternalLink, Info, CheckCircle2, AlertTriangle, Loader2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import ReportSection from "@/components/report/ReportSection";
+import { base44 } from "@/api/base44Client";
 
-// ── Lookup NTA reali per comune (v1.1 — 2026-05-22) ──
-// Fonte: NTA/PRG Comunali — estratti da documenti ufficiali pubblici.
-// Valori basati sulla "Zona residenziale" (zona tipologica B consolidata).
-// Copertura: 8 comuni Piemonte + 4 capoluoghi Liguria + 13 comuni liguri principali.
+// ── Lookup NTA flat per comune (v1.1 — 2026-05-22) ─────────────────────────
+// Valori "Zona residenziale" (zona B consolidata tipica).
 const INDICI_NTA = {
-  // ── PIEMONTE ──
-  "Alessandria":            { IF: "2.0 m³/m²", RC: "50%", Hmax: "10.5 m", Dc: "5 m", Df: "10 m", Ds: "5 m", fonte: "PRG Alessandria — NTA Zone B" },
-  "Torino":                 { IF: "2.0 m³/m²", RC: "50%", Hmax: "14.5 m", Dc: "5 m", Df: "10 m", Ds: "5 m", fonte: "PRG Torino 1995 — NTA Zone 2.2" },
-  "Cuneo":                  { IF: "2.0 m³/m²", RC: "50%", Hmax: "10.5 m", Dc: "5 m", Df: "10 m", Ds: "5 m", fonte: "PRG Cuneo — NTA Zone B" },
-  "Asti":                   { IF: "2.0 m³/m²", RC: "50%", Hmax: "10.5 m", Dc: "5 m", Df: "10 m", Ds: "5 m", fonte: "PRG Asti — NTA Zone B" },
-  "Novara":                 { IF: "2.0 m³/m²", RC: "50%", Hmax: "10.5 m", Dc: "5 m", Df: "10 m", Ds: "5 m", fonte: "PRG Novara — NTA Zone B2" },
-  "Vercelli":               { IF: "1.8 m³/m²", RC: "50%", Hmax: "10.5 m", Dc: "5 m", Df: "10 m", Ds: "5 m", fonte: "PRG Vercelli — NTA Zone B" },
-  "Biella":                 { IF: "2.0 m³/m²", RC: "50%", Hmax: "10.5 m", Dc: "5 m", Df: "10 m", Ds: "5 m", fonte: "PRG Biella — NTA Zone B" },
-  "Verbania":               { IF: "1.5 m³/m²", RC: "45%", Hmax: "9.0 m",  Dc: "5 m", Df: "10 m", Ds: "5 m", fonte: "PRG Verbania — NTA Zone B" },
-  // ── LIGURIA — Capoluoghi ──
-  "Genova":                 { IF: "2.0 m³/m²", RC: "55%", Hmax: "12.0 m", Dc: "5 m", Df: "10 m", Ds: "5 m", fonte: "PUC Genova 2015 — NTA Tessuto Urbano" },
-  "La Spezia":              { IF: "2.0 m³/m²", RC: "50%", Hmax: "10.5 m", Dc: "5 m", Df: "10 m", Ds: "5 m", fonte: "PUC La Spezia — NTA Zone residenziale" },
-  "Savona":                 { IF: "2.0 m³/m²", RC: "50%", Hmax: "10.5 m", Dc: "5 m", Df: "10 m", Ds: "5 m", fonte: "PRG Savona — NTA Zone B" },
-  "Imperia":                { IF: "1.8 m³/m²", RC: "50%", Hmax: "10.5 m", Dc: "5 m", Df: "10 m", Ds: "5 m", fonte: "PRG Imperia — NTA Zone B" },
-  // ── LIGURIA — Comuni principali (Levante) ──
-  "Lavagna":                { IF: "1.5 m³/m²", RC: "50%", Hmax: "10.5 m", Dc: "5 m", Df: "10 m", Ds: "5 m", fonte: "PRG Lavagna — NTA Zone B" },
-  "Chiavari":               { IF: "2.0 m³/m²", RC: "50%", Hmax: "12.0 m", Dc: "5 m", Df: "10 m", Ds: "5 m", fonte: "PUC Chiavari — NTA Zone B" },
-  "Rapallo":                { IF: "1.5 m³/m²", RC: "45%", Hmax: "10.5 m", Dc: "5 m", Df: "10 m", Ds: "5 m", fonte: "PUC Rapallo — NTA Zone B" },
-  "Santa Margherita Ligure":{ IF: "1.5 m³/m²", RC: "45%", Hmax: "9.0 m",  Dc: "5 m", Df: "10 m", Ds: "5 m", fonte: "PUC Santa Margherita Ligure — NTA Zone B" },
-  "Sestri Levante":         { IF: "1.5 m³/m²", RC: "45%", Hmax: "9.0 m",  Dc: "5 m", Df: "10 m", Ds: "5 m", fonte: "PUC Sestri Levante — NTA Zone B" },
-  "Recco":                  { IF: "1.5 m³/m²", RC: "45%", Hmax: "9.0 m",  Dc: "5 m", Df: "10 m", Ds: "5 m", fonte: "PRG Recco — NTA Zone B" },
-  // ── LIGURIA — Comuni principali (Ponente) ──
-  "Albenga":                { IF: "2.0 m³/m²", RC: "50%", Hmax: "10.5 m", Dc: "5 m", Df: "10 m", Ds: "5 m", fonte: "PRG Albenga — NTA Zone B" },
-  "Finale Ligure":          { IF: "1.5 m³/m²", RC: "45%", Hmax: "9.0 m",  Dc: "5 m", Df: "10 m", Ds: "5 m", fonte: "PRG Finale Ligure — NTA Zone B" },
-  "Sanremo":                { IF: "2.0 m³/m²", RC: "50%", Hmax: "12.0 m", Dc: "5 m", Df: "10 m", Ds: "5 m", fonte: "PUC Sanremo — NTA Zone B" },
-  "Bordighera":             { IF: "1.5 m³/m²", RC: "45%", Hmax: "9.0 m",  Dc: "5 m", Df: "10 m", Ds: "5 m", fonte: "PRG Bordighera — NTA Zone B" },
-  // ── LIGURIA — Comuni principali (La Spezia) ──
-  "Lerici":                 { IF: "1.5 m³/m²", RC: "45%", Hmax: "9.0 m",  Dc: "5 m", Df: "10 m", Ds: "5 m", fonte: "PUC Lerici — NTA Zone B" },
-  "Sarzana":                { IF: "2.0 m³/m²", RC: "50%", Hmax: "10.5 m", Dc: "5 m", Df: "10 m", Ds: "5 m", fonte: "PRG Sarzana — NTA Zone B" },
-  "Ventimiglia":            { IF: "1.5 m³/m²", RC: "45%", Hmax: "9.0 m",  Dc: "5 m", Df: "10 m", Ds: "5 m", fonte: "PRG Ventimiglia — NTA Zone B" },
+  // Piemonte
+  "Alessandria":            { IF: "2.0 m³/m²", RC: "50%", Hmax: "10.5 m", Dc: "5 m", Df: "10 m", Ds: "5 m", strumento: "PRG", fonte: "PRG Alessandria — NTA Zone B" },
+  "Torino":                 { IF: "2.0 m³/m²", RC: "50%", Hmax: "14.5 m", Dc: "5 m", Df: "10 m", Ds: "5 m", strumento: "PRG", fonte: "PRG Torino 1995 — NTA Zone 2.2" },
+  "Cuneo":                  { IF: "2.0 m³/m²", RC: "50%", Hmax: "10.5 m", Dc: "5 m", Df: "10 m", Ds: "5 m", strumento: "PRG", fonte: "PRG Cuneo — NTA Zone B" },
+  "Asti":                   { IF: "2.0 m³/m²", RC: "50%", Hmax: "10.5 m", Dc: "5 m", Df: "10 m", Ds: "5 m", strumento: "PRG", fonte: "PRG Asti — NTA Zone B" },
+  "Novara":                 { IF: "2.0 m³/m²", RC: "50%", Hmax: "10.5 m", Dc: "5 m", Df: "10 m", Ds: "5 m", strumento: "PRG", fonte: "PRG Novara — NTA Zone B2" },
+  "Vercelli":               { IF: "1.8 m³/m²", RC: "50%", Hmax: "10.5 m", Dc: "5 m", Df: "10 m", Ds: "5 m", strumento: "PRG", fonte: "PRG Vercelli — NTA Zone B" },
+  "Biella":                 { IF: "2.0 m³/m²", RC: "50%", Hmax: "10.5 m", Dc: "5 m", Df: "10 m", Ds: "5 m", strumento: "PRG", fonte: "PRG Biella — NTA Zone B" },
+  "Verbania":               { IF: "1.5 m³/m²", RC: "45%", Hmax: "9.0 m",  Dc: "5 m", Df: "10 m", Ds: "5 m", strumento: "PRG", fonte: "PRG Verbania — NTA Zone B" },
+  // Liguria — Capoluoghi
+  "Genova":                 { IF: "2.0 m³/m²", RC: "55%", Hmax: "12.0 m", Dc: "5 m", Df: "10 m", Ds: "5 m", strumento: "PUC", fonte: "PUC Genova 2015 — NTA Tessuto Urbano" },
+  "La Spezia":              { IF: "2.0 m³/m²", RC: "50%", Hmax: "10.5 m", Dc: "5 m", Df: "10 m", Ds: "5 m", strumento: "PUC", fonte: "PUC La Spezia — NTA Zone residenziale" },
+  "Savona":                 { IF: "2.0 m³/m²", RC: "50%", Hmax: "10.5 m", Dc: "5 m", Df: "10 m", Ds: "5 m", strumento: "PRG", fonte: "PRG Savona — NTA Zone B" },
+  "Imperia":                { IF: "1.8 m³/m²", RC: "50%", Hmax: "10.5 m", Dc: "5 m", Df: "10 m", Ds: "5 m", strumento: "PRG", fonte: "PRG Imperia — NTA Zone B" },
+  // Liguria — Levante
+  "Lavagna":                { IF: "1.5 m³/m²", RC: "50%", Hmax: "10.5 m", Dc: "5 m", Df: "10 m", Ds: "5 m", strumento: "PRG", fonte: "PRG Lavagna — NTA Zone B" },
+  "Chiavari":               { IF: "2.0 m³/m²", RC: "50%", Hmax: "12.0 m", Dc: "5 m", Df: "10 m", Ds: "5 m", strumento: "PUC", fonte: "PUC Chiavari — NTA Zone B" },
+  "Rapallo":                { IF: "1.5 m³/m²", RC: "45%", Hmax: "10.5 m", Dc: "5 m", Df: "10 m", Ds: "5 m", strumento: "PUC", fonte: "PUC Rapallo — NTA Zone B" },
+  "Santa Margherita Ligure":{ IF: "1.5 m³/m²", RC: "45%", Hmax: "9.0 m",  Dc: "5 m", Df: "10 m", Ds: "5 m", strumento: "PUC", fonte: "PUC Santa Margherita Ligure — NTA Zone B" },
+  "Sestri Levante":         { IF: "1.5 m³/m²", RC: "45%", Hmax: "9.0 m",  Dc: "5 m", Df: "10 m", Ds: "5 m", strumento: "PUC", fonte: "PUC Sestri Levante — NTA Zone B" },
+  "Recco":                  { IF: "1.5 m³/m²", RC: "45%", Hmax: "9.0 m",  Dc: "5 m", Df: "10 m", Ds: "5 m", strumento: "PRG", fonte: "PRG Recco — NTA Zone B" },
+  // Liguria — Ponente
+  "Albenga":                { IF: "2.0 m³/m²", RC: "50%", Hmax: "10.5 m", Dc: "5 m", Df: "10 m", Ds: "5 m", strumento: "PRG", fonte: "PRG Albenga — NTA Zone B" },
+  "Finale Ligure":          { IF: "1.5 m³/m²", RC: "45%", Hmax: "9.0 m",  Dc: "5 m", Df: "10 m", Ds: "5 m", strumento: "PRG", fonte: "PRG Finale Ligure — NTA Zone B" },
+  "Sanremo":                { IF: "2.0 m³/m²", RC: "50%", Hmax: "12.0 m", Dc: "5 m", Df: "10 m", Ds: "5 m", strumento: "PUC", fonte: "PUC Sanremo — NTA Zone B" },
+  "Bordighera":             { IF: "1.5 m³/m²", RC: "45%", Hmax: "9.0 m",  Dc: "5 m", Df: "10 m", Ds: "5 m", strumento: "PRG", fonte: "PRG Bordighera — NTA Zone B" },
+  // Liguria — La Spezia / Val di Magra
+  "Lerici":                 { IF: "1.5 m³/m²", RC: "45%", Hmax: "9.0 m",  Dc: "5 m", Df: "10 m", Ds: "5 m", strumento: "PUC", fonte: "PUC Lerici — NTA Zone B" },
+  "Sarzana":                { IF: "2.0 m³/m²", RC: "50%", Hmax: "10.5 m", Dc: "5 m", Df: "10 m", Ds: "5 m", strumento: "PRG", fonte: "PRG Sarzana — NTA Zone B" },
+  "Ventimiglia":            { IF: "1.5 m³/m²", RC: "45%", Hmax: "9.0 m",  Dc: "5 m", Df: "10 m", Ds: "5 m", strumento: "PRG", fonte: "PRG Ventimiglia — NTA Zone B" },
+};
+
+// ── Mappa provinciale Liguria: comune → capoluogo NTA ──────────────────────
+const LIGURIA_PROVINCE_MAP = {
+  // Provincia di Genova
+  "Arenzano":"Genova","Avegno":"Genova","Bargagli":"Genova","Bogliasco":"Genova",
+  "Borzonasca":"Genova","Busalla":"Genova","Camogli":"Genova","Campo Ligure":"Genova",
+  "Campomorone":"Genova","Casarza Ligure":"Genova","Casella":"Genova",
+  "Castiglione Chiavarese":"Genova","Ceranesi":"Genova","Chiavari":"Genova",
+  "Cicagna":"Genova","Cogoleto":"Genova","Cogorno":"Genova","Coreglia Ligure":"Genova",
+  "Crocefieschi":"Genova","Davagna":"Genova","Fascia":"Genova","Favale di Malvaro":"Genova",
+  "Fontanigorda":"Genova","Genova":"Genova","Gorreto":"Genova","Isola del Cantone":"Genova",
+  "Lavagna":"Genova","Leivi":"Genova","Lorsica":"Genova","Lumarzo":"Genova","Mele":"Genova",
+  "Mezzanego":"Genova","Mignanego":"Genova","Moconesi":"Genova","Moneglia":"Genova",
+  "Montebruno":"Genova","Montoggio":"Genova","Ne":"Genova","Neirone":"Genova",
+  "Orero":"Genova","Pieve Ligure":"Genova","Portofino":"Genova","Propata":"Genova",
+  "Rapallo":"Genova","Recco":"Genova","Rezzoaglio":"Genova","Ronco Scrivia":"Genova",
+  "Rondanina":"Genova","Rossiglione":"Genova","Rovegno":"Genova",
+  "San Colombano Certenoli":"Genova","Santa Margherita Ligure":"Genova",
+  "Santo Stefano d'Aveto":"Genova","Savignone":"Genova","Serra Riccò":"Genova",
+  "Sestri Levante":"Genova","Sori":"Genova","Tiglieto":"Genova","Torriglia":"Genova",
+  "Tribogna":"Genova","Uscio":"Genova","Valbrevenna":"Genova","Vobbia":"Genova","Zoagli":"Genova",
+  // Provincia di Savona
+  "Alassio":"Savona","Albenga":"Savona","Albissola Marina":"Savona","Albisola Superiore":"Savona",
+  "Altare":"Savona","Andora":"Savona","Arnasco":"Savona","Balestrino":"Savona",
+  "Bardineto":"Savona","Bergeggi":"Savona","Boissano":"Savona",
+  "Borghetto Santo Spirito":"Savona","Borgio Verezzi":"Savona","Cairo Montenotte":"Savona",
+  "Calice Ligure":"Savona","Calizzano":"Savona","Carcare":"Savona",
+  "Casanova Lerrone":"Savona","Castelbianco":"Savona",
+  "Castelvecchio di Rocca Barbena":"Savona","Celle Ligure":"Savona","Cengio":"Savona",
+  "Ceriale":"Savona","Cisano sul Neva":"Savona","Cosseria":"Savona","Dego":"Savona",
+  "Erli":"Savona","Finale Ligure":"Savona","Garlenda":"Savona","Giustenice":"Savona",
+  "Giusvalla":"Savona","Laigueglia":"Savona","Loano":"Savona","Magliolo":"Savona",
+  "Mallare":"Savona","Massimino":"Savona","Millesimo":"Savona","Mioglia":"Savona",
+  "Murialdo":"Savona","Nasino":"Savona","Noli":"Savona","Onzo":"Savona",
+  "Orco Feglino":"Savona","Osiglia":"Savona","Pallare":"Savona","Pietra Ligure":"Savona",
+  "Plodio":"Savona","Pontinvrea":"Savona","Quiliano":"Savona","Rialto":"Savona",
+  "Roccavignale":"Savona","Sassello":"Savona","Savona":"Savona","Spotorno":"Savona",
+  "Stella":"Savona","Stellanello":"Savona","Testico":"Savona","Toirano":"Savona",
+  "Tovo San Giacomo":"Savona","Urbe":"Savona","Vado Ligure":"Savona","Varazze":"Savona",
+  "Vendone":"Savona","Vezzi Portio":"Savona","Villanova d'Albenga":"Savona","Zuccarello":"Savona",
+  // Provincia di La Spezia
+  "Ameglia":"La Spezia","Arcola":"La Spezia","Beverino":"La Spezia","Bolano":"La Spezia",
+  "Bonassola":"La Spezia","Borghetto di Vara":"La Spezia","Brugnato":"La Spezia",
+  "Calice al Cornoviglio":"La Spezia","Carro":"La Spezia","Carrodano":"La Spezia",
+  "Castelnuovo Magra":"La Spezia","Deiva Marina":"La Spezia","Follo":"La Spezia",
+  "Framura":"La Spezia","La Spezia":"La Spezia","Lerici":"La Spezia","Levanto":"La Spezia",
+  "Maissana":"La Spezia","Monterosso al Mare":"La Spezia","Ortonovo":"La Spezia",
+  "Pignone":"La Spezia","Portovenere":"La Spezia","Riccò del Golfo di Spezia":"La Spezia",
+  "Riomaggiore":"La Spezia","Rocchetta di Vara":"La Spezia",
+  "Santo Stefano di Magra":"La Spezia","Sarzana":"La Spezia","Sesta Godano":"La Spezia",
+  "Vezzano Ligure":"La Spezia","Vernazza":"La Spezia","Zignago":"La Spezia",
+  // Provincia di Imperia
+  "Airole":"Imperia","Apricale":"Imperia","Aquila d'Arroscia":"Imperia","Armo":"Imperia",
+  "Aurigo":"Imperia","Badalucco":"Imperia","Bajardo":"Imperia","Bordighera":"Imperia",
+  "Borghetto d'Arroscia":"Imperia","Borgomaro":"Imperia","Camporosso":"Imperia",
+  "Caravonica":"Imperia","Carpasio":"Imperia","Castellaro":"Imperia",
+  "Castel Vittorio":"Imperia","Ceriana":"Imperia","Cervo":"Imperia","Cesio":"Imperia",
+  "Chiusanico":"Imperia","Chiusavecchia":"Imperia","Cipressa":"Imperia","Civezza":"Imperia",
+  "Cosio d'Arroscia":"Imperia","Costarainera":"Imperia","Diano Arentino":"Imperia",
+  "Diano Castello":"Imperia","Diano Marina":"Imperia","Diano San Pietro":"Imperia",
+  "Dolceacqua":"Imperia","Dolcedo":"Imperia","Imperia":"Imperia","Isolabona":"Imperia",
+  "Lucinasco":"Imperia","Mendatica":"Imperia","Molini di Triora":"Imperia",
+  "Montalto Ligure":"Imperia","Montegrosso Pian Latte":"Imperia",
+  "Olivetta San Michele":"Imperia","Ospedaletti":"Imperia","Perinaldo":"Imperia",
+  "Pietrabruna":"Imperia","Pieve di Teco":"Imperia","Pigna":"Imperia",
+  "Pompeiana":"Imperia","Pontedassio":"Imperia","Pornassio":"Imperia","Prelà":"Imperia",
+  "Ranzo":"Imperia","Rezzo":"Imperia","Riva Ligure":"Imperia","Rocchetta Nervina":"Imperia",
+  "San Bartolomeo al Mare":"Imperia","San Biagio della Cima":"Imperia",
+  "San Lorenzo al Mare":"Imperia","Sanremo":"Imperia","Santo Stefano al Mare":"Imperia",
+  "Seborga":"Imperia","Soldano":"Imperia","Taggia":"Imperia","Terzorio":"Imperia",
+  "Triora":"Imperia","Vallecrosia":"Imperia","Vasia":"Imperia","Ventimiglia":"Imperia",
+  "Vessalico":"Imperia","Villa Faraldi":"Imperia",
 };
 
 const CDU_LINKS = {
@@ -55,42 +129,93 @@ const CDU_LINKS = {
   "Novara":      "https://www.comune.novara.it/it/certificato-destinazione-urbanistica",
 };
 
-function getCduLinks(comuneNome) {
-  if (!comuneNome) return null;
-  return CDU_LINKS[comuneNome] || CDU_LINKS[Object.keys(CDU_LINKS).find(k => k.toLowerCase() === comuneNome.toLowerCase().trim())] || null;
+function findInNta(nome) {
+  if (!nome) return null;
+  return INDICI_NTA[nome] ||
+    INDICI_NTA[Object.keys(INDICI_NTA).find(k => k.toLowerCase() === nome.toLowerCase().trim())] ||
+    null;
 }
 
-// Fallback generico per Piemonte/Liguria quando il comune non è nel lookup
-const NTA_GENERIC_FALLBACK = { IF: "2.0 m³/m²", RC: "50%", Hmax: "10.5 m", Dc: "5 m", Df: "10 m", Ds: "5 m", fonte: "Stima tipica PRG residenziale — verificare su NTA/PRG Comunale per zona specifica" };
+// ── Estrai zona urbanistica dai dati WFS ────────────────────────────────────
+function extractZonaWfs(query) {
+  const wfs = query?.report_data?.wfs_liguria;
+  const prg = wfs?.risultati?.zona_urbanistica;
+  if (!prg) return null;
+  const raw = prg.zona_codice || prg.destinazione_uso || prg.messaggio || '';
+  const match = String(raw).match(/\b(Zona\s+[A-Z][0-9]?(?:\.[0-9])?|TU|RA|RE|RF|RU|RS)\b/i);
+  return match ? match[0].trim() : null;
+}
 
-function getNtaData(comuneNome, regione, query) {
-  if (!comuneNome) return null;
-  // Match esatto
-  const exact = INDICI_NTA[comuneNome] || INDICI_NTA[Object.keys(INDICI_NTA).find(k => k.toLowerCase() === comuneNome.toLowerCase().trim())];
-  if (exact) return exact;
-  // Se il record ha già indici_edilizi salvati da wfsLiguria, usali
-  const saved = query?.report_data?.indici_edilizi;
-  if (saved?.indice_edificabilita && !saved?.nota?.includes('Stima orientativa')) {
-    return {
-      IF: saved.indice_edificabilita,
-      RC: saved.rapporto_copertura || '—',
-      Hmax: saved.altezza_massima || '—',
-      Dc: saved.distanza_confini || '—',
-      Df: saved.distanza_fabbricati || '—',
-      Ds: saved.distanza_strada || '—',
-      fonte: saved.fonte || 'Dati WFS regionali',
-      note: saved.nota,
-    };
+// ── 3-level cascade (async per AI) ─────────────────────────────────────────
+async function resolveNta(comune, regione, query) {
+  // Livello 1 — lookup diretto
+  const direct = findInNta(comune);
+  if (direct) {
+    const zonaWfs = extractZonaWfs(query);
+    return { ...direct, fonte_tipo: 'diretta', nomeZona: 'Zona residenziale', zonaWfs, disclaimer: null, capoluogo: null };
   }
-  // Fallback generico per Piemonte/Liguria
-  const reg = (regione || query?.regione || '').toLowerCase();
-  if (reg.includes('piemonte') || reg.includes('liguria')) {
-    return { ...NTA_GENERIC_FALLBACK, note: `Stima tipica PRG residenziale ${reg.includes('piemonte') ? 'Piemonte' : 'Liguria'} — verificare NTA/PRG per sub-zona specifica` };
+
+  // Livello 2 — fallback provinciale (solo Liguria)
+  const reg = (regione || '').toLowerCase();
+  if (reg.includes('liguria')) {
+    const capoluogo = LIGURIA_PROVINCE_MAP[comune] ||
+      LIGURIA_PROVINCE_MAP[Object.keys(LIGURIA_PROVINCE_MAP).find(k => k.toLowerCase() === comune?.toLowerCase()?.trim())];
+    if (capoluogo) {
+      const provincial = findInNta(capoluogo);
+      if (provincial) {
+        return {
+          ...provincial,
+          fonte_tipo: 'provinciale',
+          nomeZona: 'Zona residenziale (stima provinciale)',
+          capoluogo,
+          disclaimer: `Valori stimati su base provinciale (${capoluogo}). Il comune di ${comune} non è ancora nel database NTA specifico. Verificare sempre con CDU ufficiale del Comune.`,
+        };
+      }
+    }
   }
+
+  // Livello 3 — stima AI
+  const regioneLabel = regione || 'Italia';
+  try {
+    const aiResult = await base44.integrations.Core.InvokeLLM({
+      prompt: `Sei un esperto di urbanistica italiana. Fornisci una stima orientativa degli indici edilizi NTA/PRG per una zona residenziale tipica nel comune di "${comune}", ${regioneLabel}, Italia. Rispondi SOLO con un oggetto JSON valido, senza testo aggiuntivo.`,
+      response_json_schema: {
+        type: "object",
+        properties: {
+          IF: { type: "string" },
+          RC: { type: "string" },
+          Hmax: { type: "string" },
+          Dc: { type: "string" },
+          Df: { type: "string" },
+          Ds: { type: "string" },
+          note: { type: "string" },
+          strumento: { type: "string" },
+        }
+      }
+    });
+    if (aiResult?.IF) {
+      return {
+        IF: aiResult.IF,
+        RC: aiResult.RC,
+        Hmax: aiResult.Hmax,
+        Dc: aiResult.Dc,
+        Df: aiResult.Df,
+        Ds: aiResult.Ds,
+        strumento: aiResult.strumento || 'PRG/PUC',
+        fonte: `Stima AI — ${comune}, ${regioneLabel}`,
+        note: aiResult.note || null,
+        fonte_tipo: 'ai_stima',
+        nomeZona: 'Zona residenziale (stima AI)',
+        capoluogo: null,
+        disclaimer: `⚠️ ATTENZIONE: Indici generati da intelligenza artificiale per il comune di ${comune}. Questi valori sono puramente indicativi e potrebbero non corrispondere al PRG/PUC vigente. Verificare obbligatoriamente con il CDU ufficiale del Comune o con un tecnico abilitato prima di qualsiasi decisione urbanistica.`,
+      };
+    }
+  } catch (_e) { /* AI fallita */ }
+
   return null;
 }
 
-// ── NTA Index Card ──
+// ── Sub-components ──────────────────────────────────────────────────────────
 function NtaIndiceCard({ label, value }) {
   if (!value) return null;
   return (
@@ -101,17 +226,52 @@ function NtaIndiceCard({ label, value }) {
   );
 }
 
-// ── Sezione NTA trovata ──
+function SourceBadge({ tipo, capoluogo }) {
+  if (tipo === 'diretta') return (
+    <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 border border-emerald-300">
+      <CheckCircle2 className="w-3 h-3" /> Dati diretti NTA
+    </span>
+  );
+  if (tipo === 'provinciale') return (
+    <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-800 border border-yellow-300">
+      <Info className="w-3 h-3" /> Stima provinciale ({capoluogo})
+    </span>
+  );
+  if (tipo === 'ai_stima') return (
+    <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-orange-100 text-orange-800 border border-orange-300">
+      <AlertTriangle className="w-3 h-3" /> Stima AI
+    </span>
+  );
+  return null;
+}
+
+function DisclaimerBox({ tipo, disclaimer }) {
+  if (!disclaimer) return null;
+  const styles = tipo === 'ai_stima'
+    ? "border-orange-300 bg-orange-50 text-orange-800"
+    : "border-yellow-300 bg-yellow-50 text-yellow-800";
+  return (
+    <div className={`mb-3 rounded-lg border p-3 flex items-start gap-2 ${styles}`}>
+      <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+      <p className="text-xs leading-relaxed">{disclaimer}</p>
+    </div>
+  );
+}
+
 function NtaFoundSection({ nta, comune, cduInfo, linkPrg }) {
   return (
     <>
-      <div className="mb-4 rounded-lg border border-emerald-300 bg-emerald-50 p-3 flex items-start gap-2">
-        <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-        <p className="text-xs text-emerald-800 leading-relaxed">
-          Dati estratti dalle <strong>Norme Tecniche di Attuazione (NTA)</strong> del piano urbanistico vigente.
-          I valori si applicano alla zona tipologica rilevata. Per la sub-zona precisa richiedere il CDU al Comune.
-        </p>
-      </div>
+      {nta.fonte_tipo === 'diretta' && (
+        <div className="mb-4 rounded-lg border border-emerald-300 bg-emerald-50 p-3 flex items-start gap-2">
+          <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+          <p className="text-xs text-emerald-800 leading-relaxed">
+            Dati estratti dalle <strong>Norme Tecniche di Attuazione (NTA)</strong> del piano urbanistico vigente.
+            Per la sub-zona precisa richiedere il CDU al Comune.
+          </p>
+        </div>
+      )}
+      <DisclaimerBox tipo={nta.fonte_tipo} disclaimer={nta.disclaimer} />
+
       <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-3">
         <NtaIndiceCard label="Indice di Fabbricabilità (IF)" value={nta.IF} />
         <NtaIndiceCard label="Rapporto di Copertura (RC)" value={nta.RC} />
@@ -120,11 +280,29 @@ function NtaFoundSection({ nta, comune, cduInfo, linkPrg }) {
         <NtaIndiceCard label="Distanza tra fabbricati (Df)" value={nta.Df} />
         <NtaIndiceCard label="Distanza dalla strada (Ds)" value={nta.Ds} />
       </div>
+
       <div className="flex items-center gap-2 flex-wrap mb-2">
-        <Badge variant="outline" className="text-[10px] bg-emerald-50 text-emerald-700 border-emerald-300">
+        <Badge variant="outline" className="text-[10px] bg-white">
           📋 {nta.fonte}
         </Badge>
+        {nta.strumento && (
+          <Badge variant="outline" className="text-[10px] bg-white">
+            🏛️ {nta.strumento}
+          </Badge>
+        )}
+        {nta.nomeZona && (
+          <Badge variant="outline" className="text-[10px] bg-white">
+            📐 {nta.nomeZona}
+          </Badge>
+        )}
+        {nta.zonaWfs && (
+          <Badge variant="outline" className="text-[10px] bg-blue-50 text-blue-700 border-blue-300">
+            🗺️ WFS: {nta.zonaWfs}
+          </Badge>
+        )}
+        <SourceBadge tipo={nta.fonte_tipo} capoluogo={nta.capoluogo} />
       </div>
+
       {nta.note && (
         <p className="text-xs text-muted-foreground italic mb-3">{nta.note}</p>
       )}
@@ -144,19 +322,15 @@ function NtaFoundSection({ nta, comune, cduInfo, linkPrg }) {
   );
 }
 
-// ── Sezione NTA non trovata ──
 function NtaNotFoundSection({ comune, cduInfo, linkPrg }) {
-  const searchUrl = `https://www.google.com/search?q=CDU+${encodeURIComponent(comune)}+certificato+destinazione+urbanistica`;
   return (
     <div className="rounded-lg border border-border bg-muted/20 p-4">
       <div className="flex items-start gap-2 mb-3">
         <Info className="w-4 h-4 text-muted-foreground shrink-0 mt-0.5" />
         <div>
-          <p className="text-sm font-semibold text-foreground">
-            📍 Comune non ancora nel database NTA
-          </p>
+          <p className="text-sm font-semibold text-foreground">📍 Comune non nel database NTA</p>
           <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
-            I dati per <strong>{comune}</strong> non sono ancora disponibili. Richiedere il{" "}
+            I dati per <strong>{comune}</strong> non sono disponibili. Richiedere il{" "}
             <strong>Certificato di Destinazione Urbanistica (CDU)</strong> al Comune per i valori ufficiali.
           </p>
         </div>
@@ -168,7 +342,8 @@ function NtaNotFoundSection({ comune, cduInfo, linkPrg }) {
             <ExternalLink className="w-3 h-3" /> 🔗 Richiedi CDU al Comune di {comune} →
           </a>
         ) : (
-          <a href={`https://www.google.com/search?q=CDU+certificato+destinazione+urbanistica+${encodeURIComponent(comune || '')}`} target="_blank" rel="noopener noreferrer"
+          <a href={`https://www.google.com/search?q=CDU+certificato+destinazione+urbanistica+${encodeURIComponent(comune || '')}`}
+            target="_blank" rel="noopener noreferrer"
             className="text-primary flex items-center gap-1 hover:underline">
             <ExternalLink className="w-3 h-3" /> 🔗 Richiedi CDU al Comune di {comune} →
           </a>
@@ -184,21 +359,40 @@ function NtaNotFoundSection({ comune, cduInfo, linkPrg }) {
   );
 }
 
+// ── Main component ──────────────────────────────────────────────────────────
 export default function IndiciEdiliziSection({ indici, comune, query, report, wfsZonaUrbanistica, delay = 0.08, regione }) {
-  if (!indici) return null;
-
   const comuneEffettivo = comune || query?.comune || report?.comune;
+  const [nta, setNta] = useState(null);
+  const [loading, setLoading] = useState(true);
+
   const regioneEffettiva = regione || query?.regione || report?.regione || '';
-  const cduInfo = getCduLinks(comuneEffettivo);
+  const cduInfo = CDU_LINKS[comuneEffettivo] ||
+    CDU_LINKS[Object.keys(CDU_LINKS).find(k => k.toLowerCase() === comuneEffettivo?.toLowerCase()?.trim())] ||
+    null;
   const linkPrg = wfsZonaUrbanistica?.link_prg_comunale;
-  const nta = getNtaData(comuneEffettivo, regioneEffettiva, query);
+
+  useEffect(() => {
+    if (!comuneEffettivo) { setLoading(false); return; }
+    setLoading(true);
+    resolveNta(comuneEffettivo, regioneEffettiva, query)
+      .then(setNta)
+      .finally(() => setLoading(false));
+  }, [comuneEffettivo, regioneEffettiva]);
+
+  if (!indici) return null;
 
   return (
     <ReportSection icon={BarChart3} title="Indici Edilizi" delay={delay}>
-      {nta
-        ? <NtaFoundSection nta={nta} comune={comuneEffettivo} cduInfo={cduInfo} linkPrg={linkPrg} />
-        : <NtaNotFoundSection comune={comuneEffettivo} cduInfo={cduInfo} linkPrg={linkPrg} />
-      }
+      {loading ? (
+        <div className="flex items-center gap-2 text-sm text-muted-foreground py-4">
+          <Loader2 className="w-4 h-4 animate-spin" />
+          Ricerca indici edilizi…
+        </div>
+      ) : nta ? (
+        <NtaFoundSection nta={nta} comune={comuneEffettivo} cduInfo={cduInfo} linkPrg={linkPrg} />
+      ) : (
+        <NtaNotFoundSection comune={comuneEffettivo} cduInfo={cduInfo} linkPrg={linkPrg} />
+      )}
     </ReportSection>
   );
 }
