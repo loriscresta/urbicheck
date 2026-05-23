@@ -43,6 +43,19 @@ const INDICI_NTA = {
   "Lerici":                 { IF: "1.5 m³/m²", RC: "45%", Hmax: "9.0 m",  Dc: "5 m", Df: "10 m", Ds: "5 m", strumento: "PUC", fonte: "PUC Lerici — NTA Zone B" },
   "Sarzana":                { IF: "2.0 m³/m²", RC: "50%", Hmax: "10.5 m", Dc: "5 m", Df: "10 m", Ds: "5 m", strumento: "PRG", fonte: "PRG Sarzana — NTA Zone B" },
   "Ventimiglia":            { IF: "1.5 m³/m²", RC: "45%", Hmax: "9.0 m",  Dc: "5 m", Df: "10 m", Ds: "5 m", strumento: "PRG", fonte: "PRG Ventimiglia — NTA Zone B" },
+  // Lombardia — Capoluoghi di provincia (zona residenziale B/B2 — PGT vigente)
+  "Milano":                 { IF: "2.5 m³/m²", RC: "55%", Hmax: "16.5 m", Dc: "5 m", Df: "10 m", Ds: "5 m", strumento: "PGT", fonte: "PGT Milano 2019 — NTA Tessuto Urbano Consolidato" },
+  "Brescia":                { IF: "2.0 m³/m²", RC: "50%", Hmax: "12.0 m", Dc: "5 m", Df: "10 m", Ds: "5 m", strumento: "PGT", fonte: "PGT Brescia — NTA Zone Residenziali B" },
+  "Bergamo":                { IF: "2.0 m³/m²", RC: "50%", Hmax: "10.5 m", Dc: "5 m", Df: "10 m", Ds: "5 m", strumento: "PGT", fonte: "PGT Bergamo — NTA Zone B" },
+  "Varese":                 { IF: "1.5 m³/m²", RC: "45%", Hmax: "10.5 m", Dc: "5 m", Df: "10 m", Ds: "5 m", strumento: "PGT", fonte: "PGT Varese — NTA Zone Residenziali" },
+  "Como":                   { IF: "1.5 m³/m²", RC: "45%", Hmax: "10.5 m", Dc: "5 m", Df: "10 m", Ds: "5 m", strumento: "PGT", fonte: "PGT Como — NTA Zone B" },
+  "Mantova":                { IF: "2.0 m³/m²", RC: "50%", Hmax: "10.5 m", Dc: "5 m", Df: "10 m", Ds: "5 m", strumento: "PGT", fonte: "PGT Mantova — NTA Zone Residenziali B" },
+  "Cremona":                { IF: "2.0 m³/m²", RC: "50%", Hmax: "10.5 m", Dc: "5 m", Df: "10 m", Ds: "5 m", strumento: "PGT", fonte: "PGT Cremona — NTA Zone B" },
+  "Pavia":                  { IF: "2.0 m³/m²", RC: "50%", Hmax: "10.5 m", Dc: "5 m", Df: "10 m", Ds: "5 m", strumento: "PGT", fonte: "PGT Pavia — NTA Zone Residenziali" },
+  "Lodi":                   { IF: "1.5 m³/m²", RC: "45%", Hmax: "10.5 m", Dc: "5 m", Df: "10 m", Ds: "5 m", strumento: "PGT", fonte: "PGT Lodi — NTA Zone B" },
+  "Lecco":                  { IF: "1.5 m³/m²", RC: "45%", Hmax: "10.5 m", Dc: "5 m", Df: "10 m", Ds: "5 m", strumento: "PGT", fonte: "PGT Lecco — NTA Zone Residenziali" },
+  "Sondrio":                { IF: "1.2 m³/m²", RC: "40%", Hmax: "9.0 m",  Dc: "5 m", Df: "10 m", Ds: "5 m", strumento: "PGT", fonte: "PGT Sondrio — NTA Zone B" },
+  "Monza":                  { IF: "2.0 m³/m²", RC: "50%", Hmax: "12.0 m", Dc: "5 m", Df: "10 m", Ds: "5 m", strumento: "PGT", fonte: "PGT Monza — NTA Zone Residenziali B" },
 };
 
 // ── Mappa provinciale Liguria: comune → capoluogo NTA ──────────────────────
@@ -134,6 +147,19 @@ const PROVINCE_CAPOLUOGHI = {
   'SV': { capoluogo: 'Savona',      regione: 'Liguria' },
   'IM': { capoluogo: 'Imperia',     regione: 'Liguria' },
   'SP': { capoluogo: 'La Spezia',   regione: 'Liguria' },
+  // LOMBARDIA
+  'MI': { capoluogo: 'Milano',      regione: 'Lombardia' },
+  'BS': { capoluogo: 'Brescia',     regione: 'Lombardia' },
+  'BG': { capoluogo: 'Bergamo',     regione: 'Lombardia' },
+  'VA': { capoluogo: 'Varese',      regione: 'Lombardia' },
+  'CO': { capoluogo: 'Como',        regione: 'Lombardia' },
+  'MN': { capoluogo: 'Mantova',     regione: 'Lombardia' },
+  'CR': { capoluogo: 'Cremona',     regione: 'Lombardia' },
+  'PV': { capoluogo: 'Pavia',       regione: 'Lombardia' },
+  'LO': { capoluogo: 'Lodi',        regione: 'Lombardia' },
+  'LC': { capoluogo: 'Lecco',       regione: 'Lombardia' },
+  'SO': { capoluogo: 'Sondrio',     regione: 'Lombardia' },
+  'MB': { capoluogo: 'Monza',       regione: 'Lombardia' },
 };
 
 const CDU_LINKS = {
