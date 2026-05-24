@@ -1,6 +1,6 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 
-const FULL_PRICE = 9.90;
+const FULL_PRICE = 9.90; // Standard single-report price (never charge more than this)
 
 Deno.serve(async (req) => {
   try {
@@ -22,30 +22,24 @@ Deno.serve(async (req) => {
       return Response.json({ ok: true, already_paid: true });
     }
 
+    // Prezzo effettivo: usa query.cost se impostato (es. sconto bulk), max FULL_PRICE
+    const effectivePrice = (query.cost && query.cost < FULL_PRICE) ? +query.cost : FULL_PRICE;
+
     // Leggi crediti con service role (bypassa RLS)
     const creditsList = await base44.asServiceRole.entities.UserCredits.filter({ user_email: user.email });
     const credits = creditsList[0];
-    if (!credits || credits.balance < FULL_PRICE) {
+    if (!credits || credits.balance < effectivePrice) {
       return Response.json({
         error: 'insufficient_credits',
         balance: credits?.balance || 0,
-        required: FULL_PRICE,
+        required: effectivePrice,
       }, { status: 402 });
     }
 
-    // Step 1: Registra transazione
-    await base44.asServiceRole.entities.CreditTransaction.create({
-      user_email: user.email,
-      type: 'query_charge',
-      amount: -FULL_PRICE,
-      description: `Scheda completa: ${query.comune} — F.${query.foglio} P.${query.particella}`,
-      query_id,
-    });
-
     // Step 2: Aggiorna saldo crediti
     await base44.asServiceRole.entities.UserCredits.update(credits.id, {
-      balance: parseFloat((credits.balance - FULL_PRICE).toFixed(2)),
-      total_spent: parseFloat(((credits.total_spent || 0) + FULL_PRICE).toFixed(2)),
+      balance: parseFloat((credits.balance - effectivePrice).toFixed(2)),
+      total_spent: parseFloat(((credits.total_spent || 0) + effectivePrice).toFixed(2)),
       total_queries: (credits.total_queries || 0) + 1,
     });
 
@@ -55,7 +49,7 @@ Deno.serve(async (req) => {
       await base44.asServiceRole.entities.CadastralQuery.update(query_id, {
         paid: true,
         status: 'completed',
-        cost: FULL_PRICE,
+        cost: effectivePrice,
       });
       queryUpdateSuccess = true;
     } catch (updateErr) {
@@ -80,12 +74,12 @@ Deno.serve(async (req) => {
           const latest = (await base44.asServiceRole.entities.UserCredits.filter({ user_email: user.email }))[0];
           if (latest) {
             await base44.asServiceRole.entities.UserCredits.update(latest.id, {
-              balance: parseFloat((latest.balance + FULL_PRICE).toFixed(2)),
+              balance: parseFloat((latest.balance + effectivePrice).toFixed(2)),
             });
             await base44.asServiceRole.entities.CreditTransaction.create({
               user_email: user.email,
               type: 'refund',
-              amount: FULL_PRICE,
+              amount: effectivePrice,
               description: `[DEV] Auto-refund — ${query.comune} F.${query.foglio} P.${query.particella}`,
               query_id,
             });
@@ -94,7 +88,7 @@ Deno.serve(async (req) => {
       }, 60000);
     }
 
-    return Response.json({ ok: true, deducted: FULL_PRICE, query_update_success: queryUpdateSuccess });
+    return Response.json({ ok: true, deducted: effectivePrice, query_update_success: queryUpdateSuccess });
 
   } catch (error) {
     console.error('chargeReport error:', error);

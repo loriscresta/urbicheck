@@ -4,26 +4,39 @@ import { base44 } from "@/api/base44Client";
 import { catasto_resolver } from "@/functions/catasto_resolver";
 import CadastralSearchForm from "@/components/search/CadastralSearchForm.jsx";
 import ErrorBoundary from "@/components/ErrorBoundary";
-import { Shield, Info, Search } from "lucide-react";
+import { Shield, Info, Search, Loader2, CheckCircle2, XCircle } from "lucide-react";
 import { motion } from "framer-motion";
+import { useQuery } from "@tanstack/react-query";
 
 export default function SearchPage() {
   const [isLoading, setIsLoading] = useState(false);
+  const [batchProgress, setBatchProgress] = useState(null);
   const navigate = useNavigate();
+
+  const { data: credits } = useQuery({
+    queryKey: ["userCredits"],
+    queryFn: async () => {
+      const user = await base44.auth.me();
+      const list = await base44.entities.UserCredits.filter({ user_email: user.email });
+      return list[0] || { balance: 0 };
+    },
+  });
 
   const handleSearch = async (formData) => {
     setIsLoading(true);
+    if (formData._batch) {
+      await handleBatchSearch(formData);
+    } else {
+      await handleSingleSearch(formData);
+    }
+    setIsLoading(false);
+  };
 
-    // Fase 1 — anteprima gratuita: genera report e salva come "pending" (nessun addebito)
+  const handleSingleSearch = async (formData) => {
     const reportData = await generateReport(formData);
-
-    // Separa i dati finanziari e dati visura dal payload principale
-    const {
-      prezzo_acquisto, superficie, stato_conservativo, destinazione_obiettivo, spese_accessorie,
+    const { prezzo_acquisto, superficie, stato_conservativo, destinazione_obiettivo, spese_accessorie,
       categoria_catastale, superficie_mq, rendita_catastale, vani, indirizzo_catastale,
-      visura_uploaded, intestatari_visura,
-      ...cadastralData
-    } = formData;
+      visura_uploaded, intestatari_visura, ...cadastralData } = formData;
     const fin_data = { prezzo_acquisto, superficie, stato_conservativo, destinazione_obiettivo, spese_accessorie };
 
     const query = await base44.entities.CadastralQuery.create({
@@ -31,31 +44,144 @@ export default function SearchPage() {
       status: "pending",
       report_data: { ...reportData, fin_data },
       cost: 9.90,
-      // Dati estratti dalla visura (se caricata)
-      ...(visura_uploaded ? {
-        categoria_catastale,
-        superficie_mq,
-        rendita_catastale,
-        vani,
-        indirizzo_catastale,
-        visura_uploaded: true,
-      } : {}),
+      ...(visura_uploaded ? { categoria_catastale, superficie_mq, rendita_catastale, vani, indirizzo_catastale, visura_uploaded: true } : {}),
     });
 
-    // Risolvi coordinate precise in background (non bloccante)
     catasto_resolver({
-      nome_comune: formData.comune,
-      regione: formData.regione,
-      foglio: formData.foglio,
-      particella: formData.particella,
+      nome_comune: formData.comune, regione: formData.regione,
+      foglio: formData.foglio, particella: formData.particella,
       sezione: formData.sezione_catastale || undefined,
       indirizzo_immobile: formData.indirizzo_immobile || undefined,
       query_id: query.id,
-    }).catch(() => {/* ignora errori — coordinate opzionali */});
+    }).catch(() => {});
 
-    setIsLoading(false);
     navigate(`/report/${query.id}`);
   };
+
+  const handleBatchSearch = async (formData) => {
+    const { units, _batch, bulkPricing, prezzo_acquisto, superficie, stato_conservativo, destinazione_obiettivo,
+      spese_accessorie, categoria_catastale, superficie_mq, rendita_catastale, vani, indirizzo_catastale,
+      visura_uploaded, intestatari_visura, ...sharedCadastral } = formData;
+
+    const pricePerUnit = bulkPricing?.pricePerUnit || 2.99;
+    const fin_data = { prezzo_acquisto, superficie, stato_conservativo, destinazione_obiettivo, spese_accessorie };
+    const visuraExtra = visura_uploaded ? { categoria_catastale, superficie_mq, rendita_catastale, vani, indirizzo_catastale, visura_uploaded: true } : {};
+
+    const batchRecord = await base44.entities.BatchQuery.create({
+      comune: sharedCadastral.comune,
+      comune_id: sharedCadastral.comune_id,
+      regione: sharedCadastral.regione,
+      provincia: sharedCadastral.provincia,
+      total_units: units.length,
+      completed_units: 0,
+      failed_units: 0,
+      status: "processing",
+      finalita: sharedCadastral.finalita,
+      label: `${sharedCadastral.comune} — ${units.length} unità`,
+      query_ids: [],
+    });
+
+    const queryIds = [];
+    const results = [];
+    setBatchProgress({ current: 0, total: units.length, results: [] });
+
+    for (let i = 0; i < units.length; i++) {
+      const unit = units[i];
+      setBatchProgress(prev => ({
+        ...prev,
+        current: i + 1,
+        label: `Elaborazione ${i + 1}/${units.length} — F.${unit.foglio} P.${unit.particella}${unit.subalterno ? ` Sub.${unit.subalterno}` : ''}`,
+      }));
+
+      try {
+        const reportData = await generateReport({ ...sharedCadastral, ...unit });
+
+        const query = await base44.entities.CadastralQuery.create({
+          ...sharedCadastral, ...unit,
+          status: "pending",
+          report_data: { ...reportData, fin_data },
+          cost: pricePerUnit,
+          batch_id: batchRecord.id,
+          ...visuraExtra,
+        });
+
+        queryIds.push(query.id);
+        results.push({ queryId: query.id, unit, success: true });
+
+        catasto_resolver({
+          nome_comune: sharedCadastral.comune, regione: sharedCadastral.regione,
+          foglio: unit.foglio, particella: unit.particella,
+          sezione: unit.sezione_catastale || undefined,
+          indirizzo_immobile: unit.indirizzo_immobile || undefined,
+          query_id: query.id,
+        }).catch(() => {});
+
+      } catch (err) {
+        console.error(`Batch unit ${i + 1} failed:`, err);
+        results.push({ unit, success: false, error: err.message });
+      }
+
+      setBatchProgress(prev => ({ ...prev, results: [...results] }));
+    }
+
+    const completedCount = results.filter(r => r.success).length;
+    const failedCount = results.filter(r => !r.success).length;
+
+    await base44.entities.BatchQuery.update(batchRecord.id, {
+      query_ids: queryIds,
+      completed_units: completedCount,
+      failed_units: failedCount,
+      status: failedCount === units.length ? 'failed' : failedCount > 0 ? 'partial' : 'completed',
+    });
+
+    navigate(`/batch/${batchRecord.id}`);
+  };
+
+  // Batch progress overlay
+  if (batchProgress && isLoading) {
+    return (
+      <div className="p-6 lg:p-10 max-w-2xl mx-auto">
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="bg-white border border-border rounded-xl p-8 text-center space-y-6">
+          <div className="w-12 h-12 rounded-full flex items-center justify-center mx-auto" style={{ background: '#1A3A6B' }}>
+            <Loader2 className="w-6 h-6 text-white animate-spin" />
+          </div>
+          <div>
+            <h2 className="text-lg font-bold" style={{ color: '#1A3A6B', fontFamily: "'Libre Baskerville', serif" }}>
+              Analisi batch in corso
+            </h2>
+            <p className="text-sm text-muted-foreground mt-1" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
+              {batchProgress.label || `Elaborazione ${batchProgress.current}/${batchProgress.total}...`}
+            </p>
+          </div>
+          <div className="w-full bg-muted rounded-full h-2">
+            <div className="h-2 rounded-full transition-all duration-500"
+              style={{ width: `${(batchProgress.current / batchProgress.total) * 100}%`, background: '#1A3A6B' }} />
+          </div>
+          <p className="text-xs text-muted-foreground" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
+            {batchProgress.current} / {batchProgress.total} unità elaborate
+          </p>
+          {batchProgress.results.length > 0 && (
+            <div className="text-left space-y-1 max-h-40 overflow-y-auto">
+              {batchProgress.results.map((r, i) => (
+                <div key={i} className="flex items-center gap-2 text-xs" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
+                  {r.success
+                    ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                    : <XCircle className="w-3.5 h-3.5 text-red-500 shrink-0" />}
+                  <span className={r.success ? 'text-emerald-700' : 'text-red-600'}>
+                    F.{r.unit.foglio} P.{r.unit.particella}{r.unit.subalterno ? ` Sub.${r.unit.subalterno}` : ''}
+                    {!r.success && ` — ${r.error}`}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+          <p className="text-xs text-muted-foreground italic" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
+            Non chiudere questa finestra. L'analisi AI impiega 30–60s per unità.
+          </p>
+        </motion.div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 lg:p-10 max-w-4xl mx-auto">
@@ -64,7 +190,8 @@ export default function SearchPage() {
           Analisi Urbanistica
         </h1>
         <p className="mb-8 text-xs tracking-[1px] uppercase" style={{ color: '#7A7268', fontFamily: "'IBM Plex Mono', monospace" }}>
-          Ottieni un'<span className="font-semibold text-foreground">anteprima gratuita</span> immediata. Sblocca la scheda completa per <span className="font-semibold text-foreground">€9,90</span>.
+          Anteprima gratuita immediata. Scheda completa <span className="font-semibold text-foreground">€9,90</span>.
+          Analisi multi-unità per palazzine e portfolio.
         </p>
       </motion.div>
 
@@ -73,25 +200,19 @@ export default function SearchPage() {
           <CadastralSearchForm
             onSubmit={handleSearch}
             isLoading={isLoading}
-            disabled={false}
             submitLabel="Ottieni anteprima gratuita →"
+            userBalance={credits?.balance ?? null}
           />
         </ErrorBoundary>
       </div>
 
-      {/* Come funziona */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.2 }}
-        className="mt-8"
-      >
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="mt-8">
         <h2 className="text-[10px] font-semibold uppercase tracking-[2px] mb-4" style={{ color: '#B33A2A', fontFamily: "'IBM Plex Mono', monospace" }}>Come funziona</h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {[
-            { n: "1", icon: Search, title: "Inserisci i dati catastali", desc: "Regione, comune, foglio e particella. Bastano 30 secondi." },
+            { n: "1", icon: Search, title: "Inserisci i dati catastali", desc: "Comune, foglio e particella. Aggiungi più subalterni per palazzine intere." },
             { n: "2", icon: Shield, title: "Anteprima gratuita istantanea", desc: "Ricevi subito zonizzazione, tipologia e presenza vincoli — gratis." },
-            { n: "3", icon: Info, title: "Sblocca la scheda completa", desc: "€9,90 per tutti gli indici edilizi, fattibilità interventi e dettaglio vincoli." },
+            { n: "3", icon: Info, title: "Sblocca la scheda completa", desc: "€9,90 per unità singola. Sconti fino al -40% su analisi multi-unità." },
           ].map(({ n, icon: Icon, title, desc }) => (
             <div key={n} className="bg-white p-5 flex gap-4" style={{ border: '1px solid #C4BAA8' }}>
               <div className="w-8 h-8 flex items-center justify-center text-xs font-bold shrink-0 mt-0.5"
@@ -107,7 +228,6 @@ export default function SearchPage() {
         </div>
       </motion.div>
 
-      {/* Footer */}
       <div className="mt-10 pt-6 border-t border-border text-center text-xs text-muted-foreground">
         urbicheck.it — Dati aggiornati da fonti GIS ufficiali regionali
       </div>
@@ -147,30 +267,14 @@ Per i seguenti campi usa SEMPRE queste stringhe standard se non hai dati reali v
 - if_mc_mq: "Stima orientativa — verificare su NTA/PRG Comunale"
 - rc_percentuale: "Stima orientativa — verificare su NTA/PRG Comunale"
 - h_max: "Stima orientativa — verificare su NTA/PRG Comunale"
-- distanza_confini: "Verificare su NTA/PRG Comunale"
-- distanza_fabbricati: "Verificare su NTA/PRG Comunale"
-- distanza_strada: "Verificare su NTA/PRG Comunale"
-- zona_censuaria: "Verificare su visura catastale ufficiale"
-- microzona: "Verificare su visura catastale ufficiale"
-- zona_codice: usa un valore generico come "Zona residenziale" o "Zona agricola" — NON inventare codici alfanumerici specifici
+- zona_codice: usa un valore generico come "Zona residenziale" o "Zona agricola"
 
-Per la categoria catastale puoi indicare la tipologia generale (es. "Abitazione civile", "Terreno agricolo", "Immobile commerciale") basandoti sul contesto, ma NON specificare sottocategorie (A/2, C/6, ecc.) a meno che non siano verificabili.
+Per la categoria catastale puoi indicare la tipologia generale basandoti sul contesto.
+Per la colore zonizzazione (verde/giallo/rosso) puoi fare una stima orientativa.
+Per i vincoli puoi indicare presenza/assenza SOLO se hai informazioni certe per quella regione/comune.
+${formData.finalita === "asta_giudiziaria" ? "IMPORTANTE: per asta giudiziaria aggiungi dettagli specifici sul CDU e conformità urbanistica." : ""}
 
-Per la colore zonizzazione (verde/giallo/rosso) puoi fare una stima orientativa basata sulla destinazione d'uso prevalente.
-Per la descrizione zonizzazione puoi descrivere il contesto urbanistico generale del comune.
-Per i vincoli (sismico, idraulico, paesaggistico) puoi indicare presenza/assenza SOLO se hai informazioni certe per quella regione/comune. In caso di dubbio imposta presente: false.
-Per fattibilità_interventi genera dati realistici basati sulla tipologia dell'immobile.
-Per pratiche_necessarie e accesso_atti genera dati realistici basati sulla normativa italiana vigente.
-${formData.finalita === "asta_giudiziaria" ? "IMPORTANTE: per asta giudiziaria aggiungi dettagli specifici sul CDU, conformità urbanistica e guida accesso atti." : ""}
-
-REGOLA LINGUISTICA — ITALIANO TECNICO URBANISTICO:
-Usa ESCLUSIVAMENTE terminologia tecnica italiana. NON tradurre dall'inglese.
-- "Distanza dai confini" (NON "setback")
-- "Indice di Fabbricabilità (IF)" in mc/mq
-- "Rapporto di Copertura (RC)" in %
-- "Altezza Massima (H max)" in metri
-- "Destinazione d'uso" (NON "land use")
-- "Permesso di costruire" (NON "building permit")`,
+REGOLA LINGUISTICA: Usa ESCLUSIVAMENTE terminologia tecnica italiana.`,
     add_context_from_internet: true,
     response_json_schema: {
       type: "object",
@@ -178,56 +282,38 @@ Usa ESCLUSIVAMENTE terminologia tecnica italiana. NON tradurre dall'inglese.
         zonizzazione: {
           type: "object",
           properties: {
-            colore: { type: "string", description: "verde, giallo, o rosso - indica fattibilità generale" },
-            zona_codice: { type: "string", description: "es. B1, C2, A, D1..." },
-            descrizione: { type: "string", description: "descrizione estesa della zona urbanistica" },
+            colore: { type: "string" },
+            zona_codice: { type: "string" },
+            descrizione: { type: "string" },
             destinazione_prevalente: { type: "string" }
           }
         },
         indici_edilizi: {
           type: "object",
           properties: {
-            if_mc_mq: { type: "string" },
-            rc_percentuale: { type: "string" },
-            h_max: { type: "string" },
-            distanza_confini: { type: "string" },
-            distanza_fabbricati: { type: "string" },
-            distanza_strada: { type: "string" }
+            if_mc_mq: { type: "string" }, rc_percentuale: { type: "string" },
+            h_max: { type: "string" }, distanza_confini: { type: "string" },
+            distanza_fabbricati: { type: "string" }, distanza_strada: { type: "string" }
           }
         },
         fattibilita_interventi: {
           type: "array",
-          items: {
-            type: "object",
-            properties: {
-              tipo_intervento: { type: "string" },
-              fattibilita: { type: "string", description: "fattibile, con_autorizzazione, non_fattibile" },
-              note: { type: "string" }
-            }
-          }
+          items: { type: "object", properties: { tipo_intervento: { type: "string" }, fattibilita: { type: "string" }, note: { type: "string" } } }
         },
         dati_catastali: {
           type: "object",
           properties: {
-            categoria: { type: "string" },
-            classe: { type: "string" },
-            consistenza: { type: "string" },
-            rendita_catastale: { type: "string" },
-            zona_censuaria: { type: "string" },
-            microzona: { type: "string" },
-            intestatari: { type: "string" }
+            categoria: { type: "string" }, classe: { type: "string" },
+            consistenza: { type: "string" }, rendita_catastale: { type: "string" },
+            zona_censuaria: { type: "string" }, microzona: { type: "string" }, intestatari: { type: "string" }
           }
         },
         quadro_urbanistico: {
           type: "object",
           properties: {
-            strumento_vigente: { type: "string" },
-            zona_urbanistica: { type: "string" },
-            destinazione_uso: { type: "string" },
-            indice_edificabilita: { type: "string" },
-            altezza_massima: { type: "string" },
-            distanze_minime: { type: "string" },
-            note_urbanistiche: { type: "string" }
+            strumento_vigente: { type: "string" }, zona_urbanistica: { type: "string" },
+            destinazione_uso: { type: "string" }, indice_edificabilita: { type: "string" },
+            altezza_massima: { type: "string" }, distanze_minime: { type: "string" }, note_urbanistiche: { type: "string" }
           }
         },
         vincoli: {
@@ -242,32 +328,19 @@ Usa ESCLUSIVAMENTE terminologia tecnica italiana. NON tradurre dall'inglese.
         },
         pratiche_necessarie: {
           type: "array",
-          items: {
-            type: "object",
-            properties: {
-              tipo_intervento: { type: "string" },
-              pratica_richiesta: { type: "string" },
-              ente_competente: { type: "string" },
-              tempistica_stimata: { type: "string" },
-              costi_stimati: { type: "string" },
-              note: { type: "string" }
-            }
-          }
+          items: { type: "object", properties: { tipo_intervento: { type: "string" }, pratica_richiesta: { type: "string" }, ente_competente: { type: "string" }, tempistica_stimata: { type: "string" }, costi_stimati: { type: "string" }, note: { type: "string" } } }
         },
         accesso_atti: {
           type: "object",
           properties: {
-            ufficio_catasto: { type: "string" },
-            ufficio_urbanistica: { type: "string" },
-            ufficio_edilizia: { type: "string" },
-            documenti_ottenibili: { type: "array", items: { type: "string" } },
-            modalita_accesso: { type: "string" }
+            ufficio_catasto: { type: "string" }, ufficio_urbanistica: { type: "string" }, ufficio_edilizia: { type: "string" },
+            documenti_ottenibili: { type: "array", items: { type: "string" } }, modalita_accesso: { type: "string" }
           }
         },
         valutazione_sintetica: {
           type: "object",
           properties: {
-            livello_complessita: { type: "string", description: "Basso, Medio, Alto" },
+            livello_complessita: { type: "string" },
             criticita_principali: { type: "array", items: { type: "string" } },
             opportunita: { type: "array", items: { type: "string" } },
             raccomandazioni: { type: "array", items: { type: "string" } }
