@@ -3,6 +3,13 @@ import { base44 } from "@/api/base44Client";
 
 const WFS_URL = "https://wfs.cartografia.agenziaentrate.gov.it/inspire/wfs/ows";
 
+// BUG 1 — Handle alphanumeric foglio (sezioni catastali): "B/5", "B5", "A/3", "C12"
+function parseFoglio(rawFoglio) {
+  const match = String(rawFoglio || '').trim().match(/^([A-Za-z])[\s\/]?(\d+)$/);
+  if (match) return { sezione: match[1].toUpperCase(), foglio: match[2] };
+  return { sezione: null, foglio: String(rawFoglio || '').trim() };
+}
+
 function loadLeaflet(cb) {
   if (window.L) { cb(); return; }
   if (!document.querySelector('link[href*="leaflet"]')) {
@@ -251,11 +258,14 @@ export default function ParcellaMap({ record, query, item }) {
   }, [initLat, initLon, hasPolygon]);
 
   // ── Render ────────────────────────────────────────────────────────────────
+  const parsed = parseFoglio(foglio);
+  const foglioDisplay = parsed.sezione ? `${parsed.sezione}/${parsed.foglio}` : foglio;
+
   if (!hasPosition) {
     return (
       <div className="p-4 space-y-2">
         <p className="text-sm text-gray-500">
-          📍 Posizione non disponibile — Foglio {foglio}, Particella {particella}
+          📍 Posizione non disponibile — Foglio {foglioDisplay}, Particella {particella}
         </p>
         <a
           href="https://geoportale.cartografia.agenziaentrate.gov.it/age-inspire/srv/ita/catalog.search"

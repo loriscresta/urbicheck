@@ -87,6 +87,8 @@ export default function CadastralSearchForm({ onSubmit, isLoading, submitLabel =
   const [finalita, setFinalita] = useState("");
   const [showFinancial, setShowFinancial] = useState(false);
   const [visuraDati, setVisuraDati] = useState(null);
+  const [planimetriaFile, setPlanimetriaFile] = useState(null);
+  const [superficieMq, setSuperficieMq] = useState("");
 
   // Financial fields
   const [prezzoAcquisto, setPrezzoAcquisto] = useState("");
@@ -184,11 +186,16 @@ export default function CadastralSearchForm({ onSubmit, isLoading, submitLabel =
       } : {}),
     };
 
+    const extraData = {
+      planimetriaFile: planimetriaFile || undefined,
+      superficie_manuale: superficieMq ? parseFloat(superficieMq) : undefined,
+    };
+
     if (!isBatch) {
       // Single unit — backward-compatible
       const p = parcels[0];
       onSubmit({
-        ...sharedData,
+        ...sharedData, ...extraData,
         foglio: p.foglio,
         particella: p.particella,
         subalterno: p.subs[0].value,
@@ -209,7 +216,7 @@ export default function CadastralSearchForm({ onSubmit, isLoading, submitLabel =
           });
         }
       }
-      onSubmit({ ...sharedData, _batch: true, units, bulkPricing: pricing });
+      onSubmit({ ...sharedData, ...extraData, _batch: true, units, bulkPricing: pricing });
     }
   };
 
@@ -346,6 +353,37 @@ export default function CadastralSearchForm({ onSubmit, isLoading, submitLabel =
             </p>
           )}
         </div>
+      </div>
+
+      {/* Planimetria catastale upload */}
+      <div className="border-2 border-dashed border-border rounded-lg p-4 space-y-2">
+        <Label className="flex items-center gap-2 cursor-pointer">
+          📐 Allega planimetria catastale <span className="text-muted-foreground text-xs">(opzionale)</span>
+        </Label>
+        <input
+          type="file"
+          accept=".pdf,.jpg,.jpeg,.png"
+          onChange={e => setPlanimetriaFile(e.target.files?.[0] || null)}
+          className="block text-xs text-muted-foreground w-full cursor-pointer file:mr-3 file:py-1 file:px-3 file:border-0 file:text-xs file:font-semibold file:bg-primary file:text-primary-foreground file:cursor-pointer hover:file:opacity-90"
+        />
+        <p className="text-[10px] text-muted-foreground">Formati: PDF, JPG, PNG — Max 10MB — L'AI estraerà superficie e vani per calcoli più precisi</p>
+        {planimetriaFile && <p className="text-xs text-emerald-700 font-semibold">✓ {planimetriaFile.name} allegata</p>}
+        <a href="https://sister.agenziaentrate.gov.it/CitizenArAccessWeb/" target="_blank" rel="noopener noreferrer"
+          className="text-xs text-primary hover:underline">→ Come scaricare la planimetria dall'Agenzia delle Entrate</a>
+      </div>
+
+      {/* Superficie manuale */}
+      <div className="space-y-1.5">
+        <div className="flex items-center gap-1.5">
+          <Label>Superficie nota (mq)</Label>
+          <span className="text-xs text-muted-foreground">(opzionale — migliora l'analisi finanziaria)</span>
+        </div>
+        <Input
+          type="number"
+          value={superficieMq}
+          onChange={e => setSuperficieMq(e.target.value)}
+          placeholder="es. 85 mq"
+        />
       </div>
 
       {/* Finalità */}

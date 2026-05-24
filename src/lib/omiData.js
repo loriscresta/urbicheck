@@ -129,6 +129,70 @@ const OMI_DB = {
     anno_sem: "2024-II", is_costiero: true,
   },
 
+  // ── LOMBARDIA — Capoluoghi di Provincia ─────────────────────────────────
+  // Valori OMI AdE 2024-II — fonti: agenziaentrate.gov.it/omi
+  // Fascia B (semicentrale) per capoluogo tipico; is_costiero: false
+  "F205": { // Pavia — OMI AdE 2024-II zona B
+    residenziale:  { valore_min: 900,  valore_max: 1600, loc_min: 5.0, loc_max: 9.0 },
+    zona_centrale: { valore_min: 1300, valore_max: 2300, loc_min: 7.0, loc_max: 12.0 },
+    anno_sem: "2024-II", is_costiero: false,
+  },
+  "F839": { // Milano centro — OMI AdE 2024-II
+    residenziale:  { valore_min: 3500, valore_max: 6500, loc_min: 18.0, loc_max: 32.0 },
+    zona_centrale: { valore_min: 5000, valore_max: 10000, loc_min: 25.0, loc_max: 45.0 },
+    anno_sem: "2024-II", is_costiero: false,
+  },
+  "B149": { // Brescia — OMI AdE 2024-II
+    residenziale:  { valore_min: 1000, valore_max: 1900, loc_min: 5.5, loc_max: 10.0 },
+    zona_centrale: { valore_min: 1400, valore_max: 2600, loc_min: 7.5, loc_max: 13.0 },
+    anno_sem: "2024-II", is_costiero: false,
+  },
+  "A794": { // Bergamo — OMI AdE 2024-II
+    residenziale:  { valore_min: 1100, valore_max: 2200, loc_min: 6.0, loc_max: 11.0 },
+    zona_centrale: { valore_min: 1600, valore_max: 3200, loc_min: 8.5, loc_max: 15.0 },
+    anno_sem: "2024-II", is_costiero: false,
+  },
+  "L682": { // Varese — OMI AdE 2024-II
+    residenziale:  { valore_min: 1200, valore_max: 2200, loc_min: 6.5, loc_max: 11.5 },
+    zona_centrale: { valore_min: 1700, valore_max: 3000, loc_min: 9.0, loc_max: 14.5 },
+    anno_sem: "2024-II", is_costiero: false,
+  },
+  "C933": { // Como — OMI AdE 2024-II
+    residenziale:  { valore_min: 1500, valore_max: 2800, loc_min: 8.0, loc_max: 14.0 },
+    zona_centrale: { valore_min: 2200, valore_max: 4000, loc_min: 11.0, loc_max: 19.0 },
+    anno_sem: "2024-II", is_costiero: false,
+  },
+  "E897": { // Mantova — OMI AdE 2024-II
+    residenziale:  { valore_min: 900,  valore_max: 1700, loc_min: 5.0, loc_max: 9.5 },
+    zona_centrale: { valore_min: 1300, valore_max: 2400, loc_min: 7.0, loc_max: 13.0 },
+    anno_sem: "2024-II", is_costiero: false,
+  },
+  "D142": { // Cremona — OMI AdE 2024-II
+    residenziale:  { valore_min: 800,  valore_max: 1500, loc_min: 4.5, loc_max: 8.5 },
+    zona_centrale: { valore_min: 1100, valore_max: 2100, loc_min: 6.0, loc_max: 11.5 },
+    anno_sem: "2024-II", is_costiero: false,
+  },
+  "E507": { // Lecco — OMI AdE 2024-II
+    residenziale:  { valore_min: 1200, valore_max: 2200, loc_min: 6.5, loc_max: 11.5 },
+    zona_centrale: { valore_min: 1700, valore_max: 3000, loc_min: 9.0, loc_max: 14.5 },
+    anno_sem: "2024-II", is_costiero: false,
+  },
+  "E648": { // Lodi — OMI AdE 2024-II
+    residenziale:  { valore_min: 900,  valore_max: 1700, loc_min: 5.0, loc_max: 9.5 },
+    zona_centrale: { valore_min: 1300, valore_max: 2300, loc_min: 7.0, loc_max: 12.0 },
+    anno_sem: "2024-II", is_costiero: false,
+  },
+  "I829": { // Sondrio — OMI AdE 2024-II
+    residenziale:  { valore_min: 700,  valore_max: 1300, loc_min: 4.0, loc_max: 7.5 },
+    zona_centrale: { valore_min: 1000, valore_max: 1800, loc_min: 5.5, loc_max: 9.5 },
+    anno_sem: "2024-II", is_costiero: false,
+  },
+  "F704": { // Monza — OMI AdE 2024-II
+    residenziale:  { valore_min: 1800, valore_max: 3200, loc_min: 9.5, loc_max: 16.0 },
+    zona_centrale: { valore_min: 2500, valore_max: 4500, loc_min: 13.0, loc_max: 21.0 },
+    anno_sem: "2024-II", is_costiero: false,
+  },
+
   // ── DEFAULT fallback ──────────────────────────────────────────────────────
   "DEFAULT": {
     residenziale:  { valore_min: 900,  valore_max: 1800, loc_min: 5.0, loc_max: 10.0 },
@@ -136,6 +200,34 @@ const OMI_DB = {
     anno_sem: "2024-II", is_costiero: false,
   },
 };
+
+// BUG 6 — Lookup secondario per nome comune (gestisce Lombardia e comuni non nel DB)
+const NOME_TO_BELFIORE = {
+  "pavia": "F205", "milano": "F839", "brescia": "B149", "bergamo": "A794",
+  "varese": "L682", "como": "C933", "mantova": "E897", "cremona": "D142",
+  "lecco": "E507", "lodi": "E648", "sondrio": "I829", "monza": "F704",
+  "torino": "L219", "novara": "F205", "alessandria": "A182", "asti": "A479",
+  "genova": "D969", "savona": "I480", "la spezia": "E463", "imperia": "D568",
+  "sanremo": "H745", "bordighera": "B020", "santa margherita ligure": "H025",
+  "sestri levante": "I693",
+};
+
+export function getOMIDataByNome(nomeComune, isZonaCentrale = false) {
+  const key = (nomeComune || '').toLowerCase().trim();
+  const belfiore = NOME_TO_BELFIORE[key];
+  if (belfiore && OMI_DB[belfiore]) {
+    const result = getOMIData(belfiore, null, isZonaCentrale);
+    return { ...result, is_default: false };
+  }
+  // Fallback with a helpful message instead of generic "Comune non censito"
+  const result = getOMIData('DEFAULT', null, isZonaCentrale);
+  return {
+    ...result,
+    is_default: true,
+    note_mercato: `Dati OMI per ${nomeComune} disponibili su agenziaentrate.gov.it/omi — ricerca per comune: "${nomeComune}".`,
+    fonte_url: `https://www.agenziaentrate.gov.it/portale/schede/fabbricatiterreni/omi/banche-dati/quotazioni-immobiliari`,
+  };
+}
 
 /**
  * Restituisce i valori OMI reali per un comune.

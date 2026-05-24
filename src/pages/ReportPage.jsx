@@ -5,7 +5,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Building2, MapPin, FileText, Shield, AlertTriangle,
   ClipboardList, FolderOpen, Lightbulb, ArrowLeft, Download, Loader2,
-  BarChart3, CheckCircle2, XCircle, AlertCircle, Gavel, FileSearch
+  BarChart3, CheckCircle2, XCircle, AlertCircle, Gavel, FileSearch, ExternalLink
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -24,6 +24,36 @@ import ParcellaMap from "@/components/report/ParcellaMap";
 import PaymentGate from "@/components/report/PaymentGate";
 import IndiciEdiliziSection from "@/components/report/IndiciEdiliziSection";
 import VincoliRischiPiemonte from "@/components/report/VincoliRischiPiemonte";
+
+// BUG 3 — Categoria group detection
+const CATEGORIA_GROUPS = {
+  residential: ['A/1','A/2','A/3','A/4','A/5','A/6','A/7','A/8','A/9','A/11'],
+  commercial: ['C/1','C/2','C/3','C/4','C/5','C/6','C/7'],
+  offices: ['A/10','B/1','B/2','B/3','B/4','B/5','B/6','B/7','B/8'],
+  industrial: ['D/1','D/2','D/3','D/4','D/5','D/6','D/7','D/8','D/9','D/10'],
+  land: ['F/1','F/2','F/3','F/4','F/5'],
+};
+const CATEGORIA_LABELS = {
+  residential: null,
+  commercial: { icon: '🏪', label: 'Immobile commerciale', color: 'bg-blue-100 text-blue-800 border-blue-300' },
+  offices: { icon: '🏢', label: 'Ufficio / Direzionale', color: 'bg-indigo-100 text-indigo-800 border-indigo-300' },
+  industrial: { icon: '🏭', label: 'Immobile non residenziale — industriale/produttivo', color: 'bg-orange-100 text-orange-800 border-orange-300' },
+  land: { icon: '🌿', label: 'Area non edificata / Terreno', color: 'bg-emerald-100 text-emerald-800 border-emerald-300' },
+};
+function detectCategoriaGroup(cat) {
+  if (!cat) return null;
+  const c = cat.toUpperCase().trim();
+  for (const [group, cats] of Object.entries(CATEGORIA_GROUPS)) {
+    if (cats.some(k => c.startsWith(k.replace('/', '').replace('/', '')) || c === k || c.startsWith(k))) return group;
+  }
+  return null;
+}
+// BUG 7 — Normalize complessità value
+function normalizeComplessita(val) {
+  if (!val || typeof val !== 'string') return null;
+  if (val.length > 25 || val.toLowerCase().includes('stima') || val.toLowerCase().includes('verificare')) return null;
+  return val;
+}
 
 const FINALITA_LABELS = {
   acquisto_privato: "Acquisto privato",
@@ -253,10 +283,27 @@ export default function ReportPage() {
   const finData = r.fin_data || {};
   const reportNum = `UB-${query.id?.slice(-8).toUpperCase()}`;
 
+  // BUG 3 — Categoria detection
+  const categoriaRaw = query.categoria_catastale || r.dati_catastali?.categoria;
+  const categoriaGroup = detectCategoriaGroup(categoriaRaw);
+  const categoriaBadge = categoriaGroup ? CATEGORIA_LABELS[categoriaGroup] : null;
+
+  // BUG 7 — Normalize complessità
+  const complessitaRaw = r.valutazione_sintetica?.livello_complessita;
+  const complessitaNorm = normalizeComplessita(complessitaRaw);
+
+  // BUG 4/5 — Vincoli verification status
+  const isLombardia = (query.regione || '').toLowerCase().includes('lombardia');
+  const hasVerifiedVincoli = !!(wfsRis) || isPiemonte || isLiguria;
+
   const complexityColor = {
+    "Bassa": "bg-emerald-50 text-emerald-700 border-emerald-200",
     "Basso": "bg-emerald-50 text-emerald-700 border-emerald-200",
+    "Media": "bg-amber-50 text-amber-700 border-amber-200",
     "Medio": "bg-amber-50 text-amber-700 border-amber-200",
+    "Alta": "bg-red-50 text-red-700 border-red-200",
     "Alto": "bg-red-50 text-red-700 border-red-200",
+    "Molto Alta": "bg-red-100 text-red-900 border-red-400",
   };
 
   const sezioniDisponibili = r.catasto_data?.sezioni_disponibili || [];
@@ -310,9 +357,9 @@ export default function ReportPage() {
               <p className="text-white/50 text-xs">
                 {format(new Date(query.created_date), "d MMMM yyyy 'alle' HH:mm", { locale: it })}
               </p>
-              {r.valutazione_sintetica?.livello_complessita && (
-                <Badge variant="outline" className={`${complexityColor[r.valutazione_sintetica.livello_complessita] || ""} text-xs`}>
-                  Complessità: {r.valutazione_sintetica.livello_complessita}
+              {complessitaNorm && (
+                <Badge variant="outline" className={`${complexityColor[complessitaNorm] || 'bg-amber-50 text-amber-700 border-amber-200'} text-xs`}>
+                  Complessità: {complessitaNorm}
                 </Badge>
               )}
               <Badge className="bg-emerald-500 text-white border-0 text-xs flex items-center gap-1">
@@ -322,6 +369,18 @@ export default function ReportPage() {
           </div>
         </div>
       </motion.div>
+
+      {/* BUG 3 — Non-residential category badge */}
+      {categoriaBadge && (
+        <motion.div initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }}
+          className={`mb-4 rounded-lg border px-4 py-3 flex items-center gap-2 ${categoriaBadge.color}`}>
+          <span className="text-lg">{categoriaBadge.icon}</span>
+          <div>
+            <p className="font-bold text-sm">{categoriaBadge.label} — {categoriaRaw}</p>
+            <p className="text-xs mt-0.5 opacity-80">I valori OMI, i costi di ristrutturazione e la fattibilità sono calibrati per immobili non residenziali.</p>
+          </div>
+        </motion.div>
+      )}
 
       {/* AVVISO MULTI-SEZIONE CATASTALE */}
       {hasMultiSezioni && (
@@ -384,8 +443,22 @@ export default function ReportPage() {
                : <DataRow label="Intestatari" value={query.intestatari && query.intestatari.length > 0 ? query.intestatari.join(" — ") : "Non disponibile dalla visura"} />
              }
             {query.visura_uploaded && query.superficie_mq && (
-              <DataRow label="Superficie catastale" value={`${query.superficie_mq} mq`} />
-            )}
+                <DataRow label="Superficie catastale" value={`${query.superficie_mq} mq`} />
+              )}
+              {r.planimetria_data?.superficie_mq && (
+                <div className="mt-2 p-2 rounded bg-blue-50 border border-blue-200 text-xs text-blue-800 flex items-center gap-2">
+                  <span>📐</span>
+                  <span>
+                    <strong>Planimetria allegata:</strong> Superficie {r.planimetria_data.superficie_mq} mq
+                    {r.planimetria_data.vani ? ` · Vani: ${r.planimetria_data.vani}` : ''}
+                  </span>
+                </div>
+              )}
+              {r.planimetria_data?.leggibile === false && (
+                <div className="mt-2 p-2 rounded bg-amber-50 border border-amber-200 text-xs text-amber-800">
+                  📐 Planimetria allegata — superficie non rilevata automaticamente.
+                </div>
+              )}
           </ReportSection>
         )}
 
@@ -417,6 +490,21 @@ export default function ReportPage() {
               <p className="text-[10px] uppercase tracking-widest text-emerald-700 mb-3" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
                 ✓ Dati da fonti ufficiali WFS — {isPiemonte ? 'ARPA Piemonte + Overpass' : isLiguria ? 'Regione Liguria + Overpass' : 'WFS ufficiale'}
               </p>
+            )}
+            {/* BUG 5 — Unverified vincoli warning */}
+            {!hasVerifiedVincoli && (
+              <div className="mb-3 rounded-lg border border-amber-300 bg-amber-50 p-3 flex items-start gap-2">
+                <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-xs font-bold text-amber-900">⚠ Vincoli non verificati tramite WFS ufficiale</p>
+                  <p className="text-xs text-amber-800 mt-0.5">
+                    I dati sui vincoli per {query.regione || 'questa regione'} non sono stati verificati automaticamente tramite servizi WFS.
+                    I valori mostrati sono stime AI indicative e <strong>non sostituiscono una verifica ufficiale</strong>.
+                    {isLombardia && <> Verifica PAI su <a href="https://geoportale.regione.lombardia.it" target="_blank" rel="noopener noreferrer" className="underline">geoportale.regione.lombardia.it</a>.</>}
+                  </p>
+                  <p className="text-xs text-amber-800 mt-1 font-semibold">→ Richiedere CDU al Comune per verifica ufficiale di tutti i vincoli.</p>
+                </div>
+              </div>
             )}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <VincoloCard label="Vincolo Sismico" presente={vincoloSismicoEffettivo.presente} dettagli={vincoloSismicoEffettivo.dettagli} extra={vincoloSismicoEffettivo.zona} />
@@ -656,6 +744,22 @@ export default function ReportPage() {
           </ReportSection>
         )}
       </div>
+
+      {/* WFS ANALISI PANEL — Lombardia: mostra link portali */}
+      {isLombardia && (
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mt-6 p-5 rounded-xl" style={{ border: '2px solid #1A3A6B', background: '#fff' }}>
+          <div className="flex items-center gap-2 mb-3" style={{ background: '#1A3A6B', margin: '-1.25rem -1.25rem 1rem', padding: '0.75rem 1.25rem' }}>
+            <Shield className="w-4 h-4 text-white" />
+            <p className="text-xs font-bold text-white uppercase tracking-widest">Verifica Vincoli — Regione Lombardia</p>
+          </div>
+          <p className="text-xs text-muted-foreground mb-3">L'analisi WFS automatica non è disponibile per la Lombardia. Verificare manualmente sui portali ufficiali:</p>
+          <div className="space-y-2 text-xs">
+            <a href="https://geoportale.regione.lombardia.it" target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-primary hover:underline"><ExternalLink className="w-3 h-3" /> Geoportale Regione Lombardia (PAI, vincoli paesaggistici)</a>
+            <a href="https://idrogeo.isprambiente.it/app/" target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-primary hover:underline"><ExternalLink className="w-3 h-3" /> IdroGEO ISPRA — PAI frane e alluvioni Lombardia</a>
+            <a href="https://www.sit.regione.lombardia.it" target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-primary hover:underline"><ExternalLink className="w-3 h-3" /> SIT Regione Lombardia — Zonizzazione sismica</a>
+          </div>
+        </motion.div>
+      )}
 
       {/* WFS ANALISI PANEL */}
       {(['Liguria','Piemonte'].includes(query.regione) || (query.regione || '').toLowerCase().includes('piemonte') || (query.regione || '').toLowerCase().includes('liguria')) && (

@@ -33,7 +33,42 @@ export default function SearchPage() {
   };
 
   const handleSingleSearch = async (formData) => {
-    const reportData = await generateReport(formData);
+    // NEW FEATURE: process planimetria if uploaded
+    let planimetriaData = null;
+    let superficieEffettiva = formData.superficie_manuale || null;
+    if (formData.planimetriaFile) {
+      try {
+        const { file_url } = await base44.integrations.Core.UploadFile({ file: formData.planimetriaFile });
+        const extracted = await base44.integrations.Core.InvokeLLM({
+          prompt: `Sei un esperto di planimetrie catastali italiane. Analizza questa planimetria e estrai: superficie totale in mq, numero di vani/stanze, presenza di balconi/terrazze con relativa superficie se indicata, scala del disegno se leggibile. Se non riesci a leggere chiaramente la planimetria, imposta tutti i valori a null.`,
+          file_urls: [file_url],
+          response_json_schema: {
+            type: "object",
+            properties: {
+              superficie_mq: { type: "number" },
+              vani: { type: "number" },
+              balconi_mq: { type: "number" },
+              scala: { type: "string" },
+              leggibile: { type: "boolean" },
+              note: { type: "string" },
+            }
+          }
+        });
+        if (extracted?.superficie_mq) {
+          planimetriaData = { ...extracted, source: 'planimetria_upload', file_url };
+          if (!superficieEffettiva) superficieEffettiva = extracted.superficie_mq;
+        } else {
+          planimetriaData = { leggibile: false, file_url, source: 'planimetria_upload' };
+        }
+      } catch (e) {
+        console.warn('Planimetria processing failed:', e);
+      }
+    }
+    // Inject actual surface into formData for financial analysis
+    const enrichedFormData = superficieEffettiva
+      ? { ...formData, superficie: String(superficieEffettiva) }
+      : formData;
+    const reportData = await generateReport(enrichedFormData);
     const { prezzo_acquisto, superficie, stato_conservativo, destinazione_obiettivo, spese_accessorie,
       categoria_catastale, superficie_mq, rendita_catastale, vani, indirizzo_catastale,
       visura_uploaded, intestatari_visura, ...cadastralData } = formData;
@@ -42,8 +77,9 @@ export default function SearchPage() {
     const query = await base44.entities.CadastralQuery.create({
       ...cadastralData,
       status: "pending",
-      report_data: { ...reportData, fin_data },
+      report_data: { ...reportData, fin_data, planimetria_data: planimetriaData },
       cost: 9.90,
+      ...(superficieEffettiva ? { superficie_mq: superficieEffettiva } : {}),
       ...(visura_uploaded ? { categoria_catastale, superficie_mq, rendita_catastale, vani, indirizzo_catastale, visura_uploaded: true } : {}),
     });
 
