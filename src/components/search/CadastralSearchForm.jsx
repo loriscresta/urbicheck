@@ -369,11 +369,17 @@ export default function CadastralSearchForm({ onSubmit, isLoading, submitLabel =
         <p className="text-[10px] text-muted-foreground">Hai la planimetria? Allegala per calcoli più precisi — PDF, JPG o PNG · Max 10MB</p>
         <p className="text-[10px] text-muted-foreground italic">Documento riservato — accessibile solo al proprietario o a professionisti abilitati con autorizzazione scritta</p>
         {planimetriaFile && <p className="text-xs text-emerald-700 font-semibold">✓ {planimetriaFile.name} allegata</p>}
-        <div className="mt-2 p-3 rounded bg-blue-50 border border-blue-200 text-[10px] text-blue-800 space-y-1">
-          <p className="font-semibold">ℹ️ Chi può accedere alla planimetria catastale?</p>
-          <p>• Il <strong>proprietario</strong> dell'immobile — tramite portale AdE con SPID (solo i propri immobili)</p>
-          <p>• Un <strong>professionista abilitato</strong> (geometra, architetto, ingegnere) — tramite accesso SISTER previa autorizzazione scritta del proprietario</p>
-          <p className="mt-1 italic">Se disponi già della planimetria, allegala per migliorare la precisione dell'analisi finanziaria.</p>
+        <div className="mt-2 p-3 rounded bg-blue-50 border border-blue-200 text-[10px] text-blue-800 space-y-2">
+          <p className="font-semibold">ℹ️ Visura catastale vs Planimetria catastale</p>
+          <div>
+            <p className="font-semibold text-emerald-700">📜 Visura catastale — PUBBLICA</p>
+            <p>Chiunque può richiederla <strong>gratuitamente</strong> sul portale dell'Agenzia delle Entrate per qualsiasi immobile. <a href="https://servizionline.agenziaentrate.gov.it/" target="_blank" rel="noopener noreferrer" className="underline">Portale AdE →</a></p>
+          </div>
+          <div>
+            <p className="font-semibold text-amber-700">🔒 Planimetria catastale — RISERVATA</p>
+            <p>Accessibile solo al <strong>proprietario</strong> (portale AdE con SPID) o a un <strong>professionista abilitato</strong> con SISTER e autorizzazione scritta del proprietario.</p>
+          </div>
+          <p className="italic">Se disponi già della planimetria, allegala per migliorare la precisione dell'analisi.</p>
         </div>
       </div>
 

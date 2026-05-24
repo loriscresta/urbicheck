@@ -664,8 +664,8 @@ export default function ReportPage() {
                     return (
                       <div key={i} className="flex flex-col gap-0.5">
                         <Badge variant="outline" className="text-xs w-fit">{d}</Badge>
-                        {isPlani && <p className="text-[10px] text-muted-foreground pl-1">richiede autorizzazione del proprietario o accesso SISTER da professionista abilitato</p>}
-                        {isVisura && <p className="text-[10px] text-muted-foreground pl-1">disponibile tramite SISTER (professionisti) o sportello AdE — privati: portale AdE con SPID</p>}
+                        {isPlani && <p className="text-[10px] text-muted-foreground pl-1">documento riservato — solo proprietario con SPID o professionista con SISTER e autorizzazione scritta</p>}
+                        {isVisura && <p className="text-[10px] text-muted-foreground pl-1">documento pubblico — richiedibile da chiunque gratuitamente sul portale AdE</p>}
                       </div>
                     );
                   })}
