@@ -190,13 +190,15 @@ export default function AppLayout() {
           <Outlet />
         </div>
         <footer className="border-t border-border/30 px-6 py-4" style={{ background: 'rgba(26,58,107,0.04)', fontFamily: "'IBM Plex Mono', monospace" }}>
-          <div className="flex flex-wrap items-center justify-between gap-2 text-[10px] text-muted-foreground">
-            <span>© 2026 UrbiCheck — Dell'Aria Claudia Giuseppina | P.IVA 02655840060</span>
+          <div className="flex flex-wrap items-center justify-between gap-2 text-[10px] text-muted-foreground mb-2">
+            <span>© 2025 UrbiCheck — Dell'Aria Claudia Giuseppina | P.IVA 02655840060</span>
             <div className="flex gap-4">
-              <Link to="/privacy-policy" className="hover:text-foreground transition-colors">Privacy Policy</Link>
-              <Link to="/termini-e-condizioni" className="hover:text-foreground transition-colors">Termini e Condizioni</Link>
+              <Link to="/privacy" className="hover:text-foreground transition-colors">Privacy Policy</Link>
+              <Link to="/termini" className="hover:text-foreground transition-colors">Termini e Condizioni</Link>
+              <Link to="/cookie" className="hover:text-foreground transition-colors">Cookie Policy</Link>
             </div>
           </div>
+          <p className="text-[9px] text-muted-foreground/60">I dati catastali provengono dai servizi pubblici dell'Agenzia delle Entrate. UrbiCheck non è affiliata né autorizzata dall'AdE.</p>
         </footer>
       </main>
     </div>

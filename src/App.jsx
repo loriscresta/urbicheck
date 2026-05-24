@@ -19,12 +19,18 @@ import AdminPage from '@/pages/AdminPage';
 import BatchResultsPage from '@/pages/BatchResultsPage.jsx';
 import PrivacyPolicy from '@/pages/PrivacyPolicy';
 import TerminiCondizioni from '@/pages/TerminiCondizioni';
+import LegalPrivacy from '@/pages/LegalPrivacy';
+import LegalTermini from '@/pages/LegalTermini';
+import LegalCookie from '@/pages/LegalCookie';
 import CookieBanner from '@/components/CookieBanner';
 
 const LegalRoutes = (
   <>
     <Route path="/privacy-policy" element={<PrivacyPolicy />} />
-    <Route path="/termini-e-condizioni" element={<TerminiCondizioni />} />
+          <Route path="/termini-e-condizioni" element={<TerminiCondizioni />} />
+          <Route path="/privacy" element={<LegalPrivacy />} />
+          <Route path="/termini" element={<LegalTermini />} />
+          <Route path="/cookie" element={<LegalCookie />} />
   </>
 );
 
