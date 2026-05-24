@@ -66,3 +66,43 @@
     @apply bg-background text-foreground font-sans;
   }
 }
+
+@media print {
+  /* Nascondi elementi non stampabili */
+  nav, header, aside,
+  [data-sidebar],
+  .no-print,
+  a[href="/history"],
+  .cookie-banner {
+    display: none !important;
+  }
+
+  /* Layout di stampa */
+  body {
+    background: white !important;
+    color: black !important;
+    font-size: 11pt;
+  }
+
+  .p-6, .lg\:p-10 {
+    padding: 0 !important;
+  }
+
+  /* Forza la visibilità del contenuto del report */
+  .space-y-6 > * {
+    break-inside: avoid;
+    margin-bottom: 1rem;
+  }
+
+  /* Rimuovi animazioni */
+  * {
+    animation: none !important;
+    transition: none !important;
+  }
+
+  /* Aggiungi margini pagina */
+  @page {
+    margin: 1.5cm 1.5cm 1.5cm 1.5cm;
+    size: A4;
+  }
+}

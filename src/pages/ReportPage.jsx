@@ -672,15 +672,15 @@ export default function ReportPage() {
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}
         className="mt-8 p-6 rounded-xl border border-border bg-card">
         <div className="flex flex-col sm:flex-row gap-3 mb-6">
-          {currentUser?.role === 'admin' ? (
+          <Button variant="outline" className="gap-2 border-emerald-500 text-emerald-700 hover:bg-emerald-50" onClick={() => window.print()}>
+            <Download className="w-4 h-4" />
+            📄 Scarica / Stampa PDF
+          </Button>
+          {currentUser?.role === 'admin' && (
             <Button variant="outline" className="gap-2" onClick={handleDownloadPDF} disabled={isDownloadingPDF}>
               {isDownloadingPDF ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-              Scarica PDF completo
+              PDF tecnico (admin)
             </Button>
-          ) : (
-            <div className="flex items-center gap-2 px-4 py-2 text-sm" style={{ border: '1px solid #C4BAA8', color: '#7A7268', fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.72rem' }}>
-              📄 PDF disponibile — funzionalità in arrivo
-            </div>
           )}
         </div>
         <h3 className="font-semibold mb-1">Servizi Aggiuntivi (opzionali)</h3>

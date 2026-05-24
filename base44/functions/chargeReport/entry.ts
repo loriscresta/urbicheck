@@ -16,7 +16,11 @@ Deno.serve(async (req) => {
     const query = queries[0];
     if (!query) return Response.json({ error: 'Query not found' }, { status: 404 });
     if (query.created_by !== user.email) return Response.json({ error: 'Forbidden' }, { status: 403 });
-    if (query.paid) return Response.json({ error: 'Already paid' }, { status: 400 });
+
+    // Se già pagata, ritorna successo (idempotente — non mostrare errore all'utente)
+    if (query.paid) {
+      return Response.json({ ok: true, already_paid: true });
+    }
 
     // Leggi crediti con service role (bypassa RLS)
     const creditsList = await base44.asServiceRole.entities.UserCredits.filter({ user_email: user.email });
@@ -29,7 +33,7 @@ Deno.serve(async (req) => {
       }, { status: 402 });
     }
 
-    // Deduzione atomica con service role
+    // Step 1: Registra transazione
     await base44.asServiceRole.entities.CreditTransaction.create({
       user_email: user.email,
       type: 'query_charge',
@@ -38,17 +42,36 @@ Deno.serve(async (req) => {
       query_id,
     });
 
+    // Step 2: Aggiorna saldo crediti
     await base44.asServiceRole.entities.UserCredits.update(credits.id, {
       balance: parseFloat((credits.balance - FULL_PRICE).toFixed(2)),
       total_spent: parseFloat(((credits.total_spent || 0) + FULL_PRICE).toFixed(2)),
       total_queries: (credits.total_queries || 0) + 1,
     });
 
-    await base44.asServiceRole.entities.CadastralQuery.update(query_id, {
-      paid: true,
-      status: 'completed',
-      cost: FULL_PRICE,
-    });
+    // Step 3: Marca report come pagato (best-effort — non blocca il successo se fallisce)
+    let queryUpdateSuccess = false;
+    try {
+      await base44.asServiceRole.entities.CadastralQuery.update(query_id, {
+        paid: true,
+        status: 'completed',
+        cost: FULL_PRICE,
+      });
+      queryUpdateSuccess = true;
+    } catch (updateErr) {
+      console.error('chargeReport: CadastralQuery.update failed (credits already deducted):', updateErr);
+      // Ritenta una volta
+      try {
+        await base44.asServiceRole.entities.CadastralQuery.update(query_id, {
+          paid: true,
+          status: 'completed',
+          cost: FULL_PRICE,
+        });
+        queryUpdateSuccess = true;
+      } catch (retryErr) {
+        console.error('chargeReport: CadastralQuery.update retry also failed:', retryErr);
+      }
+    }
 
     // DEV auto-refund: solo per admin
     if (user.role === 'admin') {
@@ -71,7 +94,7 @@ Deno.serve(async (req) => {
       }, 60000);
     }
 
-    return Response.json({ ok: true, deducted: FULL_PRICE });
+    return Response.json({ ok: true, deducted: FULL_PRICE, query_update_success: queryUpdateSuccess });
 
   } catch (error) {
     console.error('chargeReport error:', error);

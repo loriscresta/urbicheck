@@ -140,22 +140,23 @@ export default function PaymentGate({ query, onPaid }) {
     setIsProcessing(true);
     try {
       const result = await chargeReport({ query_id: query.id });
-      await refetchCredits();
+      // Successo: aggiorna crediti e apri il report
+      try { await refetchCredits(); } catch (_) {}
       onPaid();
     } catch (err) {
       console.error('handlePay error:', err);
       const data = err?.response?.data;
       if (data?.error === 'insufficient_credits') {
         setError(`Saldo insufficiente (€${(data.balance || 0).toFixed(2)} disponibili). Servono €${FULL_PRICE.toFixed(2)}.`);
-      } else if (data?.error === 'Already paid') {
-        // Already paid — just proceed
-        await refetchCredits();
-        onPaid();
+        setIsProcessing(false);
         return;
-      } else {
-        setError(data?.error ? `Errore: ${data.error}` : 'Errore durante il pagamento. Riprova.');
       }
-      setIsProcessing(false);
+      // Per qualsiasi altro errore: i crediti potrebbero essere stati scalati.
+      // Aggiorna il saldo e ri-controlla se il report risulta pagato.
+      try { await refetchCredits(); } catch (_) {}
+      // Chiama onPaid — il refetch nel parent verificherà se paid=true
+      // Se non è ancora pagato, il PaymentGate sarà mostrato di nuovo con saldo aggiornato.
+      onPaid();
     }
   };
 
