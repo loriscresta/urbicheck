@@ -3,7 +3,7 @@ import { base44 } from "@/api/base44Client";
 import { Loader2, TrendingUp, Home, BarChart3, AlertTriangle, CheckCircle2, ExternalLink, Info } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { motion } from "framer-motion";
-import { getOMIData, calcolaTariffaNotteOMI } from "@/lib/omiData";
+import { getOMIData, getOMIDataByNome, calcolaTariffaNotteOMI } from "@/lib/omiData";
 
 // ── Costi ristrutturazione 2025 ─────────────────────────────────────────────
 const RISTR_COSTS = {
@@ -40,7 +40,8 @@ export default function FinancialDueDiligence({ query, finData, onSnapshotReady 
   const fd  = finData || {};
 
   // ── Superficie: usa sempre il valore reale, mai fallback numerico ──────────
-  const mqRaw = query.superficie_mq || parseFloat(fd.superficie) || null;
+  // FIX 6 — Only use real entity superficie, never AI-generated fd.superficie
+  const mqRaw = query.superficie_mq || null;
   const mq    = mqRaw ? parseFloat(mqRaw) : null;
 
   const prezzoAcquisto     = parseFloat(fd.prezzo_acquisto) || 0;
@@ -57,7 +58,11 @@ export default function FinancialDueDiligence({ query, finData, onSnapshotReady 
   const codiceBelfioreRaw = query.codice_comune_catasto || null;
   const codiceBelfiore = codiceBelfioreRaw ? codiceBelfioreRaw.replace(/[_\s]/g, '').toUpperCase() : null;
   const isZonaCentrale  = false; // default: fascia B/C periferica
-  const omi = getOMIData(codiceBelfiore, query.categoria_catastale, isZonaCentrale);
+  // FIX 7 — Fallback to name-based lookup when no codice belfiore in entity
+  const omi = codiceBelfiore
+    ? getOMIData(codiceBelfiore, query.categoria_catastale, isZonaCentrale)
+    : getOMIDataByNome(query.comune, isZonaCentrale);
+  console.log('OMI lookup:', query.comune, '| belfiore:', codiceBelfiore, '| is_default:', omi.is_default);
 
   // ── Calcoli investimento (solo se superficie disponibile) ─────────────────
   const spese     = mq ? prezzoAcquisto * (spesePerc / 100) : null;

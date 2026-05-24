@@ -48,8 +48,10 @@ export default function ParcellaMap({ record, query, item }) {
 
   const mapDivRef     = useRef(null);
   const leafletMapRef = useRef(null);
+  const munMapDivRef  = useRef(null);
   const [polygonLoaded, setPolygonLoaded] = useState(false);
   const [wfsStatus,     setWfsStatus]     = useState("");
+  const [geocodedMunPos, setGeocodedMunPos] = useState(null);
 
   const addPolygonToMap = useCallback((feature) => {
     const L   = window.L;
@@ -258,23 +260,66 @@ export default function ParcellaMap({ record, query, item }) {
     };
   }, [initLat, initLon, hasPolygon]);
 
+  // FIX 8 — Geocode municipality when no cadastral position available
+  useEffect(() => {
+    if (hasPosition || !entity.comune) return;
+    fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(entity.comune + ', Italy')}&format=json&limit=1`)
+      .then(r => r.json())
+      .then(data => {
+        if (data[0]) setGeocodedMunPos({ lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) });
+      })
+      .catch(() => {});
+  }, [hasPosition, entity.comune]);
+
+  // FIX 8 — Init municipality fallback map
+  useEffect(() => {
+    if (!geocodedMunPos || !munMapDivRef.current) return;
+    let munMap = null;
+    const initMunMap = () => {
+      const L = window.L;
+      if (!L || !munMapDivRef.current) return;
+      munMap = L.map(munMapDivRef.current).setView([geocodedMunPos.lat, geocodedMunPos.lon], 14);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 20, attribution: '© OpenStreetMap' }).addTo(munMap);
+      L.tileLayer.wms('https://wms.cartografia.agenziaentrate.gov.it/inspire/wms/ows', {
+        layers: 'CP.CadastralParcel', format: 'image/png', transparent: true, opacity: 0.85, attribution: '© AdE',
+      }).addTo(munMap);
+      const parsed = parseFoglio(foglio);
+      L.marker([geocodedMunPos.lat, geocodedMunPos.lon])
+        .addTo(munMap)
+        .bindPopup(`<b>📍 Comune di ${entity.comune}</b><br/>Foglio ${parsed.sezione ? parsed.sezione + '/' + parsed.foglio : foglio}, Particella ${particella}<br/><small>Posizione approssimata al centro comune</small>`)
+        .openPopup();
+    };
+    loadLeaflet(initMunMap);
+    return () => { if (munMap) { munMap.remove(); munMap = null; } };
+  }, [geocodedMunPos]);
+
   // ── Render ────────────────────────────────────────────────────────────────
   const parsed = parseFoglio(foglio);
   const foglioDisplay = parsed.sezione ? `${parsed.sezione}/${parsed.foglio}` : foglio;
 
   if (!hasPosition) {
+    const parsed = parseFoglio(foglio);
     return (
-      <div className="p-4 space-y-2">
-        <p className="text-sm text-gray-500">
-          📍 Posizione non disponibile — Foglio {foglioDisplay}, Particella {particella}
-        </p>
+      <div className="space-y-2">
+        <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-800">
+          📍 Posizione approssimata al Comune di <strong>{entity.comune || foglio}</strong> — sezione catastale {parsed.sezione || 'principale'}, foglio {parsed.foglio}, particella {particella}. Verificare la particella esatta su Geoportale AdE.
+        </div>
+        {!geocodedMunPos && (
+          <p className="text-sm text-gray-400 py-2">🔍 Ricerca posizione comune in corso…</p>
+        )}
+        {geocodedMunPos && (
+          <div
+            ref={munMapDivRef}
+            style={{ height: '320px', width: '100%', borderRadius: '8px', border: '1px solid #e5e7eb', zIndex: 0 }}
+          />
+        )}
         <a
           href="https://geoportale.cartografia.agenziaentrate.gov.it/age-inspire/srv/ita/catalog.search"
           target="_blank"
           rel="noreferrer"
-          className="text-blue-600 text-sm hover:underline"
+          className="text-blue-600 text-sm hover:underline block"
         >
-          🔗 Cerca su Geoportale AdE →
+          🔗 Cerca particella su Geoportale AdE →
         </a>
       </div>
     );

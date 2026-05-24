@@ -62,6 +62,35 @@ function normalizeComplessita(val) {
   return val;
 }
 
+// FIX 5 — Enrich fattibilità rows with NTA data when AI used stima orientativa
+function enrichFattibilita(interventi, ntaData, comune) {
+  if (!interventi) return [];
+  return interventi.map(fi => {
+    const noteOk = fi.note && !/stima orientativa/i.test(fi.note);
+    if (noteOk) return fi;
+    const tipo = (fi.tipo_intervento || '').toLowerCase();
+    if (ntaData && (tipo.includes('nuova edificazione') || tipo.includes('nuova costruzione'))) {
+      return {
+        ...fi,
+        note: `Ammessa secondo indici NTA: IF ${ntaData.IF}, RC ${ntaData.RC}, H max ${ntaData.Hmax}. Permesso di costruire obbligatorio.`,
+        ente_competente: fi.ente_competente || `Comune di ${comune} — Ufficio Urbanistica`,
+        tempistica_stimata: fi.tempistica_stimata || '60-90 giorni per permesso di costruire',
+        costi_stimati: fi.costi_stimati || 'Oneri di urbanizzazione primaria/secondaria + costo costruzione',
+      };
+    }
+    if (ntaData && (tipo.includes('recupero') || tipo.includes('ristrutturazione') || tipo.includes('manutenzione'))) {
+      return {
+        ...fi,
+        note: `Interventi ammessi nella zona ${ntaData.nomeZona || 'residenziale'} (${ntaData.strumento}). Max H: ${ntaData.Hmax}, RC: ${ntaData.RC}.`,
+        ente_competente: fi.ente_competente || `Comune di ${comune} — Ufficio Edilizia Privata`,
+        tempistica_stimata: fi.tempistica_stimata || '30-90 giorni (CILA/SCIA/permesso costruire)',
+        costi_stimati: fi.costi_stimati || 'Diritti di segreteria + oneri di urbanizzazione comunali',
+      };
+    }
+    return { ...fi, note: noteOk ? fi.note : null };
+  });
+}
+
 const FINALITA_LABELS = {
   acquisto_privato: "Acquisto privato",
   investimento: "Investimento",
@@ -423,15 +452,17 @@ export default function ReportPage() {
           <ReportSection icon={Building2} title="Tipologia Immobile" delay={0.02}>
             <DataRow
               label="Categoria catastale"
-              value={query.visura_uploaded && query.categoria_catastale
-                ? query.categoria_catastale
-                : (cleanVal(r.dati_catastali.categoria) || r.catasto_data?.categoria)}
+              value={query.categoria_catastale || cleanVal(r.dati_catastali.categoria) || r.catasto_data?.categoria}
+            />
+            <DataRow
+              label="Destinazione d'Uso"
+              value={cleanVal(r.dati_catastali.destinazione_uso) || r.catasto_data?.destinazione_uso}
             />
             <DataRow
               label="Consistenza / Superficie"
-              value={query.visura_uploaded && query.vani
+              value={query.vani
                 ? `${query.vani} vani`
-                : query.visura_uploaded && query.superficie_mq
+                : query.superficie_mq
                 ? `${query.superficie_mq} mq`
                 : (cleanVal(r.dati_catastali.consistenza) || r.catasto_data?.superficie)}
             />
@@ -440,33 +471,32 @@ export default function ReportPage() {
               label="Rendita Catastale"
               value={query.rendita_catastale != null
                 ? `€${Number(query.rendita_catastale).toFixed(2)}`
-                : r.dati_catastali.rendita_catastale}
+                : cleanVal(r.dati_catastali.rendita_catastale)}
             />
             <DataRow label="Zona Censuaria" value={query.zona_censuaria || cleanVal(r.dati_catastali.zona_censuaria)} />
             {r.dati_catastali.microzona && !/verificare su visura/i.test(r.dati_catastali.microzona) && (
               <DataRow label="Microzona" value={r.dati_catastali.microzona} />
             )}
-            {query.intestatari?.length > 0
-               ? <DataRow label="Intestatari" value={query.intestatari.join(" — ")} />
-               : <DataRow label="Intestatari" value={query.intestatari && query.intestatari.length > 0 ? query.intestatari.join(" — ") : "Non disponibile dalla visura"} />
-             }
-            {query.visura_uploaded && query.superficie_mq && (
-                <DataRow label="Superficie catastale" value={`${query.superficie_mq} mq`} />
-              )}
-              {r.planimetria_data?.source === 'planimetria_upload' && r.planimetria_data?.superficie_mq && (
-                <div className="mt-2 p-2 rounded bg-blue-50 border border-blue-200 text-xs text-blue-800 flex items-center gap-2">
-                  <span>📐</span>
-                  <span>
-                    <strong>Planimetria allegata:</strong> Superficie {r.planimetria_data.superficie_mq} mq
-                    {r.planimetria_data.vani ? ` · Vani: ${r.planimetria_data.vani}` : ''}
-                  </span>
-                </div>
-              )}
-              {r.planimetria_data?.source === 'planimetria_upload' && r.planimetria_data?.leggibile === false && (
-                <div className="mt-2 p-2 rounded bg-amber-50 border border-amber-200 text-xs text-amber-800">
-                  📐 Planimetria allegata — superficie non rilevata automaticamente.
-                </div>
-              )}
+            {query.intestatari?.length > 0 && (
+              <DataRow label="Intestatari" value={query.intestatari.join(" — ")} />
+            )}
+            {query.superficie_mq && (
+              <DataRow label="Superficie catastale" value={`${query.superficie_mq} mq`} />
+            )}
+            {r.planimetria_data?.source === 'planimetria_upload' && r.planimetria_data?.file_url && r.planimetria_data?.superficie_mq && (
+              <div className="mt-2 p-2 rounded bg-blue-50 border border-blue-200 text-xs text-blue-800 flex items-center gap-2">
+                <span>📐</span>
+                <span>
+                  <strong>Planimetria allegata:</strong> Superficie {r.planimetria_data.superficie_mq} mq
+                  {r.planimetria_data.vani ? ` · Vani: ${r.planimetria_data.vani}` : ''}
+                </span>
+              </div>
+            )}
+            {r.planimetria_data?.source === 'planimetria_upload' && r.planimetria_data?.file_url && r.planimetria_data?.leggibile === false && (
+              <div className="mt-2 p-2 rounded bg-amber-50 border border-amber-200 text-xs text-amber-800">
+                📐 Planimetria allegata — superficie non rilevata automaticamente.
+              </div>
+            )}
           </ReportSection>
         )}
 
@@ -570,14 +600,31 @@ export default function ReportPage() {
         {/* Quadro Urbanistico */}
         {r.quadro_urbanistico && (
           <ReportSection icon={FileText} title="Quadro Urbanistico (PRG/PUC)" delay={0.1}>
-            <DataRow label="Strumento Vigente" value={r.quadro_urbanistico.strumento_vigente} />
-            <DataRow label="Zona Urbanistica" value={r.quadro_urbanistico.zona_urbanistica} />
-            <DataRow label="Destinazione d'Uso" value={r.quadro_urbanistico.destinazione_uso} />
+            <DataRow label="Strumento Vigente" value={resolvedNta?.strumento || r.quadro_urbanistico.strumento_vigente} />
+            <DataRow
+              label="Zona Urbanistica"
+              value={resolvedNta?.nomeZona || cleanVal(r.quadro_urbanistico.zona_urbanistica)}
+            />
+            <DataRow
+              label="Destinazione d'Uso"
+              value={
+                resolvedNta
+                  ? (resolvedNta.nomeZona?.toLowerCase().includes('resid') ? 'Residenziale' : cleanVal(r.quadro_urbanistico.destinazione_uso))
+                  : cleanVal(r.quadro_urbanistico.destinazione_uso)
+              }
+            />
             <DataRow label="Indice Edificabilità" value={resolvedNta?.IF || ntaLocal?.IF || cleanVal(r.quadro_urbanistico.indice_edificabilita)} />
             <DataRow label="Altezza Massima" value={resolvedNta?.Hmax || ntaLocal?.Hmax || cleanVal(r.quadro_urbanistico.altezza_massima)} />
             <DataRow label="Rapporto di Copertura" value={resolvedNta?.RC || cleanVal(r.quadro_urbanistico.rc_percentuale)} />
-            <DataRow label="Distanze Minime" value={r.quadro_urbanistico.distanze_minime} />
-            {r.quadro_urbanistico.note_urbanistiche && (
+            <DataRow
+              label="Distanze Minime"
+              value={
+                resolvedNta?.Dc
+                  ? `Dc: ${resolvedNta.Dc} · Df: ${resolvedNta.Df} · Ds: ${resolvedNta.Ds}`
+                  : cleanVal(r.quadro_urbanistico.distanze_minime)
+              }
+            />
+            {r.quadro_urbanistico.note_urbanistiche && !resolvedNta && cleanVal(r.quadro_urbanistico.note_urbanistiche) && (
               <div className="mt-3 p-3 bg-muted/50 rounded-lg">
                 <p className="text-sm text-muted-foreground">{r.quadro_urbanistico.note_urbanistiche}</p>
               </div>
@@ -598,7 +645,7 @@ export default function ReportPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {r.fattibilita_interventi.map((fi, i) => (
+                  {enrichFattibilita(r.fattibilita_interventi, resolvedNta, query.comune).map((fi, i) => (
                     <tr key={i} className="border-b border-border/50 last:border-0">
                       <td className="py-3 pr-4 font-medium">{fi.tipo_intervento}</td>
                       <td className="py-3 pr-4"><FattibilitaBadge value={fi.fattibilita} /></td>
