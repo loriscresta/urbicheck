@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { chargeReport } from '@/functions/chargeReport';
 import { Link, useNavigate } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import { useQuery } from "@tanstack/react-query";
@@ -138,18 +139,22 @@ export default function PaymentGate({ query, onPaid }) {
     setError("");
     setIsProcessing(true);
     try {
-      const { chargeReport } = await import('@/functions/chargeReport');
       const result = await chargeReport({ query_id: query.id });
-      if (result?.data?.error === 'insufficient_credits') {
-        setError(`Saldo insufficiente (€${(result.data.balance || 0).toFixed(2)} disponibili). Servono €${FULL_PRICE.toFixed(2)}.`);
-        setIsProcessing(false);
-        return;
-      }
       await refetchCredits();
       onPaid();
     } catch (err) {
       console.error('handlePay error:', err);
-      setError('Errore durante il pagamento. Riprova.');
+      const data = err?.response?.data;
+      if (data?.error === 'insufficient_credits') {
+        setError(`Saldo insufficiente (€${(data.balance || 0).toFixed(2)} disponibili). Servono €${FULL_PRICE.toFixed(2)}.`);
+      } else if (data?.error === 'Already paid') {
+        // Already paid — just proceed
+        await refetchCredits();
+        onPaid();
+        return;
+      } else {
+        setError(data?.error ? `Errore: ${data.error}` : 'Errore durante il pagamento. Riprova.');
+      }
       setIsProcessing(false);
     }
   };
