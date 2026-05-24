@@ -433,7 +433,7 @@ function NtaNotFoundSection({ comune, cduInfo, linkPrg }) {
 }
 
 // ── Main component ──────────────────────────────────────────────────────────
-export default function IndiciEdiliziSection({ indici, comune, query, report, wfsZonaUrbanistica, delay = 0.08, regione }) {
+export default function IndiciEdiliziSection({ indici, comune, query, report, wfsZonaUrbanistica, delay = 0.08, regione, onNtaResolved }) {
   const comuneEffettivo = comune || query?.comune || report?.comune;
   const [nta, setNta] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -448,7 +448,7 @@ export default function IndiciEdiliziSection({ indici, comune, query, report, wf
     if (!comuneEffettivo) { setLoading(false); return; }
     setLoading(true);
     resolveNta(comuneEffettivo, regioneEffettiva, query)
-      .then(setNta)
+      .then(result => { setNta(result); if (onNtaResolved) onNtaResolved(result); })
       .finally(() => setLoading(false));
   }, [comuneEffettivo, regioneEffettiva]);
 

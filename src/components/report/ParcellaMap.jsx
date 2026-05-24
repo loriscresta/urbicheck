@@ -70,6 +70,7 @@ export default function ParcellaMap({ record, query, item }) {
   useEffect(() => {
     if (!hasPosition || hasPolygon || !entity.id) return;
     let cancelled = false;
+    const { foglio: foglioNum } = parseFoglio(foglio);
 
     // Cerca la feature più pertinente nell'array GeoJSON
     const matchFeature = (features) => {
@@ -81,8 +82,8 @@ export default function ParcellaMap({ record, query, item }) {
         const pMatch = label.includes(`/${particella}`) ||
           label.includes(`/${particella.padStart(5, "0")}`) ||
           label === particella;
-        const fMatch = label.includes(`${foglio}/`) ||
-          label.includes(`${foglio.padStart(4, "0")}/`);
+        const fMatch = label.includes(`${foglioNum}/`) ||
+          label.includes(`${foglioNum.padStart(4, "0")}/`);
         if (pMatch && fMatch) { matched = f; break; }
         if (!matched && pMatch) matched = f;
       }

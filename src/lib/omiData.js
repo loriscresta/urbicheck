@@ -132,7 +132,7 @@ const OMI_DB = {
   // ── LOMBARDIA — Capoluoghi di Provincia ─────────────────────────────────
   // Valori OMI AdE 2024-II — fonti: agenziaentrate.gov.it/omi
   // Fascia B (semicentrale) per capoluogo tipico; is_costiero: false
-  "F205": { // Pavia — OMI AdE 2024-II zona B
+  "G388": { // Pavia — OMI AdE 2024-II zona B (codice Belfiore G388)
     residenziale:  { valore_min: 900,  valore_max: 1600, loc_min: 5.0, loc_max: 9.0 },
     zona_centrale: { valore_min: 1300, valore_max: 2300, loc_min: 7.0, loc_max: 12.0 },
     anno_sem: "2024-II", is_costiero: false,
@@ -203,7 +203,7 @@ const OMI_DB = {
 
 // BUG 6 — Lookup secondario per nome comune (gestisce Lombardia e comuni non nel DB)
 const NOME_TO_BELFIORE = {
-  "pavia": "F205", "milano": "F839", "brescia": "B149", "bergamo": "A794",
+  "pavia": "G388", "milano": "F839", "brescia": "B149", "bergamo": "A794",
   "varese": "L682", "como": "C933", "mantova": "E897", "cremona": "D142",
   "lecco": "E507", "lodi": "E648", "sondrio": "I829", "monza": "F704",
   "torino": "L219", "novara": "F205", "alessandria": "A182", "asti": "A479",

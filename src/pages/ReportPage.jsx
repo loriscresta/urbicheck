@@ -48,6 +48,13 @@ function detectCategoriaGroup(cat) {
   }
   return null;
 }
+// Filter out AI placeholder/stima values — show null instead
+function cleanVal(val) {
+  if (!val || typeof val !== 'string') return val;
+  if (/stima orientativa|verificare su visura|verificare su nta|disponibile su visura|richiedi visura/i.test(val)) return null;
+  return val;
+}
+
 // BUG 7 — Normalize complessità value
 function normalizeComplessita(val) {
   if (!val || typeof val !== 'string') return null;
@@ -119,6 +126,7 @@ export default function ReportPage() {
   const [isDownloadingPDF, setIsDownloadingPDF] = useState(false);
   const [showAttiForm, setShowAttiForm] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
+  const [resolvedNta, setResolvedNta] = useState(null);
 
   useEffect(() => {
     base44.auth.me().then(u => setCurrentUser(u)).catch(() => {});
@@ -417,7 +425,7 @@ export default function ReportPage() {
               label="Categoria catastale"
               value={query.visura_uploaded && query.categoria_catastale
                 ? query.categoria_catastale
-                : r.dati_catastali.categoria}
+                : (cleanVal(r.dati_catastali.categoria) || r.catasto_data?.categoria)}
             />
             <DataRow
               label="Consistenza / Superficie"
@@ -425,16 +433,16 @@ export default function ReportPage() {
                 ? `${query.vani} vani`
                 : query.visura_uploaded && query.superficie_mq
                 ? `${query.superficie_mq} mq`
-                : r.dati_catastali.consistenza}
+                : (cleanVal(r.dati_catastali.consistenza) || r.catasto_data?.superficie)}
             />
-            <DataRow label="Classe" value={query.classe_catastale || r.dati_catastali.classe} />
+            <DataRow label="Classe" value={query.classe_catastale || cleanVal(r.dati_catastali.classe)} />
             <DataRow
               label="Rendita Catastale"
               value={query.rendita_catastale != null
                 ? `€${Number(query.rendita_catastale).toFixed(2)}`
                 : r.dati_catastali.rendita_catastale}
             />
-            <DataRow label="Zona Censuaria" value={query.zona_censuaria || r.dati_catastali.zona_censuaria} />
+            <DataRow label="Zona Censuaria" value={query.zona_censuaria || cleanVal(r.dati_catastali.zona_censuaria)} />
             {r.dati_catastali.microzona && !/verificare su visura/i.test(r.dati_catastali.microzona) && (
               <DataRow label="Microzona" value={r.dati_catastali.microzona} />
             )}
@@ -445,7 +453,7 @@ export default function ReportPage() {
             {query.visura_uploaded && query.superficie_mq && (
                 <DataRow label="Superficie catastale" value={`${query.superficie_mq} mq`} />
               )}
-              {r.planimetria_data?.superficie_mq && (
+              {r.planimetria_data?.source === 'planimetria_upload' && r.planimetria_data?.superficie_mq && (
                 <div className="mt-2 p-2 rounded bg-blue-50 border border-blue-200 text-xs text-blue-800 flex items-center gap-2">
                   <span>📐</span>
                   <span>
@@ -454,7 +462,7 @@ export default function ReportPage() {
                   </span>
                 </div>
               )}
-              {r.planimetria_data?.leggibile === false && (
+              {r.planimetria_data?.source === 'planimetria_upload' && r.planimetria_data?.leggibile === false && (
                 <div className="mt-2 p-2 rounded bg-amber-50 border border-amber-200 text-xs text-amber-800">
                   📐 Planimetria allegata — superficie non rilevata automaticamente.
                 </div>
@@ -552,7 +560,7 @@ export default function ReportPage() {
         )}
 
         {/* Indici Edilizi */}
-        <IndiciEdiliziSection indici={r.indici_edilizi} comune={query.comune} regione={query.regione} query={query} wfsZonaUrbanistica={r.wfs_liguria?.risultati?.zona_urbanistica} delay={0.08} />
+        <IndiciEdiliziSection indici={r.indici_edilizi} comune={query.comune} regione={query.regione} query={query} wfsZonaUrbanistica={r.wfs_liguria?.risultati?.zona_urbanistica} delay={0.08} onNtaResolved={setResolvedNta} />
 
         {/* Vincoli e Rischi Piemonte */}
         {isPiemonte && query.report_data?.wfs_liguria && (
@@ -565,8 +573,9 @@ export default function ReportPage() {
             <DataRow label="Strumento Vigente" value={r.quadro_urbanistico.strumento_vigente} />
             <DataRow label="Zona Urbanistica" value={r.quadro_urbanistico.zona_urbanistica} />
             <DataRow label="Destinazione d'Uso" value={r.quadro_urbanistico.destinazione_uso} />
-            <DataRow label="Indice Edificabilità" value={ntaLocal?.IF || r.quadro_urbanistico.indice_edificabilita} />
-            <DataRow label="Altezza Massima" value={ntaLocal?.Hmax || r.quadro_urbanistico.altezza_massima} />
+            <DataRow label="Indice Edificabilità" value={resolvedNta?.IF || ntaLocal?.IF || cleanVal(r.quadro_urbanistico.indice_edificabilita)} />
+            <DataRow label="Altezza Massima" value={resolvedNta?.Hmax || ntaLocal?.Hmax || cleanVal(r.quadro_urbanistico.altezza_massima)} />
+            <DataRow label="Rapporto di Copertura" value={resolvedNta?.RC || cleanVal(r.quadro_urbanistico.rc_percentuale)} />
             <DataRow label="Distanze Minime" value={r.quadro_urbanistico.distanze_minime} />
             {r.quadro_urbanistico.note_urbanistiche && (
               <div className="mt-3 p-3 bg-muted/50 rounded-lg">
