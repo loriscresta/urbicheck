@@ -55,10 +55,10 @@ export default function SearchPage() {
           }
         });
         if (extracted?.superficie_mq) {
-          planimetriaData = { ...extracted, source: 'planimetria_upload', file_url };
+          planimetriaData = { ...extracted, source: 'planimetria_upload', file_url, was_uploaded: true };
           if (!superficieEffettiva) superficieEffettiva = extracted.superficie_mq;
         } else {
-          planimetriaData = { leggibile: false, file_url, source: 'planimetria_upload' };
+          planimetriaData = { leggibile: false, file_url, source: 'planimetria_upload', was_uploaded: true };
         }
       } catch (e) {
         console.warn('Planimetria processing failed:', e);

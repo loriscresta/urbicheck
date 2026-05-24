@@ -25,7 +25,6 @@ import PaymentGate from "@/components/report/PaymentGate";
 import IndiciEdiliziSection from "@/components/report/IndiciEdiliziSection";
 import VincoliRischiPiemonte from "@/components/report/VincoliRischiPiemonte";
 
-// BUG 3 — Categoria group detection
 const CATEGORIA_GROUPS = {
   residential: ['A/1','A/2','A/3','A/4','A/5','A/6','A/7','A/8','A/9','A/11'],
   commercial: ['C/1','C/2','C/3','C/4','C/5','C/6','C/7'],
@@ -48,21 +47,19 @@ function detectCategoriaGroup(cat) {
   }
   return null;
 }
-// Filter out AI placeholder/stima values — show null instead
+
 function cleanVal(val) {
   if (!val || typeof val !== 'string') return val;
   if (/stima orientativa|verificare su visura|verificare su nta|disponibile su visura|richiedi visura/i.test(val)) return null;
   return val;
 }
 
-// BUG 7 — Normalize complessità value
 function normalizeComplessita(val) {
   if (!val || typeof val !== 'string') return null;
   if (val.length > 25 || val.toLowerCase().includes('stima') || val.toLowerCase().includes('verificare')) return null;
   return val;
 }
 
-// FIX 5 — Enrich fattibilità rows with NTA data when AI used stima orientativa
 function enrichFattibilita(interventi, ntaData, comune) {
   if (!interventi) return [];
   return interventi.map(fi => {
@@ -320,16 +317,13 @@ export default function ReportPage() {
   const finData = r.fin_data || {};
   const reportNum = `UB-${query.id?.slice(-8).toUpperCase()}`;
 
-  // BUG 3 — Categoria detection
   const categoriaRaw = query.categoria_catastale || r.dati_catastali?.categoria;
   const categoriaGroup = detectCategoriaGroup(categoriaRaw);
   const categoriaBadge = categoriaGroup ? CATEGORIA_LABELS[categoriaGroup] : null;
 
-  // BUG 7 — Normalize complessità
   const complessitaRaw = r.valutazione_sintetica?.livello_complessita;
   const complessitaNorm = normalizeComplessita(complessitaRaw);
 
-  // BUG 4/5 — Vincoli verification status
   const isLombardia = (query.regione || '').toLowerCase().includes('lombardia');
   const hasVerifiedVincoli = !!(wfsRis) || isPiemonte || isLiguria;
 
@@ -407,7 +401,6 @@ export default function ReportPage() {
         </div>
       </motion.div>
 
-      {/* BUG 3 — Non-residential category badge */}
       {categoriaBadge && (
         <motion.div initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }}
           className={`mb-4 rounded-lg border px-4 py-3 flex items-center gap-2 ${categoriaBadge.color}`}>
@@ -483,7 +476,7 @@ export default function ReportPage() {
             {query.superficie_mq && (
               <DataRow label="Superficie catastale" value={`${query.superficie_mq} mq`} />
             )}
-            {r.planimetria_data?.source === 'planimetria_upload' && r.planimetria_data?.file_url && r.planimetria_data?.superficie_mq && (
+            {r.planimetria_data?.source === 'planimetria_upload' && r.planimetria_data?.was_uploaded === true && r.planimetria_data?.superficie_mq && (
               <div className="mt-2 p-2 rounded bg-blue-50 border border-blue-200 text-xs text-blue-800 flex items-center gap-2">
                 <span>📐</span>
                 <span>
@@ -492,7 +485,7 @@ export default function ReportPage() {
                 </span>
               </div>
             )}
-            {r.planimetria_data?.source === 'planimetria_upload' && r.planimetria_data?.file_url && r.planimetria_data?.leggibile === false && (
+            {r.planimetria_data?.source === 'planimetria_upload' && r.planimetria_data?.was_uploaded === true && r.planimetria_data?.leggibile === false && (
               <div className="mt-2 p-2 rounded bg-amber-50 border border-amber-200 text-xs text-amber-800">
                 📐 Planimetria allegata — superficie non rilevata automaticamente.
               </div>
@@ -529,7 +522,6 @@ export default function ReportPage() {
                 ✓ Dati da fonti ufficiali WFS — {isPiemonte ? 'ARPA Piemonte + Overpass' : isLiguria ? 'Regione Liguria + Overpass' : 'WFS ufficiale'}
               </p>
             )}
-            {/* BUG 5 — Unverified vincoli warning */}
             {!hasVerifiedVincoli && (
               <div className="mb-3 rounded-lg border border-amber-300 bg-amber-50 p-3 flex items-start gap-2">
                 <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
@@ -545,10 +537,11 @@ export default function ReportPage() {
               </div>
             )}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <VincoloCard label="Vincolo Sismico" presente={vincoloSismicoEffettivo.presente} dettagli={vincoloSismicoEffettivo.dettagli} extra={vincoloSismicoEffettivo.zona} />
+              <VincoloCard label="Vincolo Sismico" presente={vincoloSismicoEffettivo.presente} dettagli={vincoloSismicoEffettivo.dettagli} extra={vincoloSismicoEffettivo.zona} unverified={!hasVerifiedVincoli} />
               <VincoloCard
                 label="Rischio Idrogeologico (PAI)"
                 presente={vincoloIdraulicoEffettivo.presente}
+                unverified={!hasVerifiedVincoli}
                 dettagli={
                   isPiemonte && query.centroid_lat && query.centroid_lng
                     ? <span>
@@ -567,22 +560,23 @@ export default function ReportPage() {
                 presente={vincoloPaesaggisticoEffettivo.presente}
                 dettagli={vincoloPaesaggisticoEffettivo.dettagli}
                 extra={vincoloPaesaggisticoEffettivo.tipo}
+                unverified={!hasVerifiedVincoli}
               />
               {r.vincoli?.vincolo_archeologico && (
-                <VincoloCard label="Vincolo Archeologico" presente={r.vincoli.vincolo_archeologico.presente} dettagli={r.vincoli.vincolo_archeologico.dettagli} />
+                <VincoloCard label="Vincolo Archeologico" presente={r.vincoli.vincolo_archeologico.presente} dettagli={r.vincoli.vincolo_archeologico.dettagli} unverified={!hasVerifiedVincoli} />
               )}
               {vincoloCorsiAcquaEffettivo && (
-                <VincoloCard label="Corsi d'Acqua (art.142)" presente={vincoloCorsiAcquaEffettivo.presente} dettagli={vincoloCorsiAcquaEffettivo.dettagli} />
+                <VincoloCard label="Corsi d'Acqua (art.142)" presente={vincoloCorsiAcquaEffettivo.presente} dettagli={vincoloCorsiAcquaEffettivo.dettagli} unverified={!hasVerifiedVincoli} />
               )}
               {vincoloFerroviarioEffettivo && (
-                <VincoloCard label="Vincolo Ferroviario" presente={vincoloFerroviarioEffettivo.presente} dettagli={vincoloFerroviarioEffettivo.dettagli} />
+                <VincoloCard label="Vincolo Ferroviario" presente={vincoloFerroviarioEffettivo.presente} dettagli={vincoloFerroviarioEffettivo.dettagli} unverified={!hasVerifiedVincoli} />
               )}
             </div>
             {r.vincoli?.altri_vincoli?.length > 0 && !wfsRis && (
               <div className="mt-4 space-y-2">
                 <p className="text-sm font-medium text-muted-foreground">Altri Vincoli (stima AI)</p>
                 {r.vincoli.altri_vincoli.map((v, i) => (
-                  <VincoloCard key={i} label={v.nome} presente={v.presente} dettagli={v.dettagli} />
+                  <VincoloCard key={i} label={v.nome} presente={v.presente} dettagli={v.dettagli} unverified={!hasVerifiedVincoli} />
                 ))}
               </div>
             )}
@@ -744,11 +738,7 @@ export default function ReportPage() {
           </motion.div>
         )}
 
-        {/* ── MAPPA CATASTALE ──────────────────────────────────────────────────
-            ParcellaMap legge centroid_lat/lng dal DB e mostra le coordinate
-            internamente — NON duplichiamo la riga coordinate qui.
-            Passiamo geometry_geojson unificata (entity DB + catasto_data fallback).
-        ─────────────────────────────────────────────────────────────────────── */}
+        {/* Mappa Catastale */}
         {(() => {
           const poly = query.geometry_geojson || r.catasto_data?.geojson_polygon || null;
           return (
@@ -809,7 +799,7 @@ export default function ReportPage() {
         )}
       </div>
 
-      {/* WFS ANALISI PANEL — Lombardia: mostra link portali */}
+      {/* WFS ANALISI PANEL — Lombardia */}
       {isLombardia && (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mt-6 p-5 rounded-xl" style={{ border: '2px solid #1A3A6B', background: '#fff' }}>
           <div className="flex items-center gap-2 mb-3" style={{ background: '#1A3A6B', margin: '-1.25rem -1.25rem 1rem', padding: '0.75rem 1.25rem' }}>
