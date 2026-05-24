@@ -657,10 +657,18 @@ export default function ReportPage() {
             {r.accesso_atti.documenti_ottenibili?.length > 0 && (
               <div className="mt-3">
                 <p className="text-sm text-muted-foreground mb-2">Documenti Ottenibili:</p>
-                <div className="flex flex-wrap gap-2">
-                  {r.accesso_atti.documenti_ottenibili.map((d, i) => (
-                    <Badge key={i} variant="outline" className="text-xs">{d}</Badge>
-                  ))}
+                <div className="flex flex-col gap-2">
+                  {r.accesso_atti.documenti_ottenibili.map((d, i) => {
+                    const isPlani = /planimetri/i.test(d);
+                    const isVisura = /visura/i.test(d);
+                    return (
+                      <div key={i} className="flex flex-col gap-0.5">
+                        <Badge variant="outline" className="text-xs w-fit">{d}</Badge>
+                        {isPlani && <p className="text-[10px] text-muted-foreground pl-1">richiede autorizzazione del proprietario o accesso SISTER da professionista abilitato</p>}
+                        {isVisura && <p className="text-[10px] text-muted-foreground pl-1">disponibile tramite SISTER (professionisti) o sportello AdE — privati: portale AdE con SPID</p>}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}

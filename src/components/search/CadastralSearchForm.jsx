@@ -366,10 +366,15 @@ export default function CadastralSearchForm({ onSubmit, isLoading, submitLabel =
           onChange={e => setPlanimetriaFile(e.target.files?.[0] || null)}
           className="block text-xs text-muted-foreground w-full cursor-pointer file:mr-3 file:py-1 file:px-3 file:border-0 file:text-xs file:font-semibold file:bg-primary file:text-primary-foreground file:cursor-pointer hover:file:opacity-90"
         />
-        <p className="text-[10px] text-muted-foreground">Formati: PDF, JPG, PNG — Max 10MB — L'AI estraerà superficie e vani per calcoli più precisi</p>
+        <p className="text-[10px] text-muted-foreground">Hai la planimetria? Allegala per calcoli più precisi — PDF, JPG o PNG · Max 10MB</p>
+        <p className="text-[10px] text-muted-foreground italic">Documento riservato — accessibile solo al proprietario o a professionisti abilitati con autorizzazione scritta</p>
         {planimetriaFile && <p className="text-xs text-emerald-700 font-semibold">✓ {planimetriaFile.name} allegata</p>}
-        <a href="https://sister.agenziaentrate.gov.it/CitizenArAccessWeb/" target="_blank" rel="noopener noreferrer"
-          className="text-xs text-primary hover:underline">→ Come scaricare la planimetria dall'Agenzia delle Entrate</a>
+        <div className="mt-2 p-3 rounded bg-blue-50 border border-blue-200 text-[10px] text-blue-800 space-y-1">
+          <p className="font-semibold">ℹ️ Chi può accedere alla planimetria catastale?</p>
+          <p>• Il <strong>proprietario</strong> dell'immobile — tramite portale AdE con SPID (solo i propri immobili)</p>
+          <p>• Un <strong>professionista abilitato</strong> (geometra, architetto, ingegnere) — tramite accesso SISTER previa autorizzazione scritta del proprietario</p>
+          <p className="mt-1 italic">Se disponi già della planimetria, allegala per migliorare la precisione dell'analisi finanziaria.</p>
+        </div>
       </div>
 
       {/* Superficie manuale */}
