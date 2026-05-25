@@ -101,7 +101,7 @@ export default function LegalCookie() {
 
           <section>
             <h2 className="text-base font-bold text-gray-900 mb-3 border-b border-gray-200 pb-2">7. Contatti</h2>
-            <p>Per domande sui cookie: <a href="mailto:privacy@urbicheck.it" className="text-blue-600 hover:underline">privacy@urbicheck.it</a></p>
+            <p>Per domande sui cookie: <a href="mailto:info@urbicheck.it" className="text-blue-600 hover:underline">info@urbicheck.it</a></p>
           </section>
         </div>
 

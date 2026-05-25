@@ -25,8 +25,13 @@ export default function LegalPrivacy() {
 
           <section>
             <h2 className="text-base font-bold text-gray-900 mb-3 border-b border-gray-200 pb-2">1. Titolare del Trattamento</h2>
-            <p>Dell'Aria Claudia Giuseppina | P.IVA 02655840060<br />
-            Email: <a href="mailto:privacy@urbicheck.it" className="text-blue-600 hover:underline">privacy@urbicheck.it</a></p>
+            <p className="leading-relaxed">
+              <strong>Dell'Aria Claudia Giuseppina</strong> (impresa individuale)<br />
+              Via Costa 44, 15026 Carentino (AL)<br />
+              P.IVA: 02655840060 | C.F.: DLLCDG89C58G580S | REA: AL-301497<br />
+              Email: <a href="mailto:info@urbicheck.it" className="text-blue-600 hover:underline">info@urbicheck.it</a><br />
+              PEC (comunicazioni formali): <a href="mailto:claudiadellaria@pec.it" className="text-blue-600 hover:underline">claudiadellaria@pec.it</a>
+            </p>
           </section>
 
           <section>
@@ -117,7 +122,10 @@ export default function LegalPrivacy() {
                 <div key={d} className="bg-blue-50 border border-blue-200 rounded px-3 py-2 text-xs">{d}</div>
               ))}
             </div>
-            <p>Per esercitare i diritti: <a href="mailto:privacy@urbicheck.it" className="text-blue-600 hover:underline">privacy@urbicheck.it</a></p>
+            <p>Per esercitare i diritti:<br />
+              <a href="mailto:info@urbicheck.it" className="text-blue-600 hover:underline">info@urbicheck.it</a> (richieste generali)<br />
+              <a href="mailto:claudiadellaria@pec.it" className="text-blue-600 hover:underline">claudiadellaria@pec.it</a> (comunicazioni formali/PEC)
+            </p>
             <p className="mt-1">Reclami al Garante Privacy: <a href="https://www.garanteprivacy.it" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">www.garanteprivacy.it</a></p>
           </section>
 
