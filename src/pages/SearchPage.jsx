@@ -76,22 +76,20 @@ export default function SearchPage() {
     const enrichment = await callUrbiCheckEnrichment(enrichedFormData);
     const reportData = await generateReport(enrichedFormData, enrichment);
 
+    const geocodingCoords = enrichment?.geocoding?.lat ? {
+      centroid_lat: enrichment.geocoding.lat,
+      centroid_lng: enrichment.geocoding.lon ?? enrichment.geocoding.lng ?? null,
+    } : {};
+
     const query = await base44.entities.CadastralQuery.create({
       ...cadastralData,
       status: "pending",
       report_data: { ...reportData, fin_data, planimetria_data: planimetriaData },
       cost: 9.90,
+      ...geocodingCoords,
       ...(superficieEffettiva ? { superficie_mq: superficieEffettiva } : {}),
       ...(visura_uploaded ? { categoria_catastale, superficie_mq, rendita_catastale, vani, indirizzo_catastale, visura_uploaded: true } : {}),
     });
-
-    // Se il microservizio ha restituito geocoding e la query non ha ancora centroide
-    if (enrichment?.geocoding?.lat && !query.centroid_lat) {
-      base44.entities.CadastralQuery.update(query.id, {
-        centroid_lat: enrichment.geocoding.lat,
-        centroid_lng: enrichment.geocoding.lon,
-      }).catch(() => {});
-    }
 
     catasto_resolver({
       nome_comune: formData.comune, regione: formData.regione,
@@ -174,6 +172,11 @@ export default function SearchPage() {
           : visuraExtra;
 
         const prezzoUnitaAllocato = getAllocatedPrice(i);
+        const batchGeoCoords = batchEnrichment?.geocoding?.lat ? {
+          centroid_lat: batchEnrichment.geocoding.lat,
+          centroid_lng: batchEnrichment.geocoding.lon ?? batchEnrichment.geocoding.lng ?? null,
+        } : {};
+
         const query = await base44.entities.CadastralQuery.create({
           ...sharedCadastral, ...unit,
           status: "pending",
@@ -184,18 +187,11 @@ export default function SearchPage() {
           cost: pricePerUnit,
           batch_id: batchRecord.id,
           ...unitCatastral,
+          ...batchGeoCoords,
         });
 
         queryIds.push(query.id);
         results.push({ queryId: query.id, unit, success: true });
-
-        // Pre-popola centroide dal microservizio se disponibile
-        if (batchEnrichment?.geocoding?.lat && !query.centroid_lat) {
-          base44.entities.CadastralQuery.update(query.id, {
-            centroid_lat: batchEnrichment.geocoding.lat,
-            centroid_lng: batchEnrichment.geocoding.lon,
-          }).catch(() => {});
-        }
 
         catasto_resolver({
           nome_comune: sharedCadastral.comune, regione: sharedCadastral.regione,
@@ -216,6 +212,11 @@ export default function SearchPage() {
     const completedCount = results.filter(r => r.success).length;
     const failedCount = results.filter(r => !r.success).length;
 
+    const batchUpdateGeo = batchEnrichment?.geocoding?.lat ? {
+      centroid_lat: batchEnrichment.geocoding.lat,
+      centroid_lng: batchEnrichment.geocoding.lon ?? batchEnrichment.geocoding.lng ?? null,
+    } : {};
+
     await base44.entities.BatchQuery.update(batchRecord.id, {
       query_ids: queryIds,
       completed_units: completedCount,
@@ -223,6 +224,7 @@ export default function SearchPage() {
       status: failedCount === units.length ? 'failed' : failedCount > 0 ? 'partial' : 'completed',
       ...(totalAcquisitionPrice > 0 ? { total_acquisition_price: totalAcquisitionPrice } : {}),
       ...(totalSupBatch > 0 ? { total_superficie_mq: totalSupBatch } : {}),
+      ...batchUpdateGeo,
     });
 
     // ── Charge batch credits once + set paid=true on all queries ──────────
