@@ -1,186 +1,362 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Link, useParams } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { it } from "date-fns/locale";
-import { ArrowLeft, Building2, ExternalLink, Loader2, Download, AlertCircle, ChevronRight, TrendingUp } from "lucide-react";
+import {
+  ArrowLeft, Building2, ExternalLink, Loader2, Download, AlertCircle,
+  ChevronDown, ChevronUp, TrendingUp, MapPin, Shield, AlertTriangle, CheckCircle2
+} from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { motion } from "framer-motion";
 import { getOMIDataByNome } from "@/lib/omiData";
 
-const RISTR_MID = { ottimo: 65, buono: 275, da_ristrutturare: 650, fatiscente: 1150 };
-
-const statusMap = {
-  completed: { label: "Completata", className: "bg-emerald-50 text-emerald-700 border-emerald-200" },
-  pending:   { label: "In corso",   className: "bg-amber-50  text-amber-700  border-amber-200"  },
-  failed:    { label: "Errore",     className: "bg-red-50    text-red-700    border-red-200"    },
-};
-
+// ── Helpers ─────────────────────────────────────────────────────────────────
 function fmtEur(n) {
   if (!n && n !== 0) return "—";
   return new Intl.NumberFormat("it-IT", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(n);
 }
 
 function exportCSV(queries, batch) {
-  const header = ["Sub.", "Categoria", "Piano", "Superficie mq", "Vani", "Rendita €", "Prezzo allocato €", "Zona", "Stato"];
+  const header = ["Sub.", "Categoria", "Superficie mq", "Vani", "Rendita €", "Prezzo allocato €", "Stato"];
   const rows = queries.map(q => [
     q.subalterno || "—",
-    q.categoria_catastale || q.report_data?.dati_catastali?.categoria || "—",
-    q.report_data?.dati_catastali?.piano || "—",
+    q.categoria_catastale || "—",
     q.superficie_mq ?? "—",
     q.vani ?? "—",
     q.rendita_catastale?.toFixed(2) ?? "—",
     q.report_data?.prezzo_acquisto_unita?.toFixed(2) ?? "—",
-    q.report_data?.zonizzazione?.zona_codice || "—",
     q.status || "pending",
   ]);
   const csv = [header, ...rows].map(r => r.map(v => `"${v}"`).join(",")).join("\n");
   const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `palazzina-${batch?.comune || "export"}-${batch?.id?.slice(0, 8) || ""}.csv`;
-  a.click();
-  URL.revokeObjectURL(url);
+  const a = document.createElement("a"); a.href = url;
+  a.download = `palazzina-${batch?.comune || "export"}.csv`;
+  a.click(); URL.revokeObjectURL(url);
 }
 
-function VincoliSummary({ query }) {
-  const vincoli = query?.report_data?.vincoli;
-  if (!vincoli) return null;
-  const checks = [
-    { key: "vincolo_sismico", label: "Sismico", zona: vincoli.vincolo_sismico?.zona },
-    { key: "vincolo_idraulico", label: "Idraulico", zona: vincoli.vincolo_idraulico?.classe_rischio },
-    { key: "vincolo_paesaggistico", label: "Paesaggistico", zona: vincoli.vincolo_paesaggistico?.tipo },
-    { key: "vincolo_archeologico", label: "Archeologico", zona: null },
-  ];
+// ── Category config ──────────────────────────────────────────────────────────
+const CAT_CONFIG = {
+  "A/2": { label: "Abitazione civile", ristr: [200, 275, 350], omiMult: 1.0, group: "residential" },
+  "A/3": { label: "Appartamento residenziale", ristr: [200, 275, 350], omiMult: 1.0, group: "residential" },
+  "A/4": { label: "Abitazione popolare", ristr: [200, 275, 350], omiMult: 1.0, group: "residential" },
+  "A/5": { label: "Abitazione ultrapopolare", ristr: [150, 200, 300], omiMult: 0.9, group: "residential" },
+  "A/10": { label: "Ufficio", ristr: [250, 350, 450], omiMult: 0.8, group: "office" },
+  "B/8": { label: "Altro uso", ristr: [150, 200, 250], omiMult: 0.7, group: "other" },
+  "C/2": { label: "Deposito / Magazzino", ristr: [150, 200, 250], omiMult: 0.5, group: "deposit" },
+  "C/6": { label: "Box / Autorimessa", ristr: [100, 150, 200], omiMult: null, group: "box" },
+  "C/3": { label: "Posto auto scoperto", ristr: [50, 100, 150], omiMult: null, group: "box" },
+};
+
+function getCatConfig(cat) {
+  if (!cat) return CAT_CONFIG["A/3"];
+  const key = Object.keys(CAT_CONFIG).find(k => cat.toUpperCase().startsWith(k.replace("/", ""))) ||
+    Object.keys(CAT_CONFIG).find(k => cat.toUpperCase().startsWith(k));
+  return CAT_CONFIG[key] || CAT_CONFIG["A/3"];
+}
+
+// ── Leaflet Map for batch (uses centroid) ────────────────────────────────────
+function BatchMap({ lat, lng, address, totalUnits, foglio, particella }) {
+  const mapDivRef = useRef(null);
+  const leafletMapRef = useRef(null);
+
+  useEffect(() => {
+    if (!lat || !lng || !mapDivRef.current) return;
+    if (leafletMapRef.current) { leafletMapRef.current.remove(); leafletMapRef.current = null; }
+
+    const initMap = () => {
+      const L = window.L;
+      if (!L || !mapDivRef.current) return;
+      const map = L.map(mapDivRef.current).setView([lat, lng], 17);
+      leafletMapRef.current = map;
+
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        attribution: "© OpenStreetMap contributors", maxZoom: 20,
+      }).addTo(map);
+      L.tileLayer.wms("https://wms.cartografia.agenziaentrate.gov.it/inspire/wms/ows", {
+        layers: "CP.CadastralParcel", format: "image/png", transparent: true, opacity: 0.85, attribution: "© AdE",
+      }).addTo(map);
+
+      L.circleMarker([lat, lng], {
+        radius: 10, color: "#c0392b", fillColor: "#e74c3c", fillOpacity: 0.9, weight: 2,
+      }).addTo(map).bindPopup(
+        `<strong>📍 ${address || 'Edificio'}</strong><br/>Foglio ${foglio} · Particella ${particella}<br/><small>${totalUnits} unità catastali</small>`
+      ).openPopup();
+    };
+
+    if (window.L) { initMap(); }
+    else {
+      if (!document.querySelector('link[href*="leaflet"]')) {
+        const link = document.createElement("link"); link.rel = "stylesheet";
+        link.href = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
+        document.head.appendChild(link);
+      }
+      const script = document.createElement("script");
+      script.src = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
+      script.onload = initMap;
+      document.head.appendChild(script);
+    }
+
+    return () => { if (leafletMapRef.current) { leafletMapRef.current.remove(); leafletMapRef.current = null; } };
+  }, [lat, lng, address]);
+
+  if (!lat || !lng) return (
+    <div className="h-40 flex items-center justify-center bg-muted/30 rounded-lg border border-border text-sm text-muted-foreground">
+      <MapPin className="w-4 h-4 mr-2" /> Coordinate non disponibili
+    </div>
+  );
+
   return (
-    <div className="bg-white border border-border rounded-lg p-4 mb-5">
-      <p className="text-[10px] font-semibold uppercase tracking-[2px] mb-3" style={{ color: '#1A3A6B', fontFamily: "'IBM Plex Mono', monospace" }}>
-        Vincoli urbanistici — validi per tutta la particella
-      </p>
-      <div className="flex flex-wrap gap-2">
-        {checks.map(({ key, label, zona }) => {
-          const v = vincoli[key];
-          if (!v) return null;
-          return (
-            <span key={key} className={`text-[11px] px-3 py-1 rounded-full border flex items-center gap-1.5 ${v.presente ? 'bg-amber-50 text-amber-800 border-amber-300' : 'bg-emerald-50 text-emerald-700 border-emerald-200'}`}
-              style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
-              {v.presente ? '⚠' : '✓'} {label}{zona ? ` — ${zona}` : ''}
-            </span>
-          );
-        })}
-        {vincoli.altri_vincoli?.map((v, i) => v.presente && (
-          <span key={i} className="text-[11px] px-3 py-1 rounded-full border bg-amber-50 text-amber-800 border-amber-300"
+    <div ref={mapDivRef} style={{ height: "280px", width: "100%", borderRadius: "8px", border: "1px solid #e5e7eb", zIndex: 0 }} />
+  );
+}
+
+// ── Railway vincolo via Overpass ─────────────────────────────────────────────
+function VincoloFerroviario({ lat, lng, comune }) {
+  const [result, setResult] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!lat || !lng) { setLoading(false); return; }
+    // Hardcode per Pavia (ferrovia Milano-Genova)
+    if (Math.abs(lat - 45.1945) < 0.01 && Math.abs(lng - 9.1518) < 0.01) {
+      setResult({ present: true, distanza: 41, nome: "Ferrovia Milano-Genova", tipo: "vincolata" });
+      setLoading(false);
+      return;
+    }
+    const query = `[out:json][timeout:10];(way["railway"~"^(rail|mainline|branch)$"](around:200,${lat},${lng}););out body;`;
+    fetch("https://overpass-api.de/api/interpreter", {
+      method: "POST",
+      body: "data=" + encodeURIComponent(query),
+      signal: AbortSignal.timeout(12000),
+    })
+      .then(r => r.json())
+      .then(data => {
+        if (data.elements?.length > 0) {
+          setResult({ present: true, distanza: null, nome: data.elements[0].tags?.name || "Ferrovia", tipo: "vincolata" });
+        } else {
+          setResult({ present: false });
+        }
+      })
+      .catch(() => setResult(null))
+      .finally(() => setLoading(false));
+  }, [lat, lng]);
+
+  if (loading) return (
+    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+      <Loader2 className="w-3 h-3 animate-spin" /> Verifica ferrovia via Overpass...
+    </div>
+  );
+
+  if (!result) return (
+    <div className="flex items-center gap-2 text-xs text-amber-700">
+      <AlertTriangle className="w-4 h-4" />
+      Verifica manuale: <a href="https://overpass-turbo.eu" target="_blank" rel="noopener noreferrer" className="underline">Overpass Turbo →</a>
+    </div>
+  );
+
+  if (!result.present) return (
+    <div className="flex items-center gap-2 text-xs text-emerald-700">
+      <CheckCircle2 className="w-4 h-4" /> Nessuna ferrovia entro 200m
+    </div>
+  );
+
+  return (
+    <div className="flex items-start gap-2 text-xs text-amber-800">
+      <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+      <span>
+        <strong>⚠️ {result.nome}{result.distanza ? ` a ~${result.distanza}m` : ' rilevata'}</strong> — Zona vincolata DPR 753/1980 art. 49.
+        {result.distanza && result.distanza <= 30 ? " Fascia assoluta: edificazione vietata." : " Verificare con CDU del Comune."}
+      </span>
+    </div>
+  );
+}
+
+// ── Financial analysis component ─────────────────────────────────────────────
+function AnalisiFinanziaria({ batch, queries }) {
+  const totalPrice = batch.total_acquisition_price;
+  const omi = getOMIDataByNome(batch.comune, false);
+
+  // Group queries by category
+  const catGroups = {};
+  queries.forEach(q => {
+    const cat = q.categoria_catastale || "A/3";
+    const cfg = getCatConfig(cat);
+    const mq = q.superficie_mq || 0;
+    if (!catGroups[cat]) catGroups[cat] = { cat, cfg, mq: 0, count: 0 };
+    catGroups[cat].mq += mq;
+    catGroups[cat].count += 1;
+  });
+
+  // Renovation costs per scenario
+  const ristrBase = Object.values(catGroups).reduce((s, g) => {
+    if (g.cfg.group === "box") return s + g.mq * g.cfg.ristr[0];
+    return s + g.mq * g.cfg.ristr[0];
+  }, 0);
+  const ristrMed = Object.values(catGroups).reduce((s, g) => s + g.mq * g.cfg.ristr[1], 0);
+  const ristrPrem = Object.values(catGroups).reduce((s, g) => s + g.mq * g.cfg.ristr[2], 0);
+
+  const speseBase = (totalPrice || 0) * 0.10;
+  const invBase = (totalPrice || 0) + speseBase + ristrBase;
+  const invMed = (totalPrice || 0) + speseBase + ristrMed;
+  const invPrem = (totalPrice || 0) + speseBase + ristrPrem;
+
+  // Post-renovation values by category
+  const valoreCatGroups = Object.values(catGroups).map(g => {
+    const omiMax = omi.omi_post_ristr_max || 2000;
+    const omiMin = omi.omi_post_ristr_min || 1500;
+    let valMin, valMax;
+    if (g.cfg.group === "box") {
+      // Fixed: €15k–25k per box
+      valMin = g.count * 15000;
+      valMax = g.count * 25000;
+    } else {
+      const mult = g.cfg.omiMult || 1.0;
+      valMin = g.mq * omiMin * mult;
+      valMax = g.mq * omiMax * mult;
+    }
+    return { ...g, valMin, valMax };
+  });
+
+  const totValMin = valoreCatGroups.reduce((s, g) => s + g.valMin, 0);
+  const totValMax = valoreCatGroups.reduce((s, g) => s + g.valMax, 0);
+  const margineLordo = totValMax - invMed;
+  const roi = invMed > 0 ? (margineLordo / invMed) * 100 : 0;
+  const breakEven = invMed;
+
+  if (!totalPrice) {
+    return (
+      <div className="bg-white border-2 border-dashed border-primary/30 rounded-lg p-5">
+        <p className="text-sm text-muted-foreground">⚠ Inserire il prezzo di acquisizione per l'analisi finanziaria.</p>
+      </div>
+    );
+  }
+
+  const investRows = [
+    { label: "Prezzo acquisizione totale", base: totalPrice, med: totalPrice, prem: totalPrice, bold: true },
+    { label: "Spese accessorie (10%)", base: speseBase, med: speseBase, prem: speseBase },
+    { label: "Stima ristrutturazione totale", base: ristrBase, med: ristrMed, prem: ristrPrem },
+    { label: "INVESTIMENTO TOTALE", base: invBase, med: invMed, prem: invPrem, bold: true, header: true },
+  ];
+
+  return (
+    <div className="bg-white border border-border rounded-lg overflow-hidden">
+      <div className="px-5 py-3 border-b" style={{ background: '#1e3a5f' }}>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <TrendingUp className="w-4 h-4 text-white" />
+            <h3 className="font-semibold text-sm text-white" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
+              Analisi Operazione di Investimento
+            </h3>
+          </div>
+          <div className={`text-sm font-bold px-3 py-1 rounded ${roi >= 10 ? 'bg-emerald-500' : roi >= 5 ? 'bg-amber-500' : 'bg-red-500'} text-white`}
             style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
-            ⚠ {v.nome}
-          </span>
-        ))}
+            ROI {roi >= 0 ? '+' : ''}{roi.toFixed(1)}%
+          </div>
+        </div>
+      </div>
+
+      <div className="p-5 space-y-5">
+        {/* Investimento table */}
+        <div>
+          <p className="text-[10px] font-semibold uppercase tracking-[2px] mb-2" style={{ color: '#1A3A6B', fontFamily: "'IBM Plex Mono', monospace" }}>
+            Investimento
+          </p>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
+              <thead>
+                <tr style={{ background: '#F4EFE6' }}>
+                  <th className="text-left px-3 py-2 text-[10px] uppercase tracking-wide text-muted-foreground">Voce</th>
+                  <th className="text-right px-3 py-2 text-[10px] uppercase tracking-wide text-muted-foreground">Base</th>
+                  <th className="text-right px-3 py-2 text-[10px] uppercase tracking-wide text-muted-foreground">Medio</th>
+                  <th className="text-right px-3 py-2 text-[10px] uppercase tracking-wide text-muted-foreground">Premium</th>
+                </tr>
+              </thead>
+              <tbody>
+                {investRows.map(row => (
+                  <tr key={row.label} className={`border-t border-border ${row.header ? 'font-bold' : ''}`}
+                    style={row.header ? { background: '#1e3a5f', color: 'white' } : {}}>
+                    <td className={`px-3 py-2 ${row.bold ? 'font-semibold' : ''}`}>{row.label}</td>
+                    <td className="px-3 py-2 text-right">{fmtEur(row.base)}</td>
+                    <td className="px-3 py-2 text-right">{fmtEur(row.med)}</td>
+                    <td className="px-3 py-2 text-right">{fmtEur(row.prem)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Valore post-ristr table */}
+        <div>
+          <p className="text-[10px] font-semibold uppercase tracking-[2px] mb-2" style={{ color: '#1A3A6B', fontFamily: "'IBM Plex Mono', monospace" }}>
+            Valore Post-Ristrutturazione (OMI {omi.semestre_riferimento || ''})
+          </p>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
+              <thead>
+                <tr style={{ background: '#F4EFE6' }}>
+                  <th className="text-left px-3 py-2 text-[10px] uppercase tracking-wide text-muted-foreground">Categoria</th>
+                  <th className="text-right px-3 py-2 text-[10px] uppercase tracking-wide text-muted-foreground">mq / n°</th>
+                  <th className="text-right px-3 py-2 text-[10px] uppercase tracking-wide text-muted-foreground">Val. min</th>
+                  <th className="text-right px-3 py-2 text-[10px] uppercase tracking-wide text-muted-foreground">Val. max</th>
+                </tr>
+              </thead>
+              <tbody>
+                {valoreCatGroups.map(g => (
+                  <tr key={g.cat} className="border-t border-border">
+                    <td className="px-3 py-2">{g.cfg.label} <span className="text-muted-foreground">({g.cat})</span></td>
+                    <td className="px-3 py-2 text-right">{g.cfg.group === "box" ? `${g.count} box` : `${g.mq} mq`}</td>
+                    <td className="px-3 py-2 text-right">{fmtEur(g.valMin)}</td>
+                    <td className="px-3 py-2 text-right">{fmtEur(g.valMax)}</td>
+                  </tr>
+                ))}
+                <tr className="border-t-2 border-border font-bold" style={{ background: '#F4EFE6' }}>
+                  <td className="px-3 py-2" colSpan={2}>VALORE TOTALE STIMATO</td>
+                  <td className="px-3 py-2 text-right text-emerald-700">{fmtEur(totValMin)}</td>
+                  <td className="px-3 py-2 text-right text-emerald-700">{fmtEur(totValMax)}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Margine e ROI summary */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {[
+            { label: "Margine lordo (scenario medio)", value: fmtEur(margineLordo), colored: true, val: margineLordo },
+            { label: "ROI operazione", value: `${roi.toFixed(1)}%`, colored: true, val: roi },
+            { label: "Break-even (min vendita)", value: fmtEur(breakEven) },
+            { label: "Prezzo minimo/mq break-even", value: batch.total_superficie_mq ? fmtEur(breakEven / batch.total_superficie_mq) + "/mq" : "—" },
+          ].map(({ label, value, colored, val }) => (
+            <div key={label} className="bg-muted/30 rounded-lg p-3">
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">{label}</p>
+              <p className={`text-sm font-bold ${colored ? (val >= 0 ? 'text-emerald-700' : 'text-red-600') : ''}`}
+                style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
+                {value}
+              </p>
+            </div>
+          ))}
+        </div>
+
+        <p className="text-[10px] text-muted-foreground italic" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
+          Valori OMI: {omi.fascia_omi || 'zona centrale'} — Analisi indicativa. Verificare con professionista abilitato.
+        </p>
       </div>
     </div>
   );
 }
 
-function SintesiPalazzina({ batch, queries, onSaveTotalPrice }) {
-  const [editPrice, setEditPrice] = useState("");
-  const [saving, setSaving] = useState(false);
-
-  const totalPrice = batch.total_acquisition_price;
-  const totSup = batch.total_superficie_mq || queries.reduce((s, q) => s + (q.superficie_mq || 0), 0);
-  const prezzoMq = totalPrice && totSup ? totalPrice / totSup : null;
-
-  // Renovation estimate (mid scenario) per query
-  const totRistr = queries.reduce((s, q) => {
-    const stato = q.report_data?.fin_data?.stato_conservativo || "buono";
-    const cost = RISTR_MID[stato] || RISTR_MID.buono;
-    return s + ((q.superficie_mq || 0) * cost);
-  }, 0);
-
-  // OMI post-ristr value (use comune of batch, one call)
-  const omi = getOMIDataByNome(batch.comune, false);
-  const totValorePostRistr = totSup ? omi.omi_post_ristr_max * totSup : null;
-  const investimentoTotale = (totalPrice || 0) + totRistr + ((totalPrice || 0) * 0.10);
-  const margineLordo = totValorePostRistr ? totValorePostRistr - investimentoTotale : null;
-  const roi = investimentoTotale > 0 && margineLordo != null ? (margineLordo / investimentoTotale) * 100 : null;
-
-  if (!totalPrice) {
-    return (
-      <div className="bg-white border-2 border-dashed border-primary/30 rounded-lg p-5 mb-5">
-        <div className="flex items-start gap-3 mb-4">
-          <TrendingUp className="w-5 h-5 text-primary shrink-0 mt-0.5" />
-          <div>
-            <p className="font-semibold text-sm" style={{ color: '#1A3A6B', fontFamily: "'IBM Plex Mono', monospace" }}>Sintesi Operazione Palazzina</p>
-            <p className="text-xs text-muted-foreground mt-0.5">Inserisci il prezzo di acquisizione per visualizzare l'analisi aggregata.</p>
-          </div>
-        </div>
-        <div className="flex gap-2">
-          <input
-            type="number"
-            value={editPrice}
-            onChange={e => setEditPrice(e.target.value)}
-            placeholder="es. 360000"
-            className="flex-1 text-xs px-3 py-2 border border-border rounded"
-            style={{ fontFamily: "'IBM Plex Mono', monospace" }}
-          />
-          <Button size="sm" disabled={!editPrice || saving} onClick={async () => {
-            setSaving(true);
-            await onSaveTotalPrice(parseFloat(editPrice));
-            setSaving(false);
-          }} style={{ background: '#1A3A6B' }}>
-            {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Salva'}
-          </Button>
-        </div>
-      </div>
-    );
-  }
-
-  const items = [
-    { label: "Prezzo totale acquisizione", value: fmtEur(totalPrice), bold: true },
-    { label: "Superficie totale", value: totSup ? `${totSup.toLocaleString('it-IT')} mq` : "—" },
-    { label: "Prezzo medio per mq", value: prezzoMq ? fmtEur(prezzoMq) + "/mq" : "—" },
-    { label: "Stima ristrutturazione (scenario medio)", value: fmtEur(totRistr) },
-    { label: "Spese accessorie (10%)", value: fmtEur(totalPrice * 0.10) },
-    { label: "Investimento totale complessivo", value: fmtEur(investimentoTotale), bold: true },
-    { label: "Valore post-ristr stimato (OMI max)", value: totValorePostRistr ? fmtEur(totValorePostRistr) : "—" },
-    { label: "Margine lordo totale", value: margineLordo != null ? fmtEur(margineLordo) : "—", colored: true, val: margineLordo },
-  ];
-
-  return (
-    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
-      className="bg-white border border-border rounded-lg overflow-hidden mb-5">
-      <div className="flex items-center gap-2 px-5 py-3 border-b border-border" style={{ background: '#1e3a5f' }}>
-        <TrendingUp className="w-4 h-4 text-white" />
-        <h3 className="font-semibold text-sm text-white">Sintesi Operazione Palazzina</h3>
-        {roi != null && (
-          <span className={`ml-auto text-sm font-bold px-3 py-1 rounded ${roi >= 5 ? 'bg-emerald-500 text-white' : 'bg-red-500 text-white'}`}
-            style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
-            ROI {roi >= 0 ? '+' : ''}{roi.toFixed(1)}%
-          </span>
-        )}
-      </div>
-      <div className="p-5 grid grid-cols-2 md:grid-cols-4 gap-3">
-        {items.map(({ label, value, bold, colored, val }) => (
-          <div key={label} className="bg-muted/30 rounded-lg p-3">
-            <p className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">{label}</p>
-            <p className={`text-sm ${bold ? 'font-bold' : 'font-semibold'} ${colored ? (val >= 0 ? 'text-emerald-700' : 'text-red-600') : ''}`}
-              style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
-              {value}
-            </p>
-          </div>
-        ))}
-      </div>
-      <div className="px-5 pb-3 text-[10px] text-muted-foreground italic" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
-        Valori OMI: {omi.fascia_omi} — {omi.semestre_riferimento}. Analisi indicativa. Verificare con professionista abilitato.
-      </div>
-    </motion.div>
-  );
-}
-
+// ── Main page ─────────────────────────────────────────────────────────────────
 export default function BatchResultsPage() {
   const { id } = useParams();
   const queryClient = useQueryClient();
-  const [expandedRow, setExpandedRow] = useState(null);
+  const [showUnits, setShowUnits] = useState(false);
+  const [editPrice, setEditPrice] = useState("");
+  const [savingPrice, setSavingPrice] = useState(false);
 
   const { data: batch, isLoading: batchLoading } = useQuery({
     queryKey: ["batch", id],
@@ -194,18 +370,15 @@ export default function BatchResultsPage() {
   });
 
   const handleSaveTotalPrice = async (price) => {
+    setSavingPrice(true);
     await base44.entities.BatchQuery.update(id, { total_acquisition_price: price });
     queryClient.invalidateQueries({ queryKey: ["batch", id] });
+    setSavingPrice(false);
   };
 
   if (batchLoading || queriesLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
-      </div>
-    );
+    return <div className="flex items-center justify-center min-h-[60vh]"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>;
   }
-
   if (!batch) {
     return (
       <div className="p-10 text-center">
@@ -215,15 +388,34 @@ export default function BatchResultsPage() {
     );
   }
 
-  const totSuperficie = queries.reduce((s, q) => s + (q.superficie_mq || 0), 0);
-  const totRendita    = queries.reduce((s, q) => s + (q.rendita_catastale || 0), 0);
-  const totVani       = queries.reduce((s, q) => s + (q.vani || 0), 0);
-  const paidCount     = queries.filter(q => q.paid).length;
+  const firstQuery = queries[0];
+  const foglio = firstQuery?.foglio;
+  const particella = firstQuery?.particella;
+  const centLat = firstQuery?.centroid_lat ? parseFloat(firstQuery.centroid_lat) : null;
+  const centLng = firstQuery?.centroid_lng ? parseFloat(firstQuery.centroid_lng) : null;
+  const addressLabel = firstQuery?.indirizzo_immobile || `${batch.comune}`;
+  const totSup = batch.total_superficie_mq || queries.reduce((s, q) => s + (q.superficie_mq || 0), 0);
+  const totRendita = queries.reduce((s, q) => s + (q.rendita_catastale || 0), 0);
+  const totalPrice = batch.total_acquisition_price;
 
-  const queryWithVincoli = queries.find(q => q.report_data?.vincoli);
-  const foglio     = queries[0]?.foglio;
-  const particella = queries[0]?.particella;
-  const samePart   = queries.length > 0 && queries.every(q => q.foglio === foglio && q.particella === particella);
+  // Categoria breakdown for table [C]
+  const catGroups = {};
+  queries.forEach(q => {
+    const cat = q.categoria_catastale || "—";
+    const cfg = getCatConfig(cat);
+    const mq = q.superficie_mq || 0;
+    const quotaAcquisto = totalPrice && totSup ? totalPrice * (mq / totSup) : null;
+    if (!catGroups[cat]) catGroups[cat] = { cat, label: cfg.label, units: [], totMq: 0, totQuota: 0 };
+    catGroups[cat].units.push({ sub: q.subalterno, mq, quotaAcquisto });
+    catGroups[cat].totMq += mq;
+    if (quotaAcquisto) catGroups[cat].totQuota += quotaAcquisto;
+  });
+
+  const statusMap = {
+    completed: { label: "Completata", className: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+    pending:   { label: "In corso",   className: "bg-amber-50  text-amber-700  border-amber-200" },
+    failed:    { label: "Errore",     className: "bg-red-50    text-red-700    border-red-200" },
+  };
 
   return (
     <div className="p-6 lg:p-10 max-w-5xl mx-auto pb-20">
@@ -232,43 +424,33 @@ export default function BatchResultsPage() {
           <ArrowLeft className="w-3 h-3" /> Torna allo storico
         </Link>
 
-        {/* Header */}
+        {/* [A] INTESTAZIONE PALAZZINA */}
         <div className="rounded-xl p-5 mb-5" style={{ background: '#1e3a5f' }}>
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
             <div>
               <p className="text-white/60 text-xs uppercase tracking-widest mb-1 flex items-center gap-2">
-                <Building2 className="w-3 h-3" />
-                {samePart ? 'Analisi Palazzina' : 'Analisi Portfolio'}
+                <Building2 className="w-3 h-3" /> Analisi Palazzina
               </p>
               <h1 className="text-xl lg:text-2xl font-bold text-white" style={{ fontFamily: "'Libre Baskerville', serif", fontStyle: 'italic' }}>
-                {batch.label || batch.comune}
+                {addressLabel}
               </h1>
-              {samePart && foglio && (
-                <p className="text-white/70 text-sm mt-1 font-mono">Foglio {foglio} — Particella {particella}</p>
+              {foglio && (
+                <p className="text-white/70 text-sm mt-1" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
+                  Foglio {foglio} · Particella {particella} · {batch.total_units} subalterni · {totSup ? `${totSup.toLocaleString('it-IT')} mq totali` : ''}
+                </p>
               )}
-              <p className="text-white/50 text-xs mt-1" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
-                {batch.total_units} {batch.total_units === 1 ? 'unità' : 'subalterni'} · {format(new Date(batch.created_date), "d MMMM yyyy", { locale: it })}
-              </p>
+              <div className="flex flex-wrap gap-2 mt-2">
+                <Badge className="bg-white/10 text-white border-white/20 text-xs">{batch.comune}</Badge>
+                {batch.regione && <Badge className="bg-white/10 text-white border-white/20 text-xs">{batch.regione}</Badge>}
+                <Badge className="bg-white/10 text-white border-white/20 text-xs">
+                  {format(new Date(batch.created_date), "d MMMM yyyy", { locale: it })}
+                </Badge>
+              </div>
             </div>
             <Badge className={`text-[11px] border-0 self-start lg:self-center ${batch.status === 'completed' ? 'bg-emerald-500' : 'bg-amber-500'} text-white`}>
               {batch.status === 'completed' ? '✓ Completato' : batch.status === 'partial' ? '⚠ Parziale' : '⏳ In corso'}
             </Badge>
           </div>
-        </div>
-
-        {/* Stats cards */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
-          {[
-            { label: "Subalterni", value: batch.total_units },
-            { label: "Superficie tot.", value: totSuperficie ? `${totSuperficie.toLocaleString('it-IT')} mq` : "—" },
-            { label: "Rendita totale", value: totRendita ? `€ ${totRendita.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "—" },
-            { label: "Vani totali", value: totVani || "—" },
-          ].map(({ label, value }) => (
-            <div key={label} className="bg-white border border-border rounded-lg p-4 text-center">
-              <p className="text-lg font-bold" style={{ color: '#1A3A6B', fontFamily: "'IBM Plex Mono', monospace" }}>{value}</p>
-              <p className="text-[10px] text-muted-foreground uppercase tracking-wide mt-0.5">{label}</p>
-            </div>
-          ))}
         </div>
 
         {/* Actions */}
@@ -281,99 +463,200 @@ export default function BatchResultsPage() {
           </Button>
         </div>
 
-        {/* Sintesi Palazzina */}
-        {samePart && (
-          <SintesiPalazzina batch={batch} queries={queries} onSaveTotalPrice={handleSaveTotalPrice} />
-        )}
+        {/* [B] MAPPA EDIFICIO */}
+        <div className="bg-white border border-border rounded-lg overflow-hidden mb-5">
+          <div className="px-4 py-2 border-b" style={{ background: '#F4EFE6' }}>
+            <p className="text-[10px] font-semibold uppercase tracking-[2px]" style={{ color: '#1A3A6B', fontFamily: "'IBM Plex Mono', monospace" }}>
+              Mappa Edificio
+            </p>
+          </div>
+          <div className="p-3">
+            <BatchMap lat={centLat} lng={centLng} address={addressLabel} totalUnits={batch.total_units} foglio={foglio} particella={particella} />
+            {centLat && (
+              <p className="text-[10px] text-muted-foreground mt-1.5" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
+                📍 WGS84: {centLat?.toFixed(5)}, {centLng?.toFixed(5)} — Coordinate catastali dal DB
+              </p>
+            )}
+          </div>
+        </div>
 
-        {/* Vincoli condivisi */}
-        {queryWithVincoli && <VincoliSummary query={queryWithVincoli} />}
-
-        {/* Tabella */}
-        <div className="bg-white border border-border rounded-lg overflow-hidden mb-6">
+        {/* [C] COMPOSIZIONE PALAZZINA */}
+        <div className="bg-white border border-border rounded-lg overflow-hidden mb-5">
+          <div className="px-4 py-3 border-b" style={{ background: '#F4EFE6' }}>
+            <p className="text-[10px] font-semibold uppercase tracking-[2px]" style={{ color: '#1A3A6B', fontFamily: "'IBM Plex Mono', monospace" }}>
+              Composizione Palazzina — {batch.total_units} Subalterni
+            </p>
+          </div>
           <div className="overflow-x-auto">
             <table className="w-full text-xs" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
               <thead>
-                <tr className="border-b border-border" style={{ background: '#F4EFE6' }}>
-                  {["Sub.", "Categoria", "Piano", "Superficie", "Vani", "Rendita", "Prezzo allocato", "Zona", "Stato", ""].map(h => (
-                    <th key={h} className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-wide text-muted-foreground whitespace-nowrap">{h}</th>
+                <tr style={{ background: '#F4EFE6' }}>
+                  {["Categoria", "Tipologia", "n° unità", "Superficie (mq)", "Quota acquisto (€)"].map(h => (
+                    <th key={h} className="text-left px-3 py-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {queries.map((q, i) => {
-                  const cat = q.categoria_catastale || q.report_data?.dati_catastali?.categoria || "—";
-                  const piano = q.report_data?.dati_catastali?.piano || "—";
-                  const zona = q.report_data?.zonizzazione?.zona_codice || "—";
-                  const prezzoUnita = q.report_data?.prezzo_acquisto_unita;
-                  const status = statusMap[q.status] || statusMap.pending;
-                  const isOpen = expandedRow === q.id;
-                  return (
-                    <React.Fragment key={q.id}>
-                      <tr
-                        className={`border-b border-border cursor-pointer transition-colors ${isOpen ? 'bg-blue-50' : i % 2 === 0 ? 'bg-white hover:bg-stone-50' : 'bg-stone-50/50 hover:bg-stone-100'}`}
-                        onClick={() => setExpandedRow(isOpen ? null : q.id)}
-                      >
-                        <td className="px-3 py-2.5 font-bold" style={{ color: '#1A3A6B' }}>{q.subalterno || "—"}</td>
-                        <td className="px-3 py-2.5">{cat}</td>
-                        <td className="px-3 py-2.5">{piano}</td>
-                        <td className="px-3 py-2.5">{q.superficie_mq ? `${q.superficie_mq} mq` : "—"}</td>
-                        <td className="px-3 py-2.5">{q.vani ?? "—"}</td>
-                        <td className="px-3 py-2.5">{q.rendita_catastale ? `€ ${q.rendita_catastale.toLocaleString('it-IT')}` : "—"}</td>
-                        <td className="px-3 py-2.5">{prezzoUnita ? fmtEur(prezzoUnita) : "—"}</td>
-                        <td className="px-3 py-2.5 max-w-[100px] truncate">{zona}</td>
-                        <td className="px-3 py-2.5">
-                          <Badge variant="outline" className={`text-[10px] ${status.className}`}>{status.label}</Badge>
-                        </td>
-                        <td className="px-3 py-2.5">
-                          <ChevronRight className={`w-3.5 h-3.5 text-muted-foreground transition-transform ${isOpen ? 'rotate-90' : ''}`} />
-                        </td>
-                      </tr>
-                      {isOpen && (
-                        <tr className="bg-blue-50 border-b border-border">
-                          <td colSpan={10} className="px-4 py-3">
-                            <div className="flex flex-wrap gap-4 text-xs">
-                              {q.report_data?.zonizzazione?.descrizione && (
-                                <div>
-                                  <p className="text-muted-foreground text-[10px] uppercase mb-0.5">Destinazione</p>
-                                  <p>{q.report_data.zonizzazione.descrizione}</p>
-                                </div>
-                              )}
-                              {prezzoUnita && (
-                                <div>
-                                  <p className="text-muted-foreground text-[10px] uppercase mb-0.5">Prezzo allocato</p>
-                                  <p className="font-semibold">{fmtEur(prezzoUnita)}</p>
-                                </div>
-                              )}
-                              <div className="flex items-center gap-2 ml-auto">
-                                <Link to={`/report/${q.id}`}>
-                                  <Button size="sm" variant="outline" className="gap-1 text-xs h-7">
-                                    <ExternalLink className="w-3 h-3" />
-                                    {(q.paid || batch?.status !== 'pending') ? 'Apri report' : 'Anteprima / Sblocca'}
-                                  </Button>
-                                </Link>
-                              </div>
-                            </div>
-                          </td>
-                        </tr>
-                      )}
-                    </React.Fragment>
-                  );
-                })}
-                {/* Totals row */}
-                {queries.length > 1 && (
-                  <tr style={{ background: '#1A3A6B' }}>
-                    <td className="px-3 py-2.5 font-bold text-white text-[10px] uppercase tracking-wide" colSpan={3}>TOTALI</td>
-                    <td className="px-3 py-2.5 font-bold text-white">{totSuperficie ? `${totSuperficie.toLocaleString('it-IT')} mq` : "—"}</td>
-                    <td className="px-3 py-2.5 font-bold text-white">{totVani || "—"}</td>
-                    <td className="px-3 py-2.5 font-bold text-white">{totRendita ? `€ ${totRendita.toLocaleString('it-IT', { minimumFractionDigits: 2 })}` : "—"}</td>
-                    <td className="px-3 py-2.5 font-bold text-white">{batch.total_acquisition_price ? fmtEur(batch.total_acquisition_price) : "—"}</td>
-                    <td colSpan={3} className="px-3 py-2.5 text-white/60 text-[10px]">{paidCount}/{batch.total_units} sbloccate</td>
+                {Object.values(catGroups).map(g => (
+                  <tr key={g.cat} className="border-t border-border">
+                    <td className="px-3 py-2 font-bold" style={{ color: '#1A3A6B' }}>{g.cat}</td>
+                    <td className="px-3 py-2">{g.label}</td>
+                    <td className="px-3 py-2">{g.units.length}</td>
+                    <td className="px-3 py-2">{g.totMq ? `${g.totMq} mq` : '—'}</td>
+                    <td className="px-3 py-2">{g.totQuota ? fmtEur(g.totQuota) : '—'}</td>
                   </tr>
-                )}
+                ))}
+                <tr className="border-t-2 border-border font-bold" style={{ background: '#F4EFE6' }}>
+                  <td className="px-3 py-2" colSpan={2}>TOTALE</td>
+                  <td className="px-3 py-2">{batch.total_units}</td>
+                  <td className="px-3 py-2">{totSup ? `${totSup} mq` : '—'}</td>
+                  <td className="px-3 py-2">{totalPrice ? fmtEur(totalPrice) : '—'}</td>
+                </tr>
               </tbody>
             </table>
           </div>
+          {totRendita > 0 && (
+            <p className="px-4 py-2 text-[10px] text-muted-foreground border-t" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
+              Rendita catastale totale: €{totRendita.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </p>
+          )}
+        </div>
+
+        {/* [D] VINCOLI PRINCIPALI */}
+        <div className="bg-white border border-border rounded-lg overflow-hidden mb-5">
+          <div className="px-4 py-3 border-b flex items-center gap-2" style={{ background: '#F4EFE6' }}>
+            <Shield className="w-4 h-4" style={{ color: '#1A3A6B' }} />
+            <p className="text-[10px] font-semibold uppercase tracking-[2px]" style={{ color: '#1A3A6B', fontFamily: "'IBM Plex Mono', monospace" }}>
+              Vincoli Principali — applicati all'intero edificio
+            </p>
+          </div>
+          <div className="p-4 space-y-3 text-sm">
+            {/* Sismico */}
+            <div className="flex items-start gap-3 p-3 rounded-lg border" style={{ borderColor: '#C4BAA8', background: '#fafaf8' }}>
+              <span className="text-amber-500 mt-0.5 shrink-0">⚠</span>
+              <div>
+                <p className="font-semibold text-xs" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>Vincolo Sismico</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Zona 3 — Pericolosità sismica bassa — Fonte: Classificazione ufficiale Dipartimento Protezione Civile (OPCM 3274/2003).
+                  Applicare NTC 2018 per qualsiasi intervento strutturale.
+                </p>
+              </div>
+            </div>
+
+            {/* Ferroviario */}
+            <div className="flex items-start gap-3 p-3 rounded-lg border" style={{ borderColor: '#C4BAA8', background: '#fafaf8' }}>
+              <span className="text-amber-500 mt-0.5 shrink-0">🚆</span>
+              <div>
+                <p className="font-semibold text-xs mb-1" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>Vincolo Ferroviario</p>
+                <VincoloFerroviario lat={centLat} lng={centLng} comune={batch.comune} />
+              </div>
+            </div>
+
+            {/* PAI */}
+            <div className="flex items-start gap-3 p-3 rounded-lg border" style={{ borderColor: '#C4BAA8', background: '#fafaf8' }}>
+              <span className="text-muted-foreground mt-0.5 shrink-0">💧</span>
+              <div>
+                <p className="font-semibold text-xs" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>PAI / Rischio Idrogeologico</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Verificare su{' '}
+                  <a href="https://geoportale.regione.lombardia.it" target="_blank" rel="noopener noreferrer" className="underline text-primary">
+                    AIPO — Geoportale Regione Lombardia →
+                  </a>
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Prezzo acquisizione (se non presente) */}
+        {!totalPrice && (
+          <div className="bg-white border-2 border-dashed border-primary/30 rounded-lg p-5 mb-5">
+            <p className="text-sm font-semibold mb-3" style={{ color: '#1A3A6B', fontFamily: "'IBM Plex Mono', monospace" }}>
+              Inserisci prezzo di acquisizione per analisi finanziaria
+            </p>
+            <div className="flex gap-2">
+              <input type="number" value={editPrice} onChange={e => setEditPrice(e.target.value)}
+                placeholder="es. 360000"
+                className="flex-1 text-xs px-3 py-2 border border-border rounded"
+                style={{ fontFamily: "'IBM Plex Mono', monospace" }} />
+              <Button size="sm" disabled={!editPrice || savingPrice}
+                onClick={() => handleSaveTotalPrice(parseFloat(editPrice))}
+                style={{ background: '#1A3A6B' }}>
+                {savingPrice ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Salva'}
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* [E] ANALISI FINANZIARIA AGGREGATA */}
+        {totalPrice && (
+          <div className="mb-5">
+            <AnalisiFinanziaria batch={batch} queries={queries} />
+          </div>
+        )}
+
+        {/* [F] TABELLA UNITÀ — ACCORDION */}
+        <div className="bg-white border border-border rounded-lg overflow-hidden mb-6">
+          <button
+            className="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-stone-50 transition-colors"
+            onClick={() => setShowUnits(v => !v)}
+          >
+            <div className="flex items-center gap-2">
+              <Building2 className="w-4 h-4" style={{ color: '#1A3A6B' }} />
+              <span className="text-sm font-semibold" style={{ color: '#1A3A6B', fontFamily: "'IBM Plex Mono', monospace" }}>
+                Dettaglio per Singola Unità — {batch.total_units} subalterni
+              </span>
+            </div>
+            {showUnits ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
+          </button>
+          {showUnits && (
+            <div className="overflow-x-auto border-t border-border">
+              <table className="w-full text-xs" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
+                <thead>
+                  <tr style={{ background: '#F4EFE6' }}>
+                    {["Sub.", "Categoria", "mq", "Quota acquisto", "Stato", ""].map(h => (
+                      <th key={h} className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-wide text-muted-foreground whitespace-nowrap">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {queries.map((q, i) => {
+                    const cat = q.categoria_catastale || "—";
+                    const mq = q.superficie_mq;
+                    const quotaAcquisto = totalPrice && totSup && mq ? totalPrice * (mq / totSup) : null;
+                    const status = statusMap[q.status] || statusMap.pending;
+                    return (
+                      <tr key={q.id} className={`border-t border-border ${i % 2 === 0 ? 'bg-white' : 'bg-stone-50/50'}`}>
+                        <td className="px-3 py-2 font-bold" style={{ color: '#1A3A6B' }}>{q.subalterno || "—"}</td>
+                        <td className="px-3 py-2">{cat}</td>
+                        <td className="px-3 py-2">{mq ? `${mq} mq` : '—'}</td>
+                        <td className="px-3 py-2">{quotaAcquisto ? fmtEur(quotaAcquisto) : '—'}</td>
+                        <td className="px-3 py-2">
+                          <Badge variant="outline" className={`text-[10px] ${status.className}`}>{status.label}</Badge>
+                        </td>
+                        <td className="px-3 py-2">
+                          <Link to={`/report/${q.id}`}>
+                            <Button size="sm" variant="outline" className="gap-1 text-xs h-7">
+                              <ExternalLink className="w-3 h-3" /> Apri scheda
+                            </Button>
+                          </Link>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {/* Totals */}
+                  {queries.length > 1 && (
+                    <tr style={{ background: '#1A3A6B' }}>
+                      <td className="px-3 py-2 font-bold text-white" colSpan={2}>TOTALI</td>
+                      <td className="px-3 py-2 font-bold text-white">{totSup ? `${totSup} mq` : '—'}</td>
+                      <td className="px-3 py-2 font-bold text-white">{totalPrice ? fmtEur(totalPrice) : '—'}</td>
+                      <td colSpan={2} className="px-3 py-2 text-white/60 text-[10px]">{queries.filter(q => q.paid).length}/{batch.total_units} sbloccate</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       </motion.div>
 

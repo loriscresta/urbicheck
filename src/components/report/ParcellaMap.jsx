@@ -240,13 +240,16 @@ export default function ParcellaMap({ record, query, item }) {
           dashArray: "6 4",
         }).addTo(map);
         // Punto centrale preciso
+        const addrLabel = entity.indirizzo_immobile || entity.comune || '';
         L.circleMarker([initLat, initLon], {
           radius: 7,
           color: "#c0392b",
           fillColor: "#e74c3c",
           fillOpacity: 0.95,
           weight: 2,
-        }).addTo(map);
+        }).addTo(map).bindPopup(
+          `<strong>📍 ${addrLabel}</strong><br/>Foglio ${foglio}, Particella ${particella}${entity.subalterno ? `, Sub. ${entity.subalterno}` : ''}`
+        ).openPopup();
       }
     };
 
