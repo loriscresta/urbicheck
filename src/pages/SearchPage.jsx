@@ -68,11 +68,13 @@ export default function SearchPage() {
     const enrichedFormData = superficieEffettiva
       ? { ...formData, superficie: String(superficieEffettiva) }
       : formData;
-    const reportData = await generateReport(enrichedFormData);
     const { prezzo_acquisto, superficie, stato_conservativo, destinazione_obiettivo, spese_accessorie,
       categoria_catastale, superficie_mq, rendita_catastale, vani, indirizzo_catastale,
-      visura_uploaded, intestatari_visura, ...cadastralData } = formData;
+      visura_uploaded, intestatari_visura, ...cadastralData } = enrichedFormData;
     const fin_data = { prezzo_acquisto, superficie, stato_conservativo, destinazione_obiettivo, spese_accessorie };
+
+    const enrichment = await callUrbiCheckEnrichment(enrichedFormData);
+    const reportData = await generateReport(enrichedFormData, enrichment);
 
     const query = await base44.entities.CadastralQuery.create({
       ...cadastralData,
@@ -82,6 +84,14 @@ export default function SearchPage() {
       ...(superficieEffettiva ? { superficie_mq: superficieEffettiva } : {}),
       ...(visura_uploaded ? { categoria_catastale, superficie_mq, rendita_catastale, vani, indirizzo_catastale, visura_uploaded: true } : {}),
     });
+
+    // Se il microservizio ha restituito geocoding e la query non ha ancora centroide
+    if (enrichment?.geocoding?.lat && !query.centroid_lat) {
+      base44.entities.CadastralQuery.update(query.id, {
+        centroid_lat: enrichment.geocoding.lat,
+        centroid_lng: enrichment.geocoding.lon,
+      }).catch(() => {});
+    }
 
     catasto_resolver({
       nome_comune: formData.comune, regione: formData.regione,
@@ -134,6 +144,9 @@ export default function SearchPage() {
       return +(totalAcquisitionPrice / units.length).toFixed(2); // equal fallback
     };
 
+    // Chiama il microservizio una volta per il batch (livello edificio)
+    const batchEnrichment = await callUrbiCheckEnrichment(sharedCadastral);
+
     const queryIds = [];
     const results = [];
     setBatchProgress({ current: 0, total: units.length, results: [] });
@@ -147,7 +160,7 @@ export default function SearchPage() {
       }));
 
       try {
-        const reportData = await generateReport({ ...sharedCadastral, ...unit });
+        const reportData = await generateReport({ ...sharedCadastral, ...unit }, batchEnrichment);
 
         // Per-unit catastral data from visura (overrides shared)
         const unitCatastral = unit.categoria_catastale || unit.superficie_mq || unit.rendita_catastale || unit.vani
@@ -175,6 +188,14 @@ export default function SearchPage() {
 
         queryIds.push(query.id);
         results.push({ queryId: query.id, unit, success: true });
+
+        // Pre-popola centroide dal microservizio se disponibile
+        if (batchEnrichment?.geocoding?.lat && !query.centroid_lat) {
+          base44.entities.CadastralQuery.update(query.id, {
+            centroid_lat: batchEnrichment.geocoding.lat,
+            centroid_lng: batchEnrichment.geocoding.lon,
+          }).catch(() => {});
+        }
 
         catasto_resolver({
           nome_comune: sharedCadastral.comune, regione: sharedCadastral.regione,
@@ -335,7 +356,76 @@ export default function SearchPage() {
   );
 }
 
-async function generateReport(formData) {
+// ── Microservizio UrbiCheck enrichment ─────────────────────────────────────
+async function callUrbiCheckEnrichment(formData, lat = null, lon = null) {
+  try {
+    const res = await Promise.race([
+      fetch('https://web-production-6e951.up.railway.app/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          comune: formData.comune,
+          provincia: formData.provincia || null,
+          regione: formData.regione || null,
+          indirizzo: formData.indirizzo_immobile || null,
+          lat: lat || null,
+          lon: lon || null,
+        }),
+      }),
+      new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 8000)),
+    ]);
+    if (!res.ok) return null;
+    return await res.json();
+  } catch (_e) {
+    console.warn('UrbiCheck microservice unavailable, using fallback');
+    return null;
+  }
+}
+
+// ── Merge enrichment vincoli into report data ────────────────────────────────
+function mergeEnrichment(reportData, enrichment) {
+  if (!enrichment) return reportData;
+  const vincoli = { ...(reportData.vincoli || {}) };
+
+  if (enrichment.vincolo_sismico) {
+    vincoli.vincolo_sismico = {
+      presente: true,
+      zona: String(enrichment.vincolo_sismico.zona || ''),
+      dettagli: enrichment.vincolo_sismico.descrizione || '',
+      fonte: enrichment.vincolo_sismico.fonte || 'Microservizio UrbiCheck',
+    };
+  }
+
+  if (enrichment.vincolo_ferroviario) {
+    vincoli.vincolo_ferroviario = {
+      presente: enrichment.vincolo_ferroviario.presente || false,
+      distanza_m: enrichment.vincolo_ferroviario.distanza_m || null,
+      ferrovia: enrichment.vincolo_ferroviario.ferrovia || null,
+      tipo: enrichment.vincolo_ferroviario.tipo || 'assente',
+      legge: enrichment.vincolo_ferroviario.legge || 'DPR 753/1980',
+      dettagli: enrichment.vincolo_ferroviario.tipo === 'assoluta'
+        ? `Fascia assoluta 30m — edificazione vietata (DPR 753/1980 art. 49). Distanza: ${enrichment.vincolo_ferroviario.distanza_m}m`
+        : enrichment.vincolo_ferroviario.tipo === 'limitata'
+        ? `Fascia limitata 150m — interventi soggetti ad autorizzazione RFI. Distanza: ${enrichment.vincolo_ferroviario.distanza_m}m`
+        : `Nessuna ferrovia entro 200m`,
+    };
+  }
+
+  if (enrichment.vincolo_pai) {
+    vincoli.vincolo_pai = {
+      link_verifica: enrichment.vincolo_pai.link_verifica || null,
+      nota: enrichment.vincolo_pai.nota || null,
+    };
+  }
+
+  if (enrichment.overpass_infra) {
+    vincoli.overpass_infra = enrichment.overpass_infra;
+  }
+
+  return { ...reportData, vincoli, _enrichment_source: 'urbicheck_microservice' };
+}
+
+async function generateReport(formData, enrichment = null) {
   const finalitaMap = {
     acquisto_privato: "acquisto per uso privato/abitativo",
     investimento: "investimento immobiliare",
@@ -450,5 +540,5 @@ REGOLA LINGUISTICA: Usa ESCLUSIVAMENTE terminologia tecnica italiana.`,
     }
   });
 
-  return result;
+  return mergeEnrichment(result, enrichment);
 }
