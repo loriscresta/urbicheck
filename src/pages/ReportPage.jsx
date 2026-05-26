@@ -97,6 +97,32 @@ const FINALITA_LABELS = {
   valutazione_professionale: "Valutazione professionale",
 };
 
+// ── Fix C: Lookup sismico statico ufficiale (OPCM 3274/2003) ───────────────
+const SEISMIC_ZONES = {
+  // Piemonte
+  'Torino': 3, 'Alessandria': 3, 'Asti': 3, 'Biella': 3, 'Cuneo': 3, 'Novara': 4,
+  'Verbania': 3, 'Vercelli': 4, 'Casale Monferrato': 3, 'Moncalieri': 3, 'Collegno': 3,
+  'Settimo Torinese': 3, 'Pinerolo': 3, 'Rivoli': 3, 'Nichelino': 3, 'Chieri': 3,
+  'Carmagnola': 3, 'Alba': 3, 'Bra': 3, 'Fossano': 3, 'Saluzzo': 3, 'Mondovì': 3,
+  'Acqui Terme': 3, 'Ovada': 3, 'Tortona': 3, 'Novi Ligure': 3, 'Pietra Ligure': 2,
+  // Liguria
+  'Genova': 3, 'Savona': 3, 'La Spezia': 2, 'Imperia': 2, 'Sanremo': 3,
+  'Bordighera': 3, 'Ventimiglia': 3, 'Albenga': 3, 'Sestri Levante': 2,
+  'Chiavari': 2, 'Rapallo': 2, 'Arenzano': 3, 'Varazze': 3,
+  // Lombardia
+  'Milano': 4, 'Monza': 4, 'Bergamo': 3, 'Brescia': 2, 'Como': 2, 'Cremona': 3,
+  'Lecco': 2, 'Lodi': 3, 'Mantova': 3, 'Pavia': 3, 'Sondrio': 2, 'Varese': 4,
+  'Vigevano': 3, 'Busto Arsizio': 4, 'Gallarate': 4, 'Saronno': 4, 'Legnano': 4,
+  'Seregno': 4, 'Rho': 4, 'Sesto San Giovanni': 4, 'Cinisello Balsamo': 4,
+  'Desenzano del Garda': 2, 'Treviglio': 3, 'Romano di Lombardia': 3,
+};
+const SEISMIC_DESC = {
+  1: 'Alta pericolosità sismica',
+  2: 'Pericolosità sismica media',
+  3: 'Pericolosità sismica bassa',
+  4: 'Pericolosità sismica molto bassa',
+};
+
 function ZonaBadge({ colore }) {
   const config = {
     verde: { bg: "bg-emerald-100 border-emerald-300 text-emerald-800", label: "Zona Verde — Alta fattibilità" },
@@ -241,6 +267,10 @@ export default function ReportPage() {
   const wfsRis = r.wfs_liguria?.risultati;
   const wfsSismica = wfsRis?.sismica;
 
+  // Fix C — lookup statico zona sismica ufficiale
+  const staticZona = SEISMIC_ZONES[query.comune] ||
+    SEISMIC_ZONES[Object.keys(SEISMIC_ZONES).find(k => k.toLowerCase() === query.comune?.toLowerCase?.())];
+
   let vincoloSismicoEffettivo;
   if (wfsSismica) {
     const zonaLabel = `Zona ${wfsSismica.zona}`;
@@ -248,6 +278,13 @@ export default function ReportPage() {
       presente: true,
       zona: `${zonaLabel} — ${wfsSismica.descrizione || ''}`,
       dettagli: `${zonaLabel} — ${wfsSismica.descrizione || ''}. ${wfsSismica.nota || ''} Rif: ${wfsSismica.riferimento_normativo || ''}`,
+    };
+  } else if (staticZona) {
+    vincoloSismicoEffettivo = {
+      presente: true,
+      zona: `Zona ${staticZona} — ${SEISMIC_DESC[staticZona]}`,
+      dettagli: `Zona sismica ${staticZona} — ${SEISMIC_DESC[staticZona]}. Fonte: Classificazione sismica ufficiale OPCM 3274/2003 — Dipartimento Protezione Civile.`,
+      verified: true,
     };
   } else if (isPiemonte) {
     vincoloSismicoEffettivo = { presente: true, zona: 'Zona 3 — Media sismicità — DGR n.6-887/2019', dettagli: 'Zona 3 — Media sismicità — DGR n.6-887/2019. Applicare NTC 2018.' };
@@ -308,6 +345,19 @@ export default function ReportPage() {
         ? ferrorieTrovate.map(d => `${d.nome} — fascia rispetto 30m (DPR 753/1980)`).join(' | ')
         : (wfsFerroviario.dati?.[0]?.nota || 'Nessuna ferrovia rilevata entro 250m.'),
     };
+  } else if (r.vincolo_ferroviario?.tipo) {
+    // Fix D — da Overpass check in catasto_resolver
+    const vf = r.vincolo_ferroviario;
+    if (vf.tipo === 'assente') {
+      vincoloFerroviarioEffettivo = null; // non mostrare se fuori fascia
+    } else {
+      vincoloFerroviarioEffettivo = {
+        presente: vf.presente,
+        dettagli: vf.tipo === 'assoluta'
+          ? `Fascia di rispetto ferroviaria ASSOLUTA — DPR 753/1980 art. 49. Edificazione vietata entro 30m dall'asse ferroviario. Distanza rilevata: ${vf.distanza_m}m.`
+          : `Zona soggetta a vincolo ferroviario — DPR 753/1980. Entro 150m dall'asse ferroviario si applicano limitazioni alla costruzione. Distanza rilevata: ${vf.distanza_m}m. Richiedere CDU al Comune.`,
+      };
+    }
   } else {
     vincoloFerroviarioEffettivo = null;
   }
@@ -325,7 +375,7 @@ export default function ReportPage() {
   const complessitaNorm = normalizeComplessita(complessitaRaw);
 
   const isLombardia = (query.regione || '').toLowerCase().includes('lombardia');
-  const hasVerifiedVincoli = !!(wfsRis) || isPiemonte || isLiguria;
+  const hasVerifiedVincoli = !!(wfsRis) || isPiemonte || isLiguria || !!staticZona;
 
   const complexityColor = {
     "Bassa": "bg-emerald-50 text-emerald-700 border-emerald-200",

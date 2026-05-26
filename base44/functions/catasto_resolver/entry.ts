@@ -276,6 +276,71 @@ function extractPolygon(featureContent) {
   return { type: 'Polygon', coordinates: [coordinates] };
 }
 
+// ── Haversine distance in meters ──────────────────────────────────────────
+function haversineM(lat1, lon1, lat2, lon2) {
+  const R = 6371000;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+// ── Overpass API — ferrovie entro 200m ─────────────────────────────────────
+async function checkRailwayVicinity(lat, lon) {
+  const q = `[out:json][timeout:10];(way["railway"~"^(rail|mainline|branch|secondary|tertiary)$"](around:200,${lat},${lon}););out body;>;out skel qt;`;
+  try {
+    const res = await fetchWithTimeout('https://overpass-api.de/api/interpreter', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: `data=${encodeURIComponent(q)}`,
+    }, 12000);
+    if (!res.ok) { console.warn('Overpass HTTP', res.status); return null; }
+    const data = await res.json();
+    const elements = data.elements || [];
+    const nodes = {};
+    for (const el of elements) { if (el.type === 'node') nodes[el.id] = el; }
+    let minDist = Infinity;
+    const ways = elements.filter(e => e.type === 'way');
+    for (const way of ways) {
+      for (const nid of (way.nodes || [])) {
+        const n = nodes[nid];
+        if (!n) continue;
+        const d = haversineM(lat, lon, n.lat, n.lon);
+        if (d < minDist) minDist = d;
+      }
+    }
+    if (!ways.length || minDist > 200) return { presente: false, distanza_m: null, tipo: 'assente' };
+    if (minDist <= 30)  return { presente: true,  distanza_m: Math.round(minDist), tipo: 'assoluta' };
+    if (minDist <= 150) return { presente: true,  distanza_m: Math.round(minDist), tipo: 'limitata' };
+    return { presente: false, distanza_m: Math.round(minDist), tipo: 'assente' };
+  } catch (e) {
+    console.warn('Overpass railway error:', e.message);
+    return null;
+  }
+}
+
+// ── Nominatim geocoding (fallback quando OnData non trova la particella) ────
+async function geocodeAddress(indirizzo, comune, provincia) {
+  const q = indirizzo
+    ? `${indirizzo}, ${comune}, ${provincia || ''}, Italy`
+    : `${comune}, ${provincia || ''}, Italy`;
+  try {
+    const res = await fetchWithTimeout(
+      `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=1&countrycodes=it`,
+      { headers: { 'User-Agent': 'UrbiCheck/1.0 (info@urbicheck.it)' } },
+      8000
+    );
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (!data[0]) return null;
+    return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon), tipo: indirizzo ? 'indirizzo' : 'comune' };
+  } catch (e) {
+    console.warn('Nominatim error:', e.message);
+    return null;
+  }
+}
+
 // ── MAIN ──
 Deno.serve(async (req) => {
   const base44 = createClientFromRequest(req);
@@ -354,6 +419,21 @@ Deno.serve(async (req) => {
   }
 
   if (!sezioniTrovate.length) {
+    // Fix B — Nominatim fallback: salva centroid anche se OnData non trova la particella
+    if (query_id && queryRecord) {
+      const indirizzoQ = queryRecord.indirizzo_catastale || queryRecord.indirizzo_immobile || null;
+      const provinciaQ = queryRecord.provincia || null;
+      const geoResult = await geocodeAddress(indirizzoQ, nome_comune || queryRecord.comune, provinciaQ);
+      if (geoResult) {
+        try {
+          await base44.entities.CadastralQuery.update(query_id, {
+            centroid_lat: geoResult.lat,
+            centroid_lng: geoResult.lon,
+          });
+          console.log(`Nominatim fallback saved: lat=${geoResult.lat} lon=${geoResult.lon} tipo=${geoResult.tipo}`);
+        } catch (_e) {}
+      }
+    }
     return Response.json({
       error: 'Particella non trovata nel dataset OnData',
       codice_belfiore: codiceBelfiore,
@@ -516,6 +596,26 @@ Deno.serve(async (req) => {
     }
   }
 
+  // Fix D — Overpass: verifica vincolo ferroviario
+  let vincoloFerroviaRelevato = null;
+  try {
+    vincoloFerroviaRelevato = await checkRailwayVicinity(finalLat, finalLon);
+    if (vincoloFerroviaRelevato) {
+      console.log(`Railway check: presente=${vincoloFerroviaRelevato.presente} dist=${vincoloFerroviaRelevato.distanza_m}m tipo=${vincoloFerroviaRelevato.tipo}`);
+      if (query_id && queryRecord) {
+        await base44.entities.CadastralQuery.update(query_id, {
+          report_data: {
+            ...(queryRecord.report_data || {}),
+            catasto_data,
+            vincolo_ferroviario: vincoloFerroviaRelevato,
+          },
+        });
+      }
+    }
+  } catch (e) {
+    console.warn('Railway check failed:', e.message);
+  }
+
   return Response.json({
     success: true,
     lat: finalLat,
@@ -525,5 +625,6 @@ Deno.serve(async (req) => {
     sezioni: sezioniTrovate.length,
     wfs_polygon: !!wfsResult?.geojson_polygon,
     catasto_data,
+    vincolo_ferroviario: vincoloFerroviaRelevato,
   });
 });
