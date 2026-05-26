@@ -410,6 +410,11 @@ export default function ReportPage() {
     <div className="p-6 lg:p-10 max-w-5xl mx-auto pb-20">
       {/* Header */}
       <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="mb-6">
+        {query.batch_id && (
+          <Link to={`/batch/${query.batch_id}`} className="inline-flex items-center gap-1 text-sm text-primary font-semibold hover:underline mb-2">
+            <ArrowLeft className="w-3 h-3" /> Torna al Report Palazzina
+          </Link>
+        )}
         <Link to="/history" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground mb-4">
           <ArrowLeft className="w-3 h-3" /> Torna allo storico
         </Link>
