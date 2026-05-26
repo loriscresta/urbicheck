@@ -187,6 +187,36 @@ export default function SearchPage() {
       status: failedCount === units.length ? 'failed' : failedCount > 0 ? 'partial' : 'completed',
     });
 
+    // ── Charge batch credits once + set paid=true on all queries ──────────
+    if (queryIds.length > 0) {
+      try {
+        const user = await base44.auth.me();
+        const creditsList = await base44.entities.UserCredits.filter({ user_email: user.email });
+        const credits = creditsList[0];
+        const totalCost = +(pricePerUnit * queryIds.length).toFixed(2);
+
+        if (credits && credits.balance >= totalCost) {
+          await base44.entities.UserCredits.update(credits.id, {
+            balance: +(credits.balance - totalCost).toFixed(2),
+            total_spent: +((credits.total_spent || 0) + totalCost).toFixed(2),
+            total_queries: (credits.total_queries || 0) + queryIds.length,
+          });
+          await base44.entities.CreditTransaction.create({
+            user_email: user.email,
+            type: 'query_charge',
+            amount: -totalCost,
+            description: `Batch ${queryIds.length} unità — ${sharedCadastral.comune} (€${pricePerUnit.toFixed(2)}/ud)`,
+          });
+          // Set paid=true on all batch queries in parallel
+          await Promise.all(queryIds.map(qid =>
+            base44.entities.CadastralQuery.update(qid, { paid: true })
+          ));
+        }
+      } catch (e) {
+        console.error('Batch charge error:', e);
+      }
+    }
+
     navigate(`/batch/${batchRecord.id}`);
   };
 

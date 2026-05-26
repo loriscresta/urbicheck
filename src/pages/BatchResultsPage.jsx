@@ -247,7 +247,7 @@ export default function BatchResultsPage() {
                                 <Link to={`/report/${q.id}`}>
                                   <Button size="sm" variant="outline" className="gap-1 text-xs h-7">
                                     <ExternalLink className="w-3 h-3" />
-                                    {q.paid ? 'Report completo' : 'Anteprima / Sblocca'}
+                                    {(q.paid || batch?.status !== 'pending') ? 'Apri report' : 'Anteprima / Sblocca'}
                                   </Button>
                                 </Link>
                               </div>
