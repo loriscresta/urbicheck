@@ -6,13 +6,58 @@ import { CREDIT_PACKAGES } from "@/lib/italianData";
 import CreditPackageCard from "@/components/credits/CreditPackageCard";
 import { format } from "date-fns";
 import { it } from "date-fns/locale";
-import { CreditCard, ArrowUpRight, ArrowDownRight, Loader2 } from "lucide-react";
+import { CreditCard, ArrowUpRight, ArrowDownRight, Loader2, Zap } from "lucide-react";
 import { motion } from "framer-motion";
 import { stripeCheckout } from "@/functions/stripeCheckout";
+
+const ADMIN_EMAIL = 'loris.cresta@gmail.com';
 
 export default function CreditsPage() {
   const { toast } = useToast();
   const [loadingPkg, setLoadingPkg] = useState(null);
+  const [adminUser, setAdminUser] = useState(null);
+  const [autoReloadAmount, setAutoReloadAmount] = useState('');
+  const [autoReloading, setAutoReloading] = useState(false);
+
+  useEffect(() => {
+    base44.auth.me().then(u => {
+      if (u?.email === ADMIN_EMAIL) setAdminUser(u);
+    }).catch(() => {});
+  }, []);
+
+  const queryClient = useQueryClient();
+
+  const handleAdminReload = async () => {
+    if (!adminUser || adminUser.email !== ADMIN_EMAIL) return;
+    const amount = parseFloat(autoReloadAmount);
+    if (!amount || amount <= 0) return;
+    setAutoReloading(true);
+    try {
+      const list = await base44.entities.UserCredits.filter({ user_email: ADMIN_EMAIL });
+      const record = list[0];
+      if (record) {
+        await base44.entities.UserCredits.update(record.id, {
+          balance: +(record.balance + amount).toFixed(2),
+        });
+      } else {
+        await base44.entities.UserCredits.create({ user_email: ADMIN_EMAIL, balance: amount, total_spent: 0, total_queries: 0 });
+      }
+      await base44.entities.CreditTransaction.create({
+        user_email: ADMIN_EMAIL,
+        type: 'purchase',
+        amount: amount,
+        description: `Ricarica manuale admin — €${amount.toFixed(2)}`,
+      });
+      queryClient.invalidateQueries({ queryKey: ['userCredits'] });
+      queryClient.invalidateQueries({ queryKey: ['transactions'] });
+      setAutoReloadAmount('');
+      toast({ title: `✓ Credito ricaricato di €${amount.toFixed(2)}` });
+    } catch (err) {
+      toast({ title: 'Errore ricarica', description: err.message, variant: 'destructive' });
+    } finally {
+      setAutoReloading(false);
+    }
+  };
 
   const { data: credits, isLoading: creditsLoading } = useQuery({
     queryKey: ["userCredits"],
@@ -147,6 +192,36 @@ export default function CreditsPage() {
           ))
         )}
       </div>
+
+      {/* Admin-only: Autoricarica credito */}
+      {adminUser?.email === ADMIN_EMAIL && (
+        <div className="mt-8 p-5 border-2 border-dashed rounded-lg" style={{ borderColor: '#B33A2A', background: '#fff8f6' }}>
+          <p className="text-[10px] font-semibold uppercase tracking-[2px] mb-3 flex items-center gap-1.5" style={{ color: '#B33A2A', fontFamily: "'IBM Plex Mono', monospace" }}>
+            <Zap className="w-3.5 h-3.5" /> Autoricarica Credito — Admin
+          </p>
+          <div className="flex gap-2 items-center">
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={autoReloadAmount}
+              onChange={e => setAutoReloadAmount(e.target.value)}
+              placeholder="es. 50.00"
+              className="flex-1 text-xs px-3 py-2 border border-border rounded"
+              style={{ fontFamily: "'IBM Plex Mono', monospace" }}
+            />
+            <button
+              onClick={handleAdminReload}
+              disabled={autoReloading || !autoReloadAmount}
+              className="flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white rounded disabled:opacity-50"
+              style={{ background: '#B33A2A', fontFamily: "'IBM Plex Mono', monospace" }}
+            >
+              {autoReloading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Zap className="w-3.5 h-3.5" />}
+              Ricarica
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="mt-10 pt-6 border-t text-center text-[10px] uppercase tracking-[2px]" style={{ borderColor: '#C4BAA8', color: '#7A7268', fontFamily: "'IBM Plex Mono', monospace" }}>
         urbicheck.it | Dati aggiornati da fonti GIS ufficiali regionali
