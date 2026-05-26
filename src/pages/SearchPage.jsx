@@ -123,6 +123,17 @@ export default function SearchPage() {
       query_ids: [],
     });
 
+    // Per-unit price allocation from total acquisition price
+    const totalAcquisitionPrice = parseFloat(formData.total_acquisition_price) || 0;
+    const unitSurfaces = units.map(u => parseFloat(u.superficie_mq) || (parseFloat(u.vani) * 27) || 0);
+    const totalSupBatch = unitSurfaces.reduce((s, v) => s + v, 0);
+    const getAllocatedPrice = (i) => {
+      if (!totalAcquisitionPrice) return null;
+      if (totalSupBatch > 0 && unitSurfaces[i] > 0)
+        return +(totalAcquisitionPrice * (unitSurfaces[i] / totalSupBatch)).toFixed(2);
+      return +(totalAcquisitionPrice / units.length).toFixed(2); // equal fallback
+    };
+
     const queryIds = [];
     const results = [];
     setBatchProgress({ current: 0, total: units.length, results: [] });
@@ -149,10 +160,14 @@ export default function SearchPage() {
             }
           : visuraExtra;
 
+        const prezzoUnitaAllocato = getAllocatedPrice(i);
         const query = await base44.entities.CadastralQuery.create({
           ...sharedCadastral, ...unit,
           status: "pending",
-          report_data: { ...reportData, fin_data },
+          report_data: {
+            ...reportData, fin_data,
+            ...(prezzoUnitaAllocato ? { prezzo_acquisto_unita: prezzoUnitaAllocato } : {}),
+          },
           cost: pricePerUnit,
           batch_id: batchRecord.id,
           ...unitCatastral,
@@ -185,6 +200,8 @@ export default function SearchPage() {
       completed_units: completedCount,
       failed_units: failedCount,
       status: failedCount === units.length ? 'failed' : failedCount > 0 ? 'partial' : 'completed',
+      ...(totalAcquisitionPrice > 0 ? { total_acquisition_price: totalAcquisitionPrice } : {}),
+      ...(totalSupBatch > 0 ? { total_superficie_mq: totalSupBatch } : {}),
     });
 
     // ── Charge batch credits once + set paid=true on all queries ──────────

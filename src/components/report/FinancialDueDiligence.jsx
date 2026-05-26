@@ -18,10 +18,15 @@ function fmtEur(n) {
   return new Intl.NumberFormat("it-IT", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(n);
 }
 
+function roiToScore(roi) {
+  if (roi > 25) return 10; if (roi > 15) return 8; if (roi > 5) return 6;
+  if (roi > 0) return 4; return 2;
+}
+
 function ScoreCircle({ score }) {
   const color = score >= 7 ? "text-emerald-600" : score >= 5 ? "text-amber-500" : "text-red-500";
   const ring  = score >= 7 ? "border-emerald-400" : score >= 5 ? "border-amber-400" : "border-red-400";
-  const label = score >= 7 ? "Interessante" : score >= 5 ? "Valutare con cura" : "Rischio elevato";
+  const label = score >= 9 ? "Eccellente" : score >= 7 ? "Molto interessante" : score >= 5 ? "Interessante" : score >= 3 ? "Marginale" : "Non conveniente";
   return (
     <div className="flex flex-col items-center gap-2">
       <div className={`w-24 h-24 rounded-full border-4 ${ring} flex items-center justify-center`}>
@@ -44,7 +49,9 @@ export default function FinancialDueDiligence({ query, finData, onSnapshotReady 
   const mqRaw = query.superficie_mq || null;
   const mq    = mqRaw ? parseFloat(mqRaw) : null;
 
-  const prezzoAcquisto     = parseFloat(fd.prezzo_acquisto) || 0;
+  // Use per-unit allocated price (batch) if available, else fin_data price
+  const prezzoAcquisto     = parseFloat(r.prezzo_acquisto_unita) || parseFloat(fd.prezzo_acquisto) || 0;
+  const isAllocatedPrice   = !!(r.prezzo_acquisto_unita && query.batch_id);
   const spesePerc          = parseFloat(fd.spese_accessorie) || 10;
   const statoKey           = (fd.stato_conservativo || "buono").replace(/\s.*/, "").toLowerCase();
   const costs              = RISTR_COSTS[statoKey] || RISTR_COSTS.buono;
@@ -195,7 +202,15 @@ Fornisci punteggio e analisi sintetica.`,
   return (
     <div className="space-y-6">
       {/* Avviso proxy prezzo */}
-      {usandoProxyPrezzo && (
+      {isAllocatedPrice && (
+      <div className="flex items-start gap-2 p-3 rounded-lg bg-blue-50 border border-blue-200 text-xs text-blue-800">
+        <span>ℹ️</span>
+        <span>
+          Prezzo allocato per questa unità: <strong>{fmtEur(prezzoAcquisto)}</strong> — ripartizione proporzionale del prezzo totale per superficie ({mq} mq).
+        </span>
+      </div>
+    )}
+    {usandoProxyPrezzo && (
         <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-800">
           <AlertTriangle className="w-3 h-3 shrink-0 mt-0.5" />
           <span>Prezzo d'acquisto non inserito — rendimento calcolato su valore OMI stimato ({fmtEur(prezzoEffettivo)}). Inserisci il prezzo richiesto per un'analisi reale.</span>
@@ -428,7 +443,7 @@ Fornisci punteggio e analisi sintetica.`,
           </div>
           <div className="p-5 flex flex-col md:flex-row gap-6 items-start">
             <div className="shrink-0 flex justify-center md:block">
-              <ScoreCircle score={Math.round(scoreData.score)} />
+              <ScoreCircle score={roiFlip != null ? roiToScore(roiFlip) : Math.round(scoreData.score)} />
             </div>
             <div className="flex-1 grid md:grid-cols-2 gap-4">
               {scoreData.punti_forza?.length > 0 && (

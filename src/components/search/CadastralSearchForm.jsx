@@ -34,23 +34,22 @@ const DESTINAZIONE_OBIETTIVO = [
 const FIN_FINALITA = ["investimento", "sviluppo_immobiliare", "asta_giudiziaria"];
 const MAX_UNITS = 20;
 const BETA_MODE = true;
-
 const FULL_PRICE_PER_UNIT = 9.90;
 const BETA_PRICE_PER_UNIT = 2.99;
 
 const BULK_TIERS_FULL = [
-  { min: 1,  max: 1,  pricePerUnit: 9.90, discount: 0 },
-  { min: 2,  max: 4,  pricePerUnit: 8.50, discount: 0.14 },
-  { min: 5,  max: 9,  pricePerUnit: 7.90, discount: 0.20 },
-  { min: 10, max: 19, pricePerUnit: 6.90, discount: 0.30 },
+  { min: 1,  max: 1,  pricePerUnit: 9.90,  discount: 0    },
+  { min: 2,  max: 4,  pricePerUnit: 8.50,  discount: 0.14 },
+  { min: 5,  max: 9,  pricePerUnit: 7.90,  discount: 0.20 },
+  { min: 10, max: 19, pricePerUnit: 6.90,  discount: 0.30 },
   { min: 20, max: Infinity, pricePerUnit: 5.90, discount: 0.40 },
 ];
 
 const BULK_TIERS_BETA = [
-  { min: 1,  max: 1,  pricePerUnit: 2.99, discount: 0 },
-  { min: 2,  max: 4,  pricePerUnit: 2.59, discount: 0.13 },
-  { min: 5,  max: 9,  pricePerUnit: 2.39, discount: 0.20 },
-  { min: 10, max: 19, pricePerUnit: 1.99, discount: 0.33 },
+  { min: 1,  max: 1,  pricePerUnit: 2.99,  discount: 0    },
+  { min: 2,  max: 4,  pricePerUnit: 2.59,  discount: 0.13 },
+  { min: 5,  max: 9,  pricePerUnit: 2.39,  discount: 0.20 },
+  { min: 10, max: 19, pricePerUnit: 1.99,  discount: 0.33 },
   { min: 20, max: Infinity, pricePerUnit: 1.69, discount: 0.43 },
 ];
 
@@ -89,6 +88,7 @@ export default function CadastralSearchForm({ onSubmit, isLoading, submitLabel =
   const [visuraDati, setVisuraDati] = useState(null);
   const [planimetriaFile, setPlanimetriaFile] = useState(null);
   const [superficieMq, setSuperficieMq] = useState("");
+  const [totalAcquisitionPrice, setTotalAcquisitionPrice] = useState("");
 
   // Financial fields
   const [prezzoAcquisto, setPrezzoAcquisto] = useState("");
@@ -147,7 +147,6 @@ export default function CadastralSearchForm({ onSubmit, isLoading, submitLabel =
     if (!Object.keys(dati).length) { setVisuraDati(null); return; }
     setVisuraDati(dati);
     if (dati._allSubalterns && dati._allSubalterns.length > 1) {
-      // Multi-subalterno: pre-fill all subs
       setParcels([{
         ...newParcel(dati.foglio || "", dati.particella || ""),
         sezione: dati.sezione_form || "",
@@ -201,7 +200,6 @@ export default function CadastralSearchForm({ onSubmit, isLoading, submitLabel =
     };
 
     if (!isBatch) {
-      // Single unit — backward-compatible
       const p = parcels[0];
       onSubmit({
         ...sharedData, ...extraData,
@@ -212,20 +210,32 @@ export default function CadastralSearchForm({ onSubmit, isLoading, submitLabel =
         indirizzo_immobile: p.indirizzo?.trim() || undefined,
       });
     } else {
-      // Batch mode
+      // Batch mode — enrich units with per-sub visura data when available
+      const allSubsFromVisura = visuraDati?._allSubalterns || [];
       const units = [];
       for (const p of parcels) {
         for (const s of p.subs) {
+          const subVis = allSubsFromVisura.find(a => String(a.subalterno) === String(s.value)) || {};
           units.push({
             foglio: p.foglio,
             particella: p.particella,
             subalterno: s.value,
             sezione_catastale: p.sezione?.trim().toUpperCase() || undefined,
             indirizzo_immobile: p.indirizzo?.trim() || undefined,
+            ...(subVis.superficie_mq ? { superficie_mq: subVis.superficie_mq } : {}),
+            ...(subVis.vani ? { vani: subVis.vani } : {}),
+            ...(subVis.rendita_catastale ? { rendita_catastale: subVis.rendita_catastale } : {}),
+            ...(subVis.categoria ? { categoria_catastale: subVis.categoria } : {}),
           });
         }
       }
-      onSubmit({ ...sharedData, ...extraData, _batch: true, units, bulkPricing: pricing });
+      onSubmit({
+        ...sharedData, ...extraData,
+        _batch: true,
+        units,
+        bulkPricing: pricing,
+        total_acquisition_price: parseFloat(totalAcquisitionPrice) || undefined,
+      });
     }
   };
 
@@ -468,7 +478,7 @@ export default function CadastralSearchForm({ onSubmit, isLoading, submitLabel =
         </div>
       </div>
 
-      {/* Pricing summary — only for batch */}
+      {/* Pricing summary + prezzo acquisizione — only for batch */}
       {isBatch && (
         <div className={`rounded-lg border-2 p-4 ${hasSufficientBalance ? 'border-emerald-300 bg-emerald-50' : 'border-amber-300 bg-amber-50'}`}>
           <div className="flex items-start gap-3">
@@ -508,6 +518,26 @@ export default function CadastralSearchForm({ onSubmit, isLoading, submitLabel =
                     </span>
                   </div>
                 )}
+              </div>
+
+              {/* Prezzo totale acquisizione — per analisi finanziaria */}
+              <div className={`mt-3 pt-3 border-t ${hasSufficientBalance ? 'border-emerald-300' : 'border-amber-300'}`}>
+                <label className={`block text-[10px] font-semibold uppercase tracking-wide mb-1 ${hasSufficientBalance ? 'text-emerald-800' : 'text-amber-800'}`}
+                  style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
+                  Prezzo totale acquisizione (€) <span className="opacity-60 normal-case">— per analisi finanziaria</span>
+                </label>
+                <input
+                  type="number"
+                  value={totalAcquisitionPrice}
+                  onChange={e => setTotalAcquisitionPrice(e.target.value)}
+                  placeholder="es. 360000"
+                  className={`w-full text-xs px-2 py-1.5 rounded border ${hasSufficientBalance ? 'border-emerald-300 bg-white' : 'border-amber-300 bg-white'}`}
+                  style={{ fontFamily: "'IBM Plex Mono', monospace" }}
+                />
+                <p className={`text-[9px] mt-1 ${hasSufficientBalance ? 'text-emerald-700' : 'text-amber-700'}`}
+                  style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
+                  Prezzo totale dell'intero edificio — verrà ripartito proporzionalmente per superficie tra le unità.
+                </p>
               </div>
             </div>
           </div>
