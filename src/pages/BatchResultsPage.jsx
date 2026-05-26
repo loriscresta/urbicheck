@@ -369,6 +369,20 @@ export default function BatchResultsPage() {
     enabled: !!id,
   });
 
+  // Se BatchQuery non ha coordinate, le prende dalla prima CadastralQuery con coordinate valide
+  useEffect(() => {
+    if (!batch || batch.centroid_lat) return;
+    if (queries.length === 0) return;
+    const firstWithCoords = queries.find(q => q.centroid_lat && q.centroid_lng);
+    if (!firstWithCoords) return;
+    base44.entities.BatchQuery.update(id, {
+      centroid_lat: firstWithCoords.centroid_lat,
+      centroid_lng: firstWithCoords.centroid_lng,
+    }).then(() => {
+      queryClient.invalidateQueries({ queryKey: ["batch", id] });
+    }).catch(() => {});
+  }, [batch, queries, id]);
+
   const handleSaveTotalPrice = async (price) => {
     setSavingPrice(true);
     await base44.entities.BatchQuery.update(id, { total_acquisition_price: price });
@@ -391,8 +405,12 @@ export default function BatchResultsPage() {
   const firstQuery = queries[0];
   const foglio = firstQuery?.foglio;
   const particella = firstQuery?.particella;
-  const centLat = firstQuery?.centroid_lat ? parseFloat(firstQuery.centroid_lat) : null;
-  const centLng = firstQuery?.centroid_lng ? parseFloat(firstQuery.centroid_lng) : null;
+  // Priorità: coordinate del BatchQuery → prima CadastralQuery con coordinate valide
+  const firstWithCoords = queries.find(q => q.centroid_lat && q.centroid_lng);
+  const centLat = batch?.centroid_lat ? parseFloat(batch.centroid_lat)
+    : firstWithCoords?.centroid_lat ? parseFloat(firstWithCoords.centroid_lat) : null;
+  const centLng = batch?.centroid_lng ? parseFloat(batch.centroid_lng)
+    : firstWithCoords?.centroid_lng ? parseFloat(firstWithCoords.centroid_lng) : null;
   const addressLabel = firstQuery?.indirizzo_immobile || `${batch.comune}`;
   const totSup = batch.total_superficie_mq || queries.reduce((s, q) => s + (q.superficie_mq || 0), 0);
   const totRendita = queries.reduce((s, q) => s + (q.rendita_catastale || 0), 0);
