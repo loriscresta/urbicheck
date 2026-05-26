@@ -27,6 +27,7 @@ export default function CreditsPage() {
 
   const queryClient = useQueryClient();
 
+  // ADMIN ONLY - autoricarica credito loris.cresta@gmail.com
   const handleAdminReload = async () => {
     if (!adminUser || adminUser.email !== ADMIN_EMAIL) return;
     const amount = parseFloat(autoReloadAmount);

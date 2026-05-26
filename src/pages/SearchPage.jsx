@@ -92,6 +92,14 @@ export default function SearchPage() {
       ...(visura_uploaded ? { categoria_catastale, superficie_mq, rendita_catastale, vani, indirizzo_catastale, visura_uploaded: true } : {}),
     });
 
+    // Override esplicito geocoding — sovrascrive SEMPRE centroid dopo create (qualsiasi source)
+    if (enrichment?.geocoding?.lat && enrichment?.geocoding?.lon) {
+      base44.entities.CadastralQuery.update(query.id, {
+        centroid_lat: enrichment.geocoding.lat,
+        centroid_lng: enrichment.geocoding.lon,
+      }).catch(() => {});
+    }
+
     catasto_resolver({
       nome_comune: formData.comune, regione: formData.regione,
       foglio: formData.foglio, particella: formData.particella,
@@ -192,6 +200,11 @@ export default function SearchPage() {
           ...batchGeoCoords,
         });
 
+        // Override esplicito geocoding per unità batch — sovrascrive SEMPRE (qualsiasi source)
+        if (batchGeoCoords.centroid_lat) {
+          base44.entities.CadastralQuery.update(query.id, batchGeoCoords).catch(() => {});
+        }
+
         queryIds.push(query.id);
         results.push({ queryId: query.id, unit, success: true });
 
@@ -214,10 +227,11 @@ export default function SearchPage() {
     const completedCount = results.filter(r => r.success).length;
     const failedCount = results.filter(r => !r.success).length;
 
-    // Geocoding Google sempre prioritario per BatchQuery: sovrascrive sempre
+    // Geocoding sempre prioritario per BatchQuery: sovrascrive sempre
     const batchUpdateGeo = batchEnrichment?.geocoding?.lat ? {
       centroid_lat: batchEnrichment.geocoding.lat,
       centroid_lng: batchEnrichment.geocoding.lon ?? batchEnrichment.geocoding.lng ?? null,
+      geocoding_source: batchEnrichment.geocoding.source || null,
     } : {};
 
     await base44.entities.BatchQuery.update(batchRecord.id, {

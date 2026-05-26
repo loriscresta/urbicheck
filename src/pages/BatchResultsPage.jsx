@@ -492,7 +492,12 @@ export default function BatchResultsPage() {
             <BatchMap lat={centLat} lng={centLng} address={addressLabel} totalUnits={batch.total_units} foglio={foglio} particella={particella} />
             {centLat && (
               <p className="text-[10px] text-muted-foreground mt-1.5" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
-                📍 WGS84: {centLat?.toFixed(5)}, {centLng?.toFixed(5)} — Coordinate catastali dal DB
+                {batch?.geocoding_source?.includes('google')
+                  ? '📍 Google Maps geocoding'
+                  : batch?.geocoding_source?.includes('nominatim')
+                  ? '📍 OpenStreetMap geocoding'
+                  : '📍 Coordinate catastali da DB'
+                }{' — WGS84: '}{centLat?.toFixed(5)}, {centLng?.toFixed(5)}
               </p>
             )}
           </div>
