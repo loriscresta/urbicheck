@@ -144,8 +144,17 @@ export default function CadastralSearchForm({ onSubmit, isLoading, submitLabel =
 
   // ── Visura pre-fill ─────────────────────────────────────────────────────────
   const handleVisuraData = (dati) => {
-    setVisuraDati(Object.keys(dati).length ? dati : null);
-    if (dati.foglio || dati.particella) {
+    if (!Object.keys(dati).length) { setVisuraDati(null); return; }
+    setVisuraDati(dati);
+    if (dati._allSubalterns && dati._allSubalterns.length > 1) {
+      // Multi-subalterno: pre-fill all subs
+      setParcels([{
+        ...newParcel(dati.foglio || "", dati.particella || ""),
+        sezione: dati.sezione_form || "",
+        indirizzo: dati.indirizzo_catastale || "",
+        subs: dati._allSubalterns.map(s => ({ id: nextId(), value: s.subalterno || "" })),
+      }]);
+    } else if (dati.foglio || dati.particella) {
       setParcels([{
         ...newParcel(dati.foglio || "", dati.particella || ""),
         sezione: dati.sezione_form || "",

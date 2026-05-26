@@ -1,9 +1,11 @@
 import React, { useState, useRef } from "react";
 import { base44 } from "@/api/base44Client";
 import { parseVisuraCatastale } from "@/functions/parseVisuraCatastale";
-import { Loader2, FileUp, CheckCircle2, X, AlertCircle } from "lucide-react";
+import { Loader2, FileUp, CheckCircle2, X, AlertCircle, Building2, Users } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 export default function VisuraUploader({ onDataExtracted }) {
+  const [multiSubData, setMultiSubData] = useState(null); // { subs, foglio, particella, ...dati }
   const [isDragging, setIsDragging] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [error, setError] = useState(null);
@@ -21,17 +23,49 @@ export default function VisuraUploader({ onDataExtracted }) {
     setIsAnalyzing(true);
     setError(null);
     setExtracted(null);
+    setMultiSubData(null);
 
     try {
-      // Upload file
       const { file_url } = await base44.integrations.Core.UploadFile({ file });
 
-      // Parse visura
-      const res = await parseVisuraCatastale({ file_url });
-      const dati = res?.data?.dati || res?.dati || {};
+      // Parallel: parse main data + extract ALL subalterns
+      const [res, multiRes] = await Promise.all([
+        parseVisuraCatastale({ file_url }),
+        base44.integrations.Core.InvokeLLM({
+          prompt: `Sei un esperto di visure catastali italiane. Analizza questo documento ed estrai TUTTI i subalterni presenti (potrebbero essere da 1 a 20+). Per ogni subalterno estrai: numero subalterno, categoria catastale (es. A/2, C/6), piano (es. "piano 1", "piano terra"), superficie in mq (numero), numero vani (numero), rendita catastale in euro (numero). Se non trovi un valore lascia null.`,
+          file_urls: [file_url],
+          response_json_schema: {
+            type: "object",
+            properties: {
+              subalterns: {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    subalterno: { type: "string" },
+                    categoria: { type: "string" },
+                    piano: { type: "string" },
+                    superficie_mq: { type: "number" },
+                    vani: { type: "number" },
+                    rendita_catastale: { type: "number" }
+                  }
+                }
+              }
+            }
+          }
+        })
+      ]);
 
-      setExtracted(dati);
-      onDataExtracted(dati);
+      const dati = res?.data?.dati || res?.dati || {};
+      const allSubs = multiRes?.subalterns || [];
+
+      if (allSubs.length > 1) {
+        // Multi-sub: ask user what to do
+        setMultiSubData({ subs: allSubs, ...dati });
+      } else {
+        setExtracted(dati);
+        onDataExtracted(dati);
+      }
     } catch (err) {
       setError("Errore durante l'analisi: " + (err.message || "riprova"));
     } finally {
@@ -49,9 +83,71 @@ export default function VisuraUploader({ onDataExtracted }) {
   const handleReset = () => {
     setExtracted(null);
     setError(null);
+    setMultiSubData(null);
     if (inputRef.current) inputRef.current.value = "";
     onDataExtracted({});
   };
+
+  const handleAnalizzaTutti = () => {
+    const dati = { ...multiSubData, _allSubalterns: multiSubData.subs };
+    setExtracted(dati);
+    setMultiSubData(null);
+    onDataExtracted(dati);
+  };
+
+  const handleAnalizzaSolo = () => {
+    const { subs, ...dati } = multiSubData;
+    setExtracted(dati);
+    setMultiSubData(null);
+    onDataExtracted(dati);
+  };
+
+  // Multi-subalterno confirm UI
+  if (multiSubData) {
+    return (
+      <div className="mb-6 border-2 border-primary rounded-lg p-4 bg-blue-50" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
+        <div className="flex items-start gap-3 mb-4">
+          <Building2 className="w-6 h-6 text-primary shrink-0 mt-0.5" />
+          <div>
+            <p className="font-bold text-sm" style={{ color: '#1A3A6B' }}>Trovati {multiSubData.subs.length} subalterni nella visura</p>
+            <p className="text-xs text-muted-foreground mt-0.5">F.{multiSubData.foglio} P.{multiSubData.particella} — Come vuoi procedere?</p>
+          </div>
+        </div>
+        <div className="overflow-x-auto mb-4">
+          <table className="w-full text-xs border-collapse">
+            <thead>
+              <tr className="bg-white">
+                {['Sub.', 'Categoria', 'Piano', 'Superficie', 'Vani', 'Rendita'].map(h => (
+                  <th key={h} className="border border-border px-2 py-1.5 text-left font-semibold text-[10px] uppercase tracking-wide">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {multiSubData.subs.map((s, i) => (
+                <tr key={i} className={i % 2 === 0 ? 'bg-white' : 'bg-blue-50/50'}>
+                  <td className="border border-border px-2 py-1 font-bold">{s.subalterno || '—'}</td>
+                  <td className="border border-border px-2 py-1">{s.categoria || '—'}</td>
+                  <td className="border border-border px-2 py-1">{s.piano || '—'}</td>
+                  <td className="border border-border px-2 py-1">{s.superficie_mq ? `${s.superficie_mq} mq` : '—'}</td>
+                  <td className="border border-border px-2 py-1">{s.vani ?? '—'}</td>
+                  <td className="border border-border px-2 py-1">{s.rendita_catastale ? `€${s.rendita_catastale.toLocaleString('it-IT')}` : '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <div className="flex flex-col sm:flex-row gap-2">
+          <Button type="button" onClick={handleAnalizzaTutti} className="flex-1 gap-2" style={{ background: '#1A3A6B' }}>
+            <Users className="w-4 h-4" />
+            Analizza tutti {multiSubData.subs.length} subalterni <span className="opacity-70 text-xs">(consigliato)</span>
+          </Button>
+          <Button type="button" variant="outline" onClick={handleAnalizzaSolo} className="flex-1">
+            Solo 1 subalterno
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="mb-6">

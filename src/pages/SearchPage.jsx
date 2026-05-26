@@ -103,6 +103,12 @@ export default function SearchPage() {
     const fin_data = { prezzo_acquisto, superficie, stato_conservativo, destinazione_obiettivo, spese_accessorie };
     const visuraExtra = visura_uploaded ? { categoria_catastale, superficie_mq, rendita_catastale, vani, indirizzo_catastale, visura_uploaded: true } : {};
 
+    // Build label — use explicit label if provided (e.g. from multi-sub visura)
+    const batchLabel = formData.label ||
+      (units.every(u => u.foglio === units[0].foglio && u.particella === units[0].particella)
+        ? `Palazzina ${sharedCadastral.comune} F.${units[0].foglio} P.${units[0].particella} — ${units.length} subalterni`
+        : `${sharedCadastral.comune} — ${units.length} unità`);
+
     const batchRecord = await base44.entities.BatchQuery.create({
       comune: sharedCadastral.comune,
       comune_id: sharedCadastral.comune_id,
@@ -113,7 +119,7 @@ export default function SearchPage() {
       failed_units: 0,
       status: "processing",
       finalita: sharedCadastral.finalita,
-      label: `${sharedCadastral.comune} — ${units.length} unità`,
+      label: batchLabel,
       query_ids: [],
     });
 
@@ -132,13 +138,24 @@ export default function SearchPage() {
       try {
         const reportData = await generateReport({ ...sharedCadastral, ...unit });
 
+        // Per-unit catastral data from visura (overrides shared)
+        const unitCatastral = unit.categoria_catastale || unit.superficie_mq || unit.rendita_catastale || unit.vani
+          ? {
+              categoria_catastale: unit.categoria_catastale,
+              superficie_mq: unit.superficie_mq,
+              rendita_catastale: unit.rendita_catastale,
+              vani: unit.vani,
+              visura_uploaded: true,
+            }
+          : visuraExtra;
+
         const query = await base44.entities.CadastralQuery.create({
           ...sharedCadastral, ...unit,
           status: "pending",
           report_data: { ...reportData, fin_data },
           cost: pricePerUnit,
           batch_id: batchRecord.id,
-          ...visuraExtra,
+          ...unitCatastral,
         });
 
         queryIds.push(query.id);
