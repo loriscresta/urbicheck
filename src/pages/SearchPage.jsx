@@ -76,6 +76,7 @@ export default function SearchPage() {
     const enrichment = await callUrbiCheckEnrichment(enrichedFormData);
     const reportData = await generateReport(enrichedFormData, enrichment);
 
+    // Geocoding Google sempre prioritario: sovrascrive sempre centroid_lat/lng
     const geocodingCoords = enrichment?.geocoding?.lat ? {
       centroid_lat: enrichment.geocoding.lat,
       centroid_lng: enrichment.geocoding.lon ?? enrichment.geocoding.lng ?? null,
@@ -172,6 +173,7 @@ export default function SearchPage() {
           : visuraExtra;
 
         const prezzoUnitaAllocato = getAllocatedPrice(i);
+        // Geocoding Google sempre prioritario: sovrascrive sempre centroid_lat/lng
         const batchGeoCoords = batchEnrichment?.geocoding?.lat ? {
           centroid_lat: batchEnrichment.geocoding.lat,
           centroid_lng: batchEnrichment.geocoding.lon ?? batchEnrichment.geocoding.lng ?? null,
@@ -212,6 +214,7 @@ export default function SearchPage() {
     const completedCount = results.filter(r => r.success).length;
     const failedCount = results.filter(r => !r.success).length;
 
+    // Geocoding Google sempre prioritario per BatchQuery: sovrascrive sempre
     const batchUpdateGeo = batchEnrichment?.geocoding?.lat ? {
       centroid_lat: batchEnrichment.geocoding.lat,
       centroid_lng: batchEnrichment.geocoding.lon ?? batchEnrichment.geocoding.lng ?? null,
