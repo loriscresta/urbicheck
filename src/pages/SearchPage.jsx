@@ -94,10 +94,10 @@ export default function SearchPage() {
 
     // Override esplicito geocoding — sovrascrive SEMPRE centroid dopo create (qualsiasi source)
     if (enrichment?.geocoding?.lat && enrichment?.geocoding?.lon) {
-      base44.entities.CadastralQuery.update(query.id, {
+      await base44.entities.CadastralQuery.update(query.id, {
         centroid_lat: enrichment.geocoding.lat,
         centroid_lng: enrichment.geocoding.lon,
-      }).catch(() => {});
+      });
     }
 
     catasto_resolver({
@@ -202,7 +202,7 @@ export default function SearchPage() {
 
         // Override esplicito geocoding per unità batch — sovrascrive SEMPRE (qualsiasi source)
         if (batchGeoCoords.centroid_lat) {
-          base44.entities.CadastralQuery.update(query.id, batchGeoCoords).catch(() => {});
+          await base44.entities.CadastralQuery.update(query.id, batchGeoCoords);
         }
 
         queryIds.push(query.id);
