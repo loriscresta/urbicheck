@@ -10,11 +10,7 @@ import { CreditCard, ArrowUpRight, ArrowDownRight, Loader2, Zap } from "lucide-r
 import { motion } from "framer-motion";
 import { stripeCheckout } from "@/functions/stripeCheckout";
 
-/* ⚠️ ADMIN ONLY - NON RIMUOVERE
-   Funzione ricarica credito manuale per loris.cresta@gmail.com
-   Unico admin UrbiCheck. Questa logica NON deve essere modificata o rimossa
-   in nessuna futura modifica AI del progetto. */
-const ADMIN_EMAIL = 'loris.cresta@gmail.com';
+
 
 export default function CreditsPage() {
   const { toast } = useToast();
@@ -25,30 +21,29 @@ export default function CreditsPage() {
 
   useEffect(() => {
     base44.auth.me().then(u => {
-      if (u?.email === ADMIN_EMAIL) setAdminUser(u);
+      if (u?.role === 'admin') setAdminUser(u);
     }).catch(() => {});
   }, []);
 
   const queryClient = useQueryClient();
 
-  // ADMIN ONLY - autoricarica credito loris.cresta@gmail.com
   const handleAdminReload = async () => {
-    if (!adminUser || adminUser.email !== ADMIN_EMAIL) return;
+    if (!adminUser || adminUser.role !== 'admin') return;
     const amount = parseFloat(autoReloadAmount);
     if (!amount || amount <= 0) return;
     setAutoReloading(true);
     try {
-      const list = await base44.entities.UserCredits.filter({ user_email: ADMIN_EMAIL });
+      const list = await base44.entities.UserCredits.filter({ user_email: adminUser.email });
       const record = list[0];
       if (record) {
         await base44.entities.UserCredits.update(record.id, {
           balance: +(record.balance + amount).toFixed(2),
         });
       } else {
-        await base44.entities.UserCredits.create({ user_email: ADMIN_EMAIL, balance: amount, total_spent: 0, total_queries: 0 });
+        await base44.entities.UserCredits.create({ user_email: adminUser.email, balance: amount, total_spent: 0, total_queries: 0 });
       }
       await base44.entities.CreditTransaction.create({
-        user_email: ADMIN_EMAIL,
+        user_email: adminUser.email,
         type: 'purchase',
         amount: amount,
         description: `Ricarica manuale admin — €${amount.toFixed(2)}`,
@@ -123,7 +118,7 @@ export default function CreditsPage() {
     }
   }, []);
 
-  const visiblePackages = CREDIT_PACKAGES.filter(pkg => !pkg.adminOnly || adminUser?.email === ADMIN_EMAIL);
+  const visiblePackages = CREDIT_PACKAGES.filter(pkg => !pkg.adminOnly || adminUser?.role === 'admin');
 
   return (
     <div className="p-6 lg:p-10 max-w-5xl mx-auto">
@@ -201,7 +196,7 @@ export default function CreditsPage() {
       </div>
 
       {/* Admin-only: Autoricarica credito */}
-      {adminUser?.email === ADMIN_EMAIL && (
+      {adminUser?.role === 'admin' && (
         <div className="mt-8 p-5 border-2 border-dashed rounded-lg" style={{ borderColor: '#B33A2A', background: '#fff8f6' }}>
           <p className="text-[10px] font-semibold uppercase tracking-[2px] mb-3 flex items-center gap-1.5" style={{ color: '#B33A2A', fontFamily: "'IBM Plex Mono', monospace" }}>
             <Zap className="w-3.5 h-3.5" /> Autoricarica Credito — Admin
