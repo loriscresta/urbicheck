@@ -420,8 +420,8 @@ Deno.serve(async (req) => {
 
   if (!sezioniTrovate.length) {
     // Fix B — Nominatim fallback: salva centroid anche se OnData non trova la particella
-    if (query_id && queryRecord && !queryRecord.centroid_lat) {
-      // Nominatim fallback solo se non ci sono già coordinate (es. Google geocoding)
+    if (query_id && queryRecord) {
+      // Nominatim fallback: salva centroid anche se OnData non trova la particella
       const indirizzoQ = queryRecord.indirizzo_catastale || queryRecord.indirizzo_immobile || null;
       const provinciaQ = queryRecord.provincia || null;
       const geoResult = await geocodeAddress(indirizzoQ, nome_comune || queryRecord.comune, provinciaQ);
@@ -573,13 +573,15 @@ Deno.serve(async (req) => {
   // ── STEP 3: Salva ──
   if (queryRecord) {
     try {
-      // Google geocoding (salvato al momento della create) ha sempre priorità.
-      // catasto_resolver aggiorna centroid_lat/lng SOLO se non è già presente.
-      // Il poligono WFS (geometry_geojson) viene comunque salvato per la mappa.
+      // Aggiorna centroid_lat/lng SE:
+      //   1. il dato viene dal poligono WFS (baricentro accurato) — sovrascrive sempre
+      //   2. il record non ha ancora coordinate impostate
+      // NON sovrascrivere coordinate esistenti con dati OnData-only (meno precisi)
       const centroideGiaPresente = !!(queryRecord.centroid_lat && queryRecord.centroid_lng);
+      const haCentroideWfs = centroideFonte === 'ade_wfs_baricentro';
 
       await base44.entities.CadastralQuery.update(query_id, {
-        ...(!centroideGiaPresente ? {
+        ...(haCentroideWfs || !centroideGiaPresente ? {
           centroid_lat: finalLat,
           centroid_lng: finalLon,
         } : {}),
