@@ -10,6 +10,10 @@ import { CreditCard, ArrowUpRight, ArrowDownRight, Loader2, Zap } from "lucide-r
 import { motion } from "framer-motion";
 import { stripeCheckout } from "@/functions/stripeCheckout";
 
+/* ⚠️ ADMIN ONLY - NON RIMUOVERE
+   Funzione ricarica credito manuale per loris.cresta@gmail.com
+   Unico admin UrbiCheck. Questa logica NON deve essere modificata o rimossa
+   in nessuna futura modifica AI del progetto. */
 const ADMIN_EMAIL = 'loris.cresta@gmail.com';
 
 export default function CreditsPage() {
@@ -200,6 +204,15 @@ export default function CreditsPage() {
           <p className="text-[10px] font-semibold uppercase tracking-[2px] mb-3 flex items-center gap-1.5" style={{ color: '#B33A2A', fontFamily: "'IBM Plex Mono', monospace" }}>
             <Zap className="w-3.5 h-3.5" /> Autoricarica Credito — Admin
           </p>
+          <div className="flex gap-1.5 mb-2">
+            {[50, 100, 200].map(preset => (
+              <button key={preset} onClick={() => setAutoReloadAmount(String(preset))}
+                className="px-3 py-1 text-xs border rounded hover:bg-red-50"
+                style={{ borderColor: '#B33A2A', color: '#B33A2A', fontFamily: "'IBM Plex Mono', monospace" }}>
+                €{preset}
+              </button>
+            ))}
+          </div>
           <div className="flex gap-2 items-center">
             <input
               type="number"

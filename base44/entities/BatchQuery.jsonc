@@ -1,0 +1,105 @@
+{
+  "name": "BatchQuery",
+  "type": "object",
+  "properties": {
+    "label": {
+      "type": "string",
+      "description": "Etichetta batch, es. 'Palazzina Via X \u2014 F.47 P.549'"
+    },
+    "comune": {
+      "type": "string"
+    },
+    "comune_id": {
+      "type": "string"
+    },
+    "regione": {
+      "type": "string"
+    },
+    "provincia": {
+      "type": "string"
+    },
+    "total_units": {
+      "type": "number",
+      "description": "Numero totale di unit\u00e0 immobiliari nel batch"
+    },
+    "completed_units": {
+      "type": "number",
+      "default": 0
+    },
+    "failed_units": {
+      "type": "number",
+      "default": 0
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "processing",
+        "completed",
+        "partial",
+        "failed"
+      ],
+      "default": "processing"
+    },
+    "query_ids": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Lista degli ID CadastralQuery nel batch"
+    },
+    "finalita": {
+      "type": "string"
+    },
+    "total_acquisition_price": {
+      "type": "number",
+      "description": "Prezzo totale di acquisto dell'intera operazione (es. intero edificio) \u2014 inserito dall'utente al momento della creazione del batch. Viene ripartito per superficie tra le unit\u00e0."
+    },
+    "total_superficie_mq": {
+      "type": "number",
+      "description": "Superficie totale sommata di tutte le unit\u00e0 del batch (mq). Calcolata automaticamente dalla somma delle superfici_mq di tutti i CadastralQuery collegati. Usata per ripartire total_acquisition_price proporzionalmente."
+    },
+    "paid": {
+      "type": "boolean",
+      "default": false,
+      "description": "True se il batch \u00e8 stato interamente pagato con un'unica transazione batch"
+    }
+  },
+  "required": [
+    "comune",
+    "total_units"
+  ],
+  "rls": {
+    "create": {
+      "created_by": "{{user.email}}"
+    },
+    "read": {
+      "$or": [
+        {
+          "created_by": "{{user.email}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "update": {
+      "$or": [
+        {
+          "created_by": "{{user.email}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}

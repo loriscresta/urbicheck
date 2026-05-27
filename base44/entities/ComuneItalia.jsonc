@@ -81,6 +81,17 @@
       "default": false,
       "description": "True se la PEC \u00e8 stata verificata come attiva"
     },
+    "zona_sismica": {
+      "type": "string",
+      "enum": [
+        "1",
+        "2",
+        "3S",
+        "3",
+        "4"
+      ],
+      "description": "Zona sismica per DGR regionale (Piemonte: DGR 6-887/2019 \u2014 zone 3S, 3, 4)"
+    },
     "note": {
       "type": "string",
       "description": "Note operative (es. orari UTC, riferimenti, procedure speciali)"

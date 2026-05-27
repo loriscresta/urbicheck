@@ -2,6 +2,10 @@
   "name": "CadastralQuery",
   "type": "object",
   "properties": {
+    "batch_id": {
+      "description": "ID del BatchQuery (se fa parte di un'analisi multi-unit\u00e0)",
+      "type": "string"
+    },
     "atti_request_id": {
       "description": "ID dell'AttiRequest collegata",
       "type": "string"
