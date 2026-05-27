@@ -44,7 +44,7 @@ export default function PeriziaPage() {
             prezzo_base: data.prezzo_base ? String(data.prezzo_base) : "",
             comune: data.comune || "",
             provincia: data.provincia || "",
-            regione: data.regione || "",
+            regione: "",
             indirizzo: data.indirizzo || "",
             foglio: data.foglio || "",
             particella: data.particella || "",
