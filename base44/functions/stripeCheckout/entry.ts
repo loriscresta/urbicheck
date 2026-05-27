@@ -4,9 +4,11 @@ import Stripe from 'npm:stripe@14.21.0';
 const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY"));
 
 const PACKAGES = {
-  'price_1TZrnJLyFVq8L2LAyYXq0y8u': { credits: 25,  label: 'Starter — €25 crediti' },
-  'price_1TZrnJLyFVq8L2LAKICk86H0': { credits: 55,  label: 'Pro — €55 crediti' },
-  'price_1TZrnJLyFVq8L2LAnQJOOnOR': { credits: 99,  label: 'Business — €99 crediti' },
+  'price_1TbgLXLyFVq8L2LAeoECufB1': { credits: 2.90,  label: 'Pacchetto BETA — 1 analisi' },
+  'price_1TYMpKLyFVq8L2LAu5vrVYJb': { credits: 9.90,  label: 'Pacchetto SINGOLA — 1 analisi' },
+  'price_1TbgJJLyFVq8L2LAeYJAXKu6': { credits: 29.70, label: 'Pacchetto STARTER — 3 analisi' },
+  'price_1TbgKBLyFVq8L2LAxMA6TlTj': { credits: 49.50, label: 'Pacchetto PRO — 5 analisi' },
+  'price_1TZrnJLyFVq8L2LAnQJOOnOR': { credits: 99.00, label: 'Pacchetto BUSINESS — 10 analisi' },
 };
 
 Deno.serve(async (req) => {
