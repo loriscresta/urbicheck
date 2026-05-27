@@ -4,7 +4,8 @@ import Stripe from 'npm:stripe@14.21.0';
 const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY"));
 
 const PACKAGES = {
-  'price_1TbgLXLyFVq8L2LAeoECufB1': { credits: 2.90,  label: 'Pacchetto BETA — 1 analisi' },
+  'price_1TbgLXLyFVq8L2LAeoECufB1': { credits: 2.99,  label: 'Pacchetto BETA — 1 analisi' },
+  'price_1TbgUhLyFVq8L2LAASPaovOw': { credits: 1.00,  label: 'Test Webhook (Admin) — 1 analisi' },
   'price_1TYMpKLyFVq8L2LAu5vrVYJb': { credits: 9.90,  label: 'Pacchetto SINGOLA — 1 analisi' },
   'price_1TbgJJLyFVq8L2LAeYJAXKu6': { credits: 29.70, label: 'Pacchetto STARTER — 3 analisi' },
   'price_1TbgKBLyFVq8L2LAxMA6TlTj': { credits: 49.50, label: 'Pacchetto PRO — 5 analisi' },

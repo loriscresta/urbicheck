@@ -123,6 +123,8 @@ export default function CreditsPage() {
     }
   }, []);
 
+  const visiblePackages = CREDIT_PACKAGES.filter(pkg => !pkg.adminOnly || adminUser?.email === ADMIN_EMAIL);
+
   return (
     <div className="p-6 lg:p-10 max-w-5xl mx-auto">
       <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}>
@@ -156,7 +158,7 @@ export default function CreditsPage() {
       {/* Packages */}
       <p className="text-[10px] font-semibold uppercase tracking-[2px] mb-4" style={{ color: '#B33A2A', fontFamily: "'IBM Plex Mono', monospace" }}>Pacchetti Disponibili</p>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-10">
-        {CREDIT_PACKAGES.map((pkg, i) => (
+        {visiblePackages.map((pkg, i) => (
           <CreditPackageCard key={pkg.id} pkg={pkg} onPurchase={handlePurchase} delay={i * 0.05} loading={loadingPkg === pkg.id} />
         ))}
       </div>
