@@ -17,6 +17,7 @@ import WaitlistPage from '@/pages/WaitlistPage';
 import DevPanel from '@/pages/DevPanel';
 import AdminPage from '@/pages/AdminPage';
 import BatchResultsPage from '@/pages/BatchResultsPage.jsx';
+import PeriziaPage from '@/pages/PeriziaPage.jsx';
 import PrivacyPolicy from '@/pages/PrivacyPolicy';
 import TerminiCondizioni from '@/pages/TerminiCondizioni';
 import LegalPrivacy from '@/pages/LegalPrivacy';
@@ -95,6 +96,7 @@ const AuthenticatedApp = () => {
           <Route path="/credits" element={<ErrorBoundary><CreditsPage /></ErrorBoundary>} />
           <Route path="/dev" element={<ErrorBoundary><DevPanel /></ErrorBoundary>} />
           <Route path="/batch/:id" element={<ErrorBoundary><BatchResultsPage /></ErrorBoundary>} />
+          <Route path="/perizia" element={<ErrorBoundary><PeriziaPage /></ErrorBoundary>} />
           <Route path="/admin" element={<ErrorBoundary><AdminPage /></ErrorBoundary>} />
         </Route>
         <Route path="*" element={<PageNotFound />} />

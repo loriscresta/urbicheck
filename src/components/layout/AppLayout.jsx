@@ -2,11 +2,12 @@ import React, { useState } from "react";
 import { Outlet, Link, useLocation } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import { useQuery } from "@tanstack/react-query";
-import { Search, History, CreditCard, LayoutDashboard, Menu, X, LogOut, ShieldCheck } from "lucide-react";
+import { Search, History, CreditCard, LayoutDashboard, Menu, X, LogOut, ShieldCheck, FileText } from "lucide-react";
 
 const navItems = [
   { path: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
   { path: "/search", icon: Search, label: "Nuova Ricerca" },
+  { path: "/perizia", icon: FileText, label: "Analisi Perizia" },
   { path: "/history", icon: History, label: "Le mie analisi" },
   { path: "/credits", icon: CreditCard, label: "Crediti" },
 ];
