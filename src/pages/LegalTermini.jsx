@@ -31,7 +31,7 @@ export default function LegalTermini() {
                 ["Titolare", "Dell'Aria Claudia Giuseppina (impresa individuale) — Via Costa 44, 15026 Carentino (AL) — P.IVA 02655840060"],
                 ["Utente", "Persona fisica o giuridica registrata che accede al Servizio"],
                 ["Report", "L'analisi urbanistica e catastale generata per una singola particella"],
-                ["Crediti", "Unità di pagamento prepagato per l'acquisto di Report (1 Report = €9,90)"],
+                ["Crediti", "Unità di pagamento prepagato per l'acquisto di analisi. Pacchetti da €2,99 a €99,00."],
               ].map(([termine, def]) => (
                 <li key={termine} className="flex gap-2"><span className="font-semibold shrink-0">{termine}:</span><span>{def}</span></li>
               ))}
@@ -67,11 +67,11 @@ export default function LegalTermini() {
                 </thead>
                 <tbody>
                   {[
-                    ["Costo per Report", "€9,90", "IVA inclusa"],
-                    ["Credito benvenuto (Beta)", "€49,50", "= 5 Report gratuiti alla registrazione"],
-                    ["Pacchetto Starter", "€25,00", "Ricarica manuale crediti"],
-                    ["Pacchetto Pro", "€55,00", "Ricarica manuale crediti"],
-                    ["Pacchetto Business", "€99,00", "Ricarica manuale crediti"],
+                    ["Beta", "€2,99", "1 analisi — offerta fase beta"],
+                    ["Singola", "€9,90", "1 analisi"],
+                    ["Starter", "€29,70", "3 analisi"],
+                    ["Pro", "€49,50", "5 analisi"],
+                    ["Business", "€99,00", "10 analisi"],
                   ].map(([voce, importo, note], i) => (
                     <tr key={i} className={i % 2 === 0 ? "bg-white" : "bg-gray-50"}>
                       <td className="border border-gray-200 px-3 py-2 font-semibold">{voce}</td>
@@ -84,6 +84,7 @@ export default function LegalTermini() {
             </div>
             <ul className="space-y-1 list-disc list-inside text-xs text-gray-600">
               <li>Pagamenti elaborati da Stripe Inc. — nessun dato carta conservato da UrbiCheck</li>
+              <li>I crediti acquistati non hanno scadenza</li>
               <li>Crediti non rimborsabili salvo cancellazione del servizio da parte del Titolare</li>
             </ul>
           </section>

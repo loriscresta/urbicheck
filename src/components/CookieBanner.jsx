@@ -24,7 +24,7 @@ export default function CookieBanner() {
       <div className="max-w-5xl mx-auto px-4 py-3 flex flex-col sm:flex-row items-center justify-between gap-3">
         <p className="text-xs text-white/80 leading-relaxed text-center sm:text-left">
           UrbiCheck utilizza cookie tecnici necessari al funzionamento del servizio. Nessun cookie di profilazione.{" "}
-          <Link to="/cookie" className="underline text-white/90 hover:text-white">
+          <Link to="/cookie-policy" className="underline text-white/90 hover:text-white">
             Cookie Policy
           </Link>
         </p>

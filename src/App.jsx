@@ -23,6 +23,7 @@ import TerminiCondizioni from '@/pages/TerminiCondizioni';
 import LegalPrivacy from '@/pages/LegalPrivacy';
 import LegalTermini from '@/pages/LegalTermini';
 import LegalCookie from '@/pages/LegalCookie';
+import CookiePolicyPage from '@/pages/CookiePolicyPage';
 import CookieBanner from '@/components/CookieBanner';
 
 const LegalRoutes = (
@@ -32,6 +33,7 @@ const LegalRoutes = (
           <Route path="/privacy" element={<LegalPrivacy />} />
           <Route path="/termini" element={<LegalTermini />} />
           <Route path="/cookie" element={<LegalCookie />} />
+          <Route path="/cookie-policy" element={<CookiePolicyPage />} />
   </>
 );
 
