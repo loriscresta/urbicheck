@@ -15,7 +15,7 @@ const RISTR_COSTS = {
 
 function fmtEur(n) {
   if (n == null || isNaN(n)) return "—";
-  return new Intl.NumberFormat("it-IT", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(n);
+  return new Intl.NumberFormat("it-IT", { style: "currency", currency: "EUR", minimumFractionDigits: 0, maximumFractionDigits: 0, useGrouping: true }).format(n);
 }
 
 function roiToScore(roi) {
@@ -96,6 +96,7 @@ export default function FinancialDueDiligence({ query, finData, onSnapshotReady 
   const margineLordo      = totMid ? valoreFlip - totMid : null;
   const tassePlusvalenza  = margineLordo > 0 ? margineLordo * 0.26 : 0;
   const margineNetto      = margineLordo != null ? margineLordo - tassePlusvalenza : null;
+  const creditoImposta    = ristrMid ? ristrMid * 0.50 : null; // Bonus Ristrutturazione 50%
   const roiFlip           = totMid > 0 && margineLordo != null ? (margineLordo / totMid) * 100 : null;
   const breakEvenMq       = totMid > 0 && mq > 0 ? totMid / mq : null;
 
@@ -340,9 +341,15 @@ Fornisci punteggio e analisi sintetica.`,
                 <span className={`font-bold ${roiFlip >= 15 ? "text-emerald-700" : roiFlip >= 5 ? "text-amber-700" : "text-red-700"}`}>{roiFlip?.toFixed(1)}%</span>
               </div>
               <div className="bg-white/50 rounded-lg px-4 py-2">
-                <span className="text-muted-foreground">Plusvalenza fiscale (26%): </span>
+                <span className="text-muted-foreground">Tassa plusvalenza (26%): </span>
                 <span className="font-bold">{fmtEur(tassePlusvalenza)}</span>
               </div>
+              {creditoImposta && (
+                <div className="bg-white/50 rounded-lg px-4 py-2">
+                  <span className="text-muted-foreground">Credito d'imposta (Bonus Ristr. 50%): </span>
+                  <span className="font-bold text-emerald-700">{fmtEur(creditoImposta)}</span>
+                </div>
+              )}
               <div className="bg-white/50 rounded-lg px-4 py-2">
                 <span className="text-muted-foreground">MARGINE NETTO: </span>
                 <span className={`font-bold ${margineNetto >= 0 ? "text-emerald-700" : "text-red-700"}`}>{fmtEur(margineNetto)}</span>

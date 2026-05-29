@@ -71,10 +71,20 @@
   /* Nascondi elementi non stampabili */
   nav, header, aside,
   [data-sidebar],
+  [data-radix-popper-content-wrapper],
   .no-print,
   a[href="/history"],
-  .cookie-banner {
+  .cookie-banner,
+  button,
+  [role="navigation"] {
     display: none !important;
+  }
+
+  /* Forza position static su tutto — evita sovrapposizioni fixed/sticky */
+  *, *::before, *::after {
+    position: static !important;
+    float: none !important;
+    box-shadow: none !important;
   }
 
   /* Layout di stampa */
@@ -82,16 +92,25 @@
     background: white !important;
     color: black !important;
     font-size: 11pt;
-  }
-
-  .p-6, .lg\:p-10 {
+    margin: 0 !important;
     padding: 0 !important;
+    width: 100% !important;
   }
 
-  /* Forza la visibilità del contenuto del report */
-  .space-y-6 > * {
+  /* Rimuovi padding del wrapper principale */
+  .p-6, .lg\:p-10 {
+    padding: 0.5cm 0 !important;
+  }
+
+  /* Evita interruzioni di pagina dentro i blocchi principali */
+  .space-y-6 > *,
+  .rounded-xl,
+  .rounded-lg,
+  table,
+  .bg-white {
     break-inside: avoid;
-    margin-bottom: 1rem;
+    page-break-inside: avoid;
+    margin-bottom: 0.5rem;
   }
 
   /* Rimuovi animazioni */

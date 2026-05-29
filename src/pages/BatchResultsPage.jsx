@@ -16,7 +16,7 @@ import { getOMIDataByNome } from "@/lib/omiData";
 // ── Helpers ─────────────────────────────────────────────────────────────────
 function fmtEur(n) {
   if (!n && n !== 0) return "—";
-  return new Intl.NumberFormat("it-IT", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(n);
+  return new Intl.NumberFormat("it-IT", { style: "currency", currency: "EUR", minimumFractionDigits: 0, maximumFractionDigits: 0, useGrouping: true }).format(n);
 }
 
 function exportCSV(queries, batch) {
@@ -582,9 +582,19 @@ export default function BatchResultsPage() {
                 <p className="font-semibold text-xs" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>PAI / Rischio Idrogeologico</p>
                 <p className="text-xs text-muted-foreground mt-0.5">
                   Verificare su{' '}
-                  <a href="https://geoportale.regione.lombardia.it" target="_blank" rel="noopener noreferrer" className="underline text-primary">
-                    AIPO — Geoportale Regione Lombardia →
-                  </a>
+                  {batch.regione?.toLowerCase().includes('piemonte') ? (
+                    <a href="https://www.arpa.piemonte.it/approfondimenti/temi-ambientali/geologia-e-dissesto/IFFI-frane-e-valanghe/pai" target="_blank" rel="noopener noreferrer" className="underline text-primary">
+                      ARPA Piemonte — PAI →
+                    </a>
+                  ) : batch.regione?.toLowerCase().includes('liguria') ? (
+                    <a href="https://www.regione.liguria.it/homepage-enti/13-ambiente/55-difesa-del-suolo.html" target="_blank" rel="noopener noreferrer" className="underline text-primary">
+                      Regione Liguria — Difesa del Suolo →
+                    </a>
+                  ) : (
+                    <a href="https://www.agenziapo.it/content/pai" target="_blank" rel="noopener noreferrer" className="underline text-primary">
+                      AIPO — PAI Bacino del Po →
+                    </a>
+                  )}
                 </p>
               </div>
             </div>
