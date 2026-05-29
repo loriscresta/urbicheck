@@ -179,10 +179,10 @@ export default function VisuraUploader({ onDataExtracted }) {
             <div className="flex flex-col items-center gap-2 py-1">
               <FileUp className="w-6 h-6 text-muted-foreground" />
               <p className="text-sm font-semibold text-foreground">
-                📄 Carica Visura Catastale o Perizia del Tribunale — compila automaticamente i dati
+                📄 Carica Avviso di Vendita o Visura Catastale — compila automaticamente i dati
               </p>
               <p className="text-xs text-muted-foreground">
-                Visura catastale o perizia giudiziaria · PDF o immagine · trascina o clicca per selezionare
+                Avviso di vendita del Tribunale · Visura catastale · PDF o immagine · trascina o clicca per selezionare
               </p>
             </div>
           )}

@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { base44 } from "@/api/base44Client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -89,6 +90,7 @@ export default function CadastralSearchForm({ onSubmit, isLoading, submitLabel =
   const [planimetriaFile, setPlanimetriaFile] = useState(null);
   const [superficieMq, setSuperficieMq] = useState("");
   const [totalAcquisitionPrice, setTotalAcquisitionPrice] = useState("");
+  const [prezzoBaseAsta, setPrezzoBaseAsta] = useState("");
 
   // Financial fields
   const [prezzoAcquisto, setPrezzoAcquisto] = useState("");
@@ -143,8 +145,17 @@ export default function CadastralSearchForm({ onSubmit, isLoading, submitLabel =
   };
 
   // ── Visura pre-fill ─────────────────────────────────────────────────────────
-  const handleVisuraData = (dati) => {
-    if (!Object.keys(dati).length) { setVisuraDati(null); return; }
+  const handleVisuraData = async (dati) => {
+    if (!Object.keys(dati).length) { setVisuraDati(null); setPrezzoBaseAsta(""); return; }
+    // Pre-fill prezzo base asta
+    if (dati.prezzo_base_asta) setPrezzoBaseAsta(String(dati.prezzo_base_asta));
+    // Auto-select comune by name
+    if (dati.comune) {
+      try {
+        const results = await base44.entities.ComuneItalia.filter({ nome: dati.comune }, "-created_date", 1);
+        if (results[0]) setSelectedComune(results[0]);
+      } catch {}
+    }
     setVisuraDati(dati);
     if (dati._allSubalterns && dati._allSubalterns.length > 1) {
       setParcels([{
@@ -243,6 +254,12 @@ export default function CadastralSearchForm({ onSubmit, isLoading, submitLabel =
     <form onSubmit={handleSubmit} className="space-y-6">
       {/* Visura uploader */}
       <VisuraUploader onDataExtracted={handleVisuraData} />
+      {prezzoBaseAsta && (
+        <div className="flex items-center gap-2 px-4 py-2.5 border border-emerald-300 bg-emerald-50 text-xs" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
+          <span className="text-emerald-700 font-semibold uppercase tracking-wide">💰 Prezzo base d'asta:</span>
+          <span className="font-bold text-emerald-900">€ {parseFloat(prezzoBaseAsta).toLocaleString('it-IT', { minimumFractionDigits: 2 })}</span>
+        </div>
+      )}
 
       <div className="flex items-center gap-3">
         <div className="flex-1 h-px bg-border" />
