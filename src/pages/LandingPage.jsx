@@ -58,8 +58,8 @@ const steps = [
 
 const packages = [
   { name: "Starter",  price: "€9,90",  credits: "9,90 crediti",  desc: "1 report completo",       highlight: false, features: ["Zona urbanistica", "Vincoli art.142", "Rischio PAI", "Sismica", "Analisi completa"] },
-  { name: "Pro",      price: "€24,90", credits: "27,40 crediti", desc: "3 report + 10% bonus",     highlight: true,  badge: "Più popolare", features: ["Tutto Starter ×3", "+10% crediti bonus", "Valutazione finanziaria", "Accesso agli atti", "Priority support"] },
-  { name: "Business", price: "€59,90", credits: "71,90 crediti", desc: "8 report + 20% bonus",     highlight: false, features: ["Tutto Pro ×8", "+20% crediti bonus", "Export Excel", "API access (presto)", "Volume scontato"] },
+  { name: "Pro",      price: "€24,90", credits: "32,67 crediti", desc: "3 report + 10% bonus",     highlight: true,  badge: "Più popolare", features: ["Tutto Starter ×3", "+10% crediti bonus", "Valutazione finanziaria", "Accesso agli atti", "Priority support"] },
+  { name: "Business", price: "€59,90", credits: "95,04 crediti", desc: "8 report + 20% bonus",     highlight: false, features: ["Tutto Pro ×8", "+20% crediti bonus", "Export Excel", "API access (presto)", "Volume scontato"] },
 ];
 
 const stats = [
