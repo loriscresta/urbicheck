@@ -314,6 +314,11 @@ Deno.serve(async (req) => {
   const targetEmail = user_email || user.email;
   const targetName = user_name || user.full_name || 'Utente';
 
+  // Authorization: non-admin users can only send emails to their own address
+  if (user_email && user_email !== user.email && user.role !== 'admin') {
+    return Response.json({ error: 'Forbidden: cannot send emails to other users' }, { status: 403 });
+  }
+
   if (type === 'report_ready') {
     if (!query_id) return Response.json({ error: 'query_id obbligatorio' }, { status: 400 });
     const queries = await base44.entities.CadastralQuery.filter({ id: query_id });

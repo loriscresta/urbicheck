@@ -5,11 +5,19 @@ const APP_URL = Deno.env.get("APP_URL") ?? "https://urbicheck.it";
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
+    const user = await base44.auth.me();
+    if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
+
     const payload = await req.json();
     const { user_email, user_name, amount_purchased, new_balance } = payload;
 
     if (!user_email || !amount_purchased) {
       return Response.json({ error: 'user_email and amount_purchased required' }, { status: 400 });
+    }
+
+    // Prevent sending emails on behalf of other users
+    if (user_email !== user.email) {
+      return Response.json({ error: 'Forbidden: email mismatch' }, { status: 403 });
     }
 
     const firstName = (user_name || 'Utente').split(' ')[0];
