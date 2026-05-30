@@ -3,6 +3,8 @@ import { Outlet, Link, useLocation } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import { useQuery } from "@tanstack/react-query";
 import { Search, History, CreditCard, LayoutDashboard, Menu, X, LogOut, ShieldCheck, FileText } from "lucide-react";
+import BetaBanner from "@/components/BetaBanner";
+import RegionOnboarding from "@/components/onboarding/RegionOnboarding";
 
 const navItems = [
   { path: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
@@ -61,7 +63,10 @@ export default function AppLayout() {
   const handleLogout = () => base44.auth.logout();
 
   return (
-    <div className="min-h-screen flex" style={{ background: '#F4EFE6' }}>
+    <div className="min-h-screen flex flex-col" style={{ background: '#F4EFE6' }}>
+      <BetaBanner />
+      <RegionOnboarding onComplete={() => {}} />
+      <div className="flex flex-1 min-h-0">
       {/* Desktop Sidebar */}
       <aside className="hidden lg:flex flex-col w-64" style={{ background: '#1A3A6B', borderRight: '3px solid #B33A2A' }}>
         <div className="p-6" style={{ borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
@@ -202,6 +207,7 @@ export default function AppLayout() {
           <p className="text-[9px] text-muted-foreground/60">I dati catastali provengono dai servizi pubblici dell'Agenzia delle Entrate. UrbiCheck non è affiliata né autorizzata dall'AdE.</p>
         </footer>
       </main>
+      </div>
     </div>
   );
 }

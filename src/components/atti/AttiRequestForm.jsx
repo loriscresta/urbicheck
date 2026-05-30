@@ -274,7 +274,7 @@ export default function AttiRequestForm({ prefill, onSuccess, onCancel }) {
         )}
         <Button type="submit" disabled={!isValid || isLoading} style={{ background: '#1e3a5f' }}>
           {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileSearch className="w-4 h-4" />}
-          Salva richiesta — €4,90
+          Richiedi &quot;Accesso agli Atti&quot;
         </Button>
       </div>
     </motion.form>

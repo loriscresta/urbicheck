@@ -8,9 +8,12 @@ import { Shield, Info, Search, Loader2, CheckCircle2, XCircle } from "lucide-rea
 import { motion } from "framer-motion";
 import { useQuery } from "@tanstack/react-query";
 
+const BETA_REGIONS = ['piemonte', 'liguria', 'lombardia'];
+
 export default function SearchPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [batchProgress, setBatchProgress] = useState(null);
+  const [geoBlockError, setGeoBlockError] = useState(null);
   const navigate = useNavigate();
 
   const { data: credits } = useQuery({
@@ -23,6 +26,14 @@ export default function SearchPage() {
   });
 
   const handleSearch = async (formData) => {
+    setGeoBlockError(null);
+    // Geographic block: beta only covers Piemonte, Liguria, Lombardia
+    const regioneLower = (formData.regione || '').toLowerCase();
+    const isBetaRegion = BETA_REGIONS.some(r => regioneLower.includes(r));
+    if (!isBetaRegion && formData.regione) {
+      setGeoBlockError(formData.regione);
+      return;
+    }
     setIsLoading(true);
     if (formData._batch) {
       await handleBatchSearch(formData);
@@ -329,10 +340,20 @@ export default function SearchPage() {
         <h1 className="text-2xl lg:text-3xl font-bold tracking-tight mb-1" style={{ color: '#1A3A6B', fontFamily: "'Libre Baskerville', serif", fontStyle: 'italic' }}>
           Analisi Urbanistica
         </h1>
-        <p className="mb-8 text-xs tracking-[1px] uppercase" style={{ color: '#7A7268', fontFamily: "'IBM Plex Mono', monospace" }}>
-          Anteprima gratuita immediata. Scheda completa <span className="font-semibold text-foreground">€9,90</span>.
-          Analisi multi-unità per palazzine e portfolio.
-        </p>
+        <div className="mb-6 flex items-center gap-2 px-3 py-2 text-xs" style={{ background: '#f0fdf4', border: '1px solid #86efac', fontFamily: "'IBM Plex Mono', monospace", color: '#15803d' }}>
+          🚀 <strong>Beta attiva</strong> — Prime 3 analisi gratuite · poi €2,99/report · Solo Piemonte, Liguria, Lombardia
+        </div>
+        {geoBlockError && (
+          <div className="mb-5 p-4 flex flex-col gap-2" style={{ background: '#fff8f0', border: '2px solid #f59e0b', fontFamily: "'IBM Plex Mono', monospace" }}>
+            <p className="text-sm font-semibold" style={{ color: '#92400e' }}>
+              ⚠️ La fase beta è disponibile solo per immobili in Piemonte, Liguria e Lombardia.
+            </p>
+            <p className="text-xs" style={{ color: '#78350f' }}>
+              Hai selezionato: <strong>{geoBlockError}</strong>. Sei interessato ad altre regioni?
+            </p>
+            <a href="/waitlist" className="text-xs underline font-semibold" style={{ color: '#92400e' }}>Iscriviti alla lista d'attesa →</a>
+          </div>
+        )}
       </motion.div>
 
       <div className="bg-white p-6 lg:p-8" style={{ border: '1px solid #C4BAA8' }}>

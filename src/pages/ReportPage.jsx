@@ -896,21 +896,27 @@ export default function ReportPage() {
             </Button>
           )}
         </div>
-        <h3 className="font-semibold mb-1">Servizi Aggiuntivi (opzionali)</h3>
-        <p className="text-sm text-muted-foreground mb-4">Servizi extra a pagamento separato, non inclusi nella scheda base.</p>
+        <div className="mb-3 flex items-center gap-2 px-3 py-1.5 text-xs" style={{ background: '#f0fdf4', border: '1px solid #86efac', fontFamily: "'IBM Plex Mono', monospace", color: '#15803d' }}>
+          <CheckCircle2 className="w-3.5 h-3.5" /> ✓ Incluso in beta — nessun costo aggiuntivo
+        </div>
         <div className="flex flex-col sm:flex-row gap-3">
-          <Button className="gap-2" style={{ background: '#1e3a5f' }} onClick={async () => {
-            let comuneRecord = null;
-            if (query.comune_id) {
-              const results = await base44.entities.ComuneItalia.filter({ id: query.comune_id });
-              comuneRecord = results[0] || null;
-            }
-            setComunePrefill(comuneRecord);
-            setShowAttiForm(true);
-          }}>
-            <FileSearch className="w-4 h-4" />
-            Richiedi Accesso Atti — €4,90
-          </Button>
+          <div className="flex flex-col gap-1">
+            <Button className="gap-2" style={{ background: '#1e3a5f' }} onClick={async () => {
+              let comuneRecord = null;
+              if (query.comune_id) {
+                const results = await base44.entities.ComuneItalia.filter({ id: query.comune_id });
+                comuneRecord = results[0] || null;
+              }
+              setComunePrefill(comuneRecord);
+              setShowAttiForm(true);
+            }}>
+              <FileSearch className="w-4 h-4" />
+              Richiedi &quot;Accesso agli Atti&quot;
+            </Button>
+            <p className="text-[10px] text-muted-foreground" style={{ fontFamily: "'IBM Plex Mono', monospace", maxWidth: 280 }}>
+              Fissa un appuntamento al Comune per ottenere copia di tutti i documenti d'archivio relativi al tuo immobile
+            </p>
+          </div>
         </div>
       </motion.div>
 
@@ -919,7 +925,7 @@ export default function ReportPage() {
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
           className="mt-8 p-6 rounded-xl border-2 border-primary bg-card">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="font-bold text-lg" style={{ color: '#1e3a5f' }}>Richiesta Accesso agli Atti</h3>
+            <h3 className="font-bold text-lg" style={{ color: '#1e3a5f' }}>Richiedi "Accesso agli Atti"</h3>
             <Button variant="ghost" size="sm" onClick={() => setShowAttiForm(false)}>✕</Button>
           </div>
           <AttiRequestForm

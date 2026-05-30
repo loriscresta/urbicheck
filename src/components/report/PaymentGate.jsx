@@ -8,9 +8,7 @@ import { Button } from "@/components/ui/button";
 import { motion } from "framer-motion";
 import ParcellaMap from "@/components/report/ParcellaMap";
 
-const BETA_MODE = true;
 const BETA_PRICE = 2.99;
-const FULL_PRICE = 9.90;
 
 function PreviewPanel({ query }) {
   const r = query.report_data || {};
@@ -112,7 +110,7 @@ function PreviewPanel({ query }) {
           <div className="absolute inset-0 flex items-center justify-center bg-background/70 backdrop-blur-[2px]">
             <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-white border border-border shadow text-sm font-semibold text-foreground">
               <Lock className="w-4 h-4 text-muted-foreground" />
-              {`Sblocca il report completo — €${FULL_PRICE.toFixed(2)}${BETA_MODE ? ' (prezzo beta)' : ''}`}
+              {`Sblocca il report completo — prezzo beta €${BETA_PRICE.toFixed(2)}`}
             </div>
           </div>
         </div>
@@ -125,6 +123,7 @@ export default function PaymentGate({ query, onPaid }) {
   const navigate = useNavigate();
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState("");
+  const [betaLimitReached, setBetaLimitReached] = useState(false);
 
   const { data: credits, refetch: refetchCredits } = useQuery({
     queryKey: ["userCredits"],
@@ -140,28 +139,32 @@ export default function PaymentGate({ query, onPaid }) {
     setIsProcessing(true);
     try {
       const result = await chargeReport({ query_id: query.id });
-      // Successo: aggiorna crediti e apri il report
       try { await refetchCredits(); } catch (_) {}
       onPaid();
     } catch (err) {
       console.error('handlePay error:', err);
       const data = err?.response?.data;
-      if (data?.error === 'insufficient_credits') {
-        setError(`Saldo insufficiente (€${(data.balance || 0).toFixed(2)} disponibili). Servono €${FULL_PRICE.toFixed(2)}.`);
+      if (data?.error === 'beta_limit_reached') {
+        setBetaLimitReached(true);
         setIsProcessing(false);
         return;
       }
-      // Per qualsiasi altro errore: i crediti potrebbero essere stati scalati.
-      // Aggiorna il saldo e ri-controlla se il report risulta pagato.
+      if (data?.error === 'insufficient_credits') {
+        setError(`Saldo insufficiente (€${(data.balance || 0).toFixed(2)} disponibili). Servono €${BETA_PRICE.toFixed(2)}.`);
+        setIsProcessing(false);
+        return;
+      }
       try { await refetchCredits(); } catch (_) {}
-      // Chiama onPaid — il refetch nel parent verificherà se paid=true
-      // Se non è ancora pagato, il PaymentGate sarà mostrato di nuovo con saldo aggiornato.
       onPaid();
     }
   };
 
   const balance = credits?.balance || 0;
-  const hasFunds = balance >= FULL_PRICE;
+  const freeUsed = credits?.free_reports_used || 0;
+  const betaPaidUsed = credits?.beta_paid_reports_used || 0;
+  const isFreeReport = freeUsed < 3;
+  const effectivePrice = isFreeReport ? 0 : BETA_PRICE;
+  const hasFunds = isFreeReport || balance >= BETA_PRICE;
 
   return (
     <div className="p-6 lg:p-10 max-w-2xl mx-auto">
@@ -185,7 +188,23 @@ export default function PaymentGate({ query, onPaid }) {
         {/* Preview gratuita */}
         <PreviewPanel query={query} />
 
+        {betaLimitReached && (
+          <div className="rounded-xl border-2 border-amber-400 bg-amber-50 p-6 mb-6 text-center">
+            <p className="text-lg font-bold text-amber-900 mb-2">Limite beta raggiunto</p>
+            <p className="text-sm text-amber-800 mb-4">
+              Hai raggiunto il limite di 6 report nella fase beta (3 gratuiti + 3 a €2,99).<br />
+              Il servizio completo sarà disponibile al lancio ufficiale.
+            </p>
+            <a href="/waitlist"
+              className="inline-block px-6 py-3 text-xs font-bold uppercase tracking-widest text-white"
+              style={{ background: '#1A3A6B', fontFamily: "'IBM Plex Mono', monospace" }}>
+              Notificami al lancio →
+            </a>
+          </div>
+        )}
+
         {/* Payment card */}
+        {!betaLimitReached && (
         <div className="rounded-xl border-2 border-emerald-400 bg-emerald-50 p-6">
           <div className="flex items-center gap-3 mb-4">
             <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center">
@@ -196,12 +215,12 @@ export default function PaymentGate({ query, onPaid }) {
               <p className="text-sm text-emerald-700">Accesso immediato a tutti i dati urbanistici</p>
             </div>
             <div className="ml-auto text-right">
-              <span className="text-2xl font-black text-emerald-800">€{FULL_PRICE.toFixed(2)}</span>
-              {BETA_MODE && (
-                <p className="text-xs text-emerald-600 mt-0.5">
-                  Accesso completo
-                </p>
-              )}
+              {isFreeReport
+                ? <span className="text-2xl font-black text-emerald-700">GRATIS</span>
+                : <span className="text-2xl font-black text-emerald-800">€{BETA_PRICE.toFixed(2)}</span>}
+              <p className="text-xs text-emerald-600 mt-0.5">
+                {isFreeReport ? `Report gratuito #${freeUsed + 1}/3` : `Prezzo beta (${betaPaidUsed + 1}/3)`}
+              </p>
             </div>
           </div>
 
@@ -212,18 +231,20 @@ export default function PaymentGate({ query, onPaid }) {
             <li>✓ Pratiche necessarie (SCIA, PdC…)</li>
             <li>✓ Analisi finanziaria & OMI</li>
             <li>✓ Download PDF certificato</li>
-            {BETA_MODE && <li className="text-emerald-600 font-semibold">🎁 Prezzo beta: €2,99 invece di €9,90</li>}
+            {isFreeReport && <li className="text-emerald-600 font-semibold">🎁 Analisi gratuita — fase beta</li>}
           </ul>
 
-          <div className="flex items-center justify-between text-sm text-emerald-700 mb-4 p-3 bg-white/60 rounded-lg">
-            <span className="flex items-center gap-2">
-              <CreditCard className="w-4 h-4" />
-              Saldo disponibile
-            </span>
-            <span className={`font-bold ${hasFunds ? "text-emerald-700" : "text-red-600"}`}>
-              €{balance.toFixed(2)}{!hasFunds && BETA_MODE && ` — ricarica per sbloccare`}
-            </span>
-          </div>
+          {!isFreeReport && (
+            <div className="flex items-center justify-between text-sm text-emerald-700 mb-4 p-3 bg-white/60 rounded-lg">
+              <span className="flex items-center gap-2">
+                <CreditCard className="w-4 h-4" />
+                Saldo disponibile
+              </span>
+              <span className={`font-bold ${hasFunds ? 'text-emerald-700' : 'text-red-600'}`}>
+                €{balance.toFixed(2)}{!hasFunds ? ' — ricarica per sbloccare' : ''}
+              </span>
+            </div>
+          )}
 
           {error && (
             <div className="flex items-start gap-2 p-3 rounded-lg bg-red-50 border border-red-200 text-xs text-red-700 mb-4">
@@ -240,30 +261,28 @@ export default function PaymentGate({ query, onPaid }) {
               disabled={isProcessing}
             >
               {isProcessing
-                ? <><Loader2 className="w-4 h-4 animate-spin mr-2" /> Elaborazione pagamento…</>
-                : <><Unlock className="w-4 h-4 mr-2" /> Sblocca scheda — €{FULL_PRICE.toFixed(2)}</>
+                ? <><Loader2 className="w-4 h-4 animate-spin mr-2" /> Elaborazione…</>
+                : isFreeReport
+                  ? <><Unlock className="w-4 h-4 mr-2" /> Sblocca gratis — Report beta #{freeUsed + 1}/3</>
+                  : <><Unlock className="w-4 h-4 mr-2" /> Sblocca scheda — €{BETA_PRICE.toFixed(2)}</>
               }
             </Button>
           ) : (
             <div className="space-y-3">
               <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 text-sm text-amber-800 flex items-start gap-2">
                 <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-                Saldo insufficiente — ricarica per continuare
+                Saldo insufficiente — ricarica €{BETA_PRICE.toFixed(2)} per sbloccare
               </div>
-              <Button
-                size="lg"
-                className="w-full"
-                style={{ background: '#1e3a5f' }}
-                onClick={() => navigate("/credits")}
-              >
+              <Button size="lg" className="w-full" style={{ background: '#1e3a5f' }} onClick={() => navigate("/credits")}>
                 Ricarica crediti →
               </Button>
             </div>
           )}
         </div>
+        )}
 
         <p className="text-[11px] text-muted-foreground text-center mt-4">
-          Addebito immediato dal saldo crediti. Nessun abbonamento.
+          {isFreeReport ? 'Analisi gratuita — fase beta attiva.' : 'Addebito immediato dal saldo crediti. Nessun abbonamento.'}
         </p>
       </motion.div>
     </div>
