@@ -415,7 +415,7 @@ async function checkWaterwayVicinity(lat, lon, regione = '') {
   const isLiguria = regioneLower.includes('liguria');
   const isLombardia = regioneLower.includes('lombard');
 
-  const q = `[out:json][timeout:15];(way["waterway"~"river|stream|canal|drain|ditch"](around:300,${lat},${lon});way["natural"="water"](around:300,${lat},${lon}););out body tags;>;out skel qt;`;
+  const q = `[out:json][timeout:15];(way["waterway"~"river|stream|canal|drain|ditch"](around:400,${lat},${lon});way["natural"="water"](around:400,${lat},${lon}););out body tags;>;out skel qt;`;
   try {
     const res = await fetchWithTimeout('https://overpass-api.de/api/interpreter', {
       method: 'POST',
@@ -446,7 +446,7 @@ async function checkWaterwayVicinity(lat, lon, regione = '') {
         const d = haversineM(lat, lon, n.lat, n.lon);
         if (d < minDist) minDist = d;
       }
-      if (!isFinite(minDist) || minDist > 300) continue;
+      if (!isFinite(minDist) || minDist > 400) continue;
       const distM = Math.round(minDist);
 
       if (waterwayType === 'river') {
@@ -615,8 +615,9 @@ Deno.serve(async (req) => {
     // Fix B — Nominatim fallback: salva centroid anche se OnData non trova la particella
     if (query_id && queryRecord) {
       // Nominatim fallback: salva centroid anche se OnData non trova la particella
-      const indirizzoQ = queryRecord.indirizzo_catastale || queryRecord.indirizzo_immobile || null;
-      const provinciaQ = queryRecord.provincia || null;
+      const indirizzoQ = queryRecord.indirizzo_immobile || queryRecord.indirizzo_catastale || null;
+      const siglaProv = queryRecord.sigla_provincia || null;
+      const provinciaQ = siglaProv || queryRecord.provincia || null;
       const geoResult = await geocodeAddress(indirizzoQ, nome_comune || queryRecord.comune, provinciaQ);
       if (geoResult) {
         try {

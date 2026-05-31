@@ -263,6 +263,16 @@ export default function ReportPage() {
   const ntaLocal = INDICI_NTA_LOCAL[query.comune] || null;
 
   const isPiemonte = (query.regione || '').toLowerCase().includes('piemonte');
+
+  // FIX 5 — PRG mismatch: categoria residenziale vs zona servizi/impianti
+  const isResiCategory = /^A\//i.test(categoriaRaw || '');
+  const isPrgServizi = r.zonizzazione && (
+    r.zonizzazione.zona_codice === '19' ||
+    /servizi.*(impianti|pubblici)/i.test(r.zonizzazione.destinazione_prevalente || '') ||
+    /area.*servizi/i.test(r.zonizzazione.destinazione_prevalente || '') ||
+    /servizi.impianti/i.test(r.zonizzazione.zona_codice || '')
+  );
+  const showPrgMismatchNote = isResiCategory && isPrgServizi;
   const isLiguria = (query.regione || '').toLowerCase().includes('liguria');
   const wfsRis = r.wfs_liguria?.risultati;
   const wfsSismica = wfsRis?.sismica;
@@ -576,6 +586,14 @@ export default function ReportPage() {
             {r.prg_lookup_status && (
               <div className="mt-2">
                 <PRGStatusBadge status={r.prg_lookup_status} />
+              </div>
+            )}
+            {showPrgMismatchNote && (
+              <div className="mt-3 p-3 rounded-lg border border-amber-300 bg-amber-50 flex items-start gap-2">
+                <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                <p className="text-xs text-amber-900">
+                  ⚠️ <strong>Possibile disallineamento PRG:</strong> La zonizzazione dal mosaico regionale indica un'area per servizi/impianti (codice 19), ma la categoria catastale risulta residenziale ({categoriaRaw}). Il mosaico PRG regionale riporta la destinazione di zona aggregata e potrebbe non riflettere la destinazione specifica della singola particella. <strong>Richiedere il CDU al Comune per conferma ufficiale.</strong>
+                </p>
               </div>
             )}
             {r.zonizzazione.descrizione && (
