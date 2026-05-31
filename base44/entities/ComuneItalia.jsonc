@@ -26,6 +26,14 @@
       "type": "string",
       "description": "Codice ISTAT della regione (2 cifre)"
     },
+    "lat": {
+      "type": "number",
+      "description": "Latitudine del centroide del comune (WGS84) \u2014 usata come fallback coordinate quando il catasto non trova la particella"
+    },
+    "lon": {
+      "type": "number",
+      "description": "Longitudine del centroide del comune (WGS84) \u2014 usata come fallback coordinate quando il catasto non trova la particella"
+    },
     "pec_utc": {
       "type": "string",
       "description": "PEC dell'Ufficio Tecnico Comunale"
@@ -90,11 +98,11 @@
         "3",
         "4"
       ],
-      "description": "Zona sismica per DGR regionale (Piemonte: DGR 6-887/2019 \u2014 zone 3S, 3, 4)"
+      "description": "Zona sismica per DGR regionale"
     },
     "note": {
       "type": "string",
-      "description": "Note operative (es. orari UTC, riferimenti, procedure speciali)"
+      "description": "Note operative"
     }
   },
   "required": [

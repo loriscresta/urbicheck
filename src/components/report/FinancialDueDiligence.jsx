@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
 import { Loader2, TrendingUp, Home, BarChart3, AlertTriangle, CheckCircle2, ExternalLink, Info } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { motion } from "framer-motion";
 import { getOMIData, getOMIDataByNome, calcolaTariffaNotteOMI } from "@/lib/omiData";
@@ -40,14 +42,15 @@ function ScoreCircle({ score }) {
 export default function FinancialDueDiligence({ query, finData, onSnapshotReady }) {
   const [scoreData, setScoreData] = useState(null);
   const [loadingScore, setLoadingScore] = useState(false);
+  const [mqOverride, setMqOverride] = useState(null);
+  const [inputMq, setInputMq] = useState('');
 
   const r   = query.report_data || {};
   const fd  = finData || {};
 
   // ── Superficie: usa sempre il valore reale, mai fallback numerico ──────────
-  // FIX 6 — Only use real entity superficie, never AI-generated fd.superficie
   const mqRaw = query.superficie_mq || null;
-  const mq    = mqRaw ? parseFloat(mqRaw) : null;
+  const mq    = mqOverride || (mqRaw ? parseFloat(mqRaw) : null);
 
   // Use per-unit allocated price (batch) if available, else fin_data price
   const prezzoAcquisto     = parseFloat(r.prezzo_acquisto_unita) || parseFloat(fd.prezzo_acquisto) || 0;
@@ -182,18 +185,37 @@ Fornisci punteggio e analisi sintetica.`,
     }
   }, []);
 
-  // ── Blocco "superficie mancante" ──────────────────────────────────────────
+  // ── Blocco "superficie mancante" con input inline ────────────────────────
   if (!mq) {
     return (
       <div className="rounded-xl border-2 border-amber-400 bg-amber-50 p-6">
         <div className="flex items-start gap-3">
           <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
-          <div>
-            <p className="font-bold text-amber-900 mb-1">Superficie mancante — calcoli non disponibili</p>
-            <p className="text-sm text-amber-800">
+          <div className="flex-1">
+            <p className="font-bold text-amber-900 mb-1">Superficie mancante — inseriscila per calcolare</p>
+            <p className="text-sm text-amber-800 mb-4">
               Per visualizzare l'analisi finanziaria è necessario conoscere la superficie dell'immobile.
-              Inserisci la superficie nel form di ricerca (campo "Superficie stimata") oppure carica la visura catastale per l'estrazione automatica.
             </p>
+            <div className="flex items-center gap-2 flex-wrap">
+              <Input
+                type="number"
+                value={inputMq}
+                onChange={e => setInputMq(e.target.value)}
+                placeholder="es. 85"
+                className="h-9 w-28 text-sm bg-white"
+                min="1" max="9999"
+                onKeyDown={e => { if (e.key === 'Enter' && parseFloat(inputMq) > 0) setMqOverride(parseFloat(inputMq)); }}
+              />
+              <span className="text-sm text-amber-800">m²</span>
+              <Button
+                size="sm"
+                className="bg-amber-700 hover:bg-amber-800 text-white"
+                onClick={() => { const v = parseFloat(inputMq); if (v > 0) setMqOverride(v); }}
+                disabled={!inputMq || parseFloat(inputMq) <= 0}
+              >
+                Calcola →
+              </Button>
+            </div>
           </div>
         </div>
       </div>

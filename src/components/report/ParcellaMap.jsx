@@ -263,56 +263,21 @@ export default function ParcellaMap({ record, query, item }) {
     };
   }, [initLat, initLon, hasPolygon]);
 
-  // FIX 2 — Hardcoded coords for major Italian municipalities to avoid geocoding errors
-  const MUNICIPALITY_COORDS = {
-    'Pavia': { lat: 45.1847, lon: 9.1582 },
-    'Milano': { lat: 45.4642, lon: 9.1900 },
-    'Torino': { lat: 45.0703, lon: 7.6869 },
-    'Genova': { lat: 44.4056, lon: 8.9463 },
-    'Alessandria': { lat: 44.9124, lon: 8.6151 },
-    'Novara': { lat: 45.4469, lon: 8.6219 },
-    'Bergamo': { lat: 45.6983, lon: 9.6773 },
-    'Brescia': { lat: 45.5416, lon: 10.2118 },
-    'Como': { lat: 45.8080, lon: 9.0852 },
-    'Cremona': { lat: 45.1333, lon: 10.0333 },
-    'Lecco': { lat: 45.8564, lon: 9.3925 },
-    'Lodi': { lat: 45.3150, lon: 9.5033 },
-    'Mantova': { lat: 45.1564, lon: 10.7914 },
-    'Monza': { lat: 45.5845, lon: 9.2744 },
-    'Sondrio': { lat: 46.1697, lon: 9.8706 },
-    'Varese': { lat: 45.8206, lon: 8.8257 },
-    'Asti': { lat: 44.9003, lon: 8.2064 },
-    'Cuneo': { lat: 44.3905, lon: 7.5464 },
-    'Biella': { lat: 45.5658, lon: 8.0533 },
-    'Verbania': { lat: 45.9236, lon: 8.5506 },
-    'Vercelli': { lat: 45.3239, lon: 8.4233 },
-    'Roma': { lat: 41.9028, lon: 12.4964 },
-    'Napoli': { lat: 40.8518, lon: 14.2681 },
-    'Firenze': { lat: 43.7696, lon: 11.2558 },
-    'Bologna': { lat: 44.4949, lon: 11.3426 },
-    'Venezia': { lat: 45.4408, lon: 12.3155 },
-    'La Spezia': { lat: 44.1024, lon: 9.8240 },
-    'Savona': { lat: 44.3069, lon: 8.4820 },
-    'Imperia': { lat: 43.8870, lon: 8.0268 },
-    'Sanremo': { lat: 43.8155, lon: 7.7762 },
-  };
 
-  // FIX 8 — Geocode municipality when no cadastral position available
+
+  // Geocode municipality when no cadastral position available — use comune + provincia for accuracy
   useEffect(() => {
     if (hasPosition || !entity.comune) return;
-    // Use hardcoded coords first to avoid geocoding errors (e.g. Pavia → Casteggio)
-    const knownCoords = MUNICIPALITY_COORDS[entity.comune];
-    if (knownCoords) {
-      setGeocodedMunPos(knownCoords);
-      return;
-    }
-    fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(entity.comune + ', Italy')}&format=json&limit=1`)
+    const q = entity.provincia
+      ? `${entity.comune}, ${entity.provincia}, Italia`
+      : `${entity.comune}, Italia`;
+    fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=1&countrycodes=it`)
       .then(r => r.json())
       .then(data => {
         if (data[0]) setGeocodedMunPos({ lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) });
       })
       .catch(() => {});
-  }, [hasPosition, entity.comune]);
+  }, [hasPosition, entity.comune, entity.provincia]);
 
   // FIX 8 — Init municipality fallback map
   useEffect(() => {
@@ -373,7 +338,7 @@ export default function ParcellaMap({ record, query, item }) {
       <p className="text-sm text-gray-500">
         📍 WGS84: {initLat?.toFixed(5)}, {initLon?.toFixed(5)}{" "}
         <span className="italic text-xs text-gray-400">
-          {hasPolygon ? "— poligono da DB" : "— centroide da DB"}
+          {hasPolygon ? "— poligono catastale AdE" : "— centroide GIS"}
         </span>
       </p>
 

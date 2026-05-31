@@ -618,8 +618,8 @@ export default function ReportPage() {
                   isPiemonte && query.centroid_lat && query.centroid_lng
                     ? <span>
                         {vincoloIdraulicoEffettivo.dettagli}
-                        {vincoloIdraulicoEffettivo.dettagli && !vincoloIdraulicoEffettivo.dettagli.includes('webgis') && ' — '}
-                        <a href={`https://webgis.arpa.piemonte.it/paigeo/?lat=${query.centroid_lat}&lon=${query.centroid_lng}`} target="_blank" rel="noopener noreferrer" style={{ color: '#1A3A6B', textDecoration: 'underline' }}>
+                        {vincoloIdraulicoEffettivo.dettagli && ' — '}
+                        <a href="https://webgis.arpa.piemonte.it/agportal/home" target="_blank" rel="noopener noreferrer" style={{ color: '#1A3A6B', textDecoration: 'underline' }}>
                           Mappa ARPA interattiva →
                         </a>
                       </span>

@@ -88,9 +88,11 @@ export default function SearchPage() {
     const reportData = await generateReport(enrichedFormData, enrichment);
 
     // Geocoding Google sempre prioritario: sovrascrive sempre centroid_lat/lng
-    const geocodingCoords = enrichment?.geocoding?.lat ? {
-      centroid_lat: enrichment.geocoding.lat,
-      centroid_lng: enrichment.geocoding.lon ?? enrichment.geocoding.lng ?? null,
+    const _geoLat = enrichment?.geocoding?.lat;
+    const _geoLon = enrichment?.geocoding?.lon ?? enrichment?.geocoding?.lng ?? null;
+    const geocodingCoords = (_geoLat && isValidItalianCoord(_geoLat, _geoLon)) ? {
+      centroid_lat: _geoLat,
+      centroid_lng: _geoLon,
     } : {};
 
     const query = await base44.entities.CadastralQuery.create({
@@ -103,11 +105,11 @@ export default function SearchPage() {
       ...(visura_uploaded ? { categoria_catastale, superficie_mq, rendita_catastale, vani, indirizzo_catastale, visura_uploaded: true } : {}),
     });
 
-    // Override esplicito geocoding — sovrascrive SEMPRE centroid dopo create (qualsiasi source)
-    if (enrichment?.geocoding?.lat && enrichment?.geocoding?.lon) {
+    // Override geocoding — sovrascrive solo se le coordinate sono valide (dentro Italia)
+    if (_geoLat && _geoLon && isValidItalianCoord(_geoLat, _geoLon)) {
       await base44.entities.CadastralQuery.update(query.id, {
-        centroid_lat: enrichment.geocoding.lat,
-        centroid_lng: enrichment.geocoding.lon,
+        centroid_lat: _geoLat,
+        centroid_lng: _geoLon,
       });
     }
 
@@ -164,6 +166,8 @@ export default function SearchPage() {
 
     // Chiama il microservizio una volta per il batch (livello edificio)
     const batchEnrichment = await callUrbiCheckEnrichment(sharedCadastral);
+    const _bLat = batchEnrichment?.geocoding?.lat;
+    const _bLon = batchEnrichment?.geocoding?.lon ?? batchEnrichment?.geocoding?.lng ?? null;
 
     const queryIds = [];
     const results = [];
@@ -192,10 +196,9 @@ export default function SearchPage() {
           : visuraExtra;
 
         const prezzoUnitaAllocato = getAllocatedPrice(i);
-        // Geocoding Google sempre prioritario: sovrascrive sempre centroid_lat/lng
-        const batchGeoCoords = batchEnrichment?.geocoding?.lat ? {
-          centroid_lat: batchEnrichment.geocoding.lat,
-          centroid_lng: batchEnrichment.geocoding.lon ?? batchEnrichment.geocoding.lng ?? null,
+        const batchGeoCoords = (_bLat && isValidItalianCoord(_bLat, _bLon)) ? {
+          centroid_lat: _bLat,
+          centroid_lng: _bLon,
         } : {};
 
         const query = await base44.entities.CadastralQuery.create({
@@ -211,7 +214,7 @@ export default function SearchPage() {
           ...batchGeoCoords,
         });
 
-        // Override esplicito geocoding per unità batch — sovrascrive SEMPRE (qualsiasi source)
+        // Override geocoding batch — solo se coordinate valide (dentro Italia)
         if (batchGeoCoords.centroid_lat) {
           await base44.entities.CadastralQuery.update(query.id, batchGeoCoords);
         }
@@ -238,11 +241,11 @@ export default function SearchPage() {
     const completedCount = results.filter(r => r.success).length;
     const failedCount = results.filter(r => !r.success).length;
 
-    // Geocoding sempre prioritario per BatchQuery: sovrascrive sempre
-    const batchUpdateGeo = batchEnrichment?.geocoding?.lat ? {
-      centroid_lat: batchEnrichment.geocoding.lat,
-      centroid_lng: batchEnrichment.geocoding.lon ?? batchEnrichment.geocoding.lng ?? null,
-      geocoding_source: batchEnrichment.geocoding.source || null,
+    // Geocoding BatchQuery — solo se coordinate valide
+    const batchUpdateGeo = (_bLat && isValidItalianCoord(_bLat, _bLon)) ? {
+      centroid_lat: _bLat,
+      centroid_lng: _bLon,
+      geocoding_source: batchEnrichment?.geocoding?.source || null,
     } : {};
 
     await base44.entities.BatchQuery.update(batchRecord.id, {
@@ -394,6 +397,12 @@ export default function SearchPage() {
       </div>
     </div>
   );
+}
+
+// Validate geocoding coords are inside Italy bounding box
+function isValidItalianCoord(lat, lon) {
+  if (!lat || !lon || !isFinite(lat) || !isFinite(lon)) return false;
+  return lat >= 36 && lat <= 47.5 && lon >= 6 && lon <= 18.5;
 }
 
 // ── Microservizio UrbiCheck enrichment ─────────────────────────────────────

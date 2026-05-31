@@ -291,7 +291,7 @@ async function checkRailwayVicinity(lat, lon, regione = '') {
   const regioneLower = (regione || '').toLowerCase();
   const isLiguria = regioneLower.includes('liguria');
 
-  const q = `[out:json][timeout:15];(way["railway"~"rail|narrow_gauge|tram|light_rail|subway|preserved|monorail"](around:200,${lat},${lon}););out body tags;>;out skel qt;`;
+  const q = `[out:json][timeout:15];(way["railway"~"rail|narrow_gauge|tram|light_rail|subway|preserved|monorail"](around:500,${lat},${lon}););out body tags;>;out skel qt;`;
   try {
     const res = await fetchWithTimeout('https://overpass-api.de/api/interpreter', {
       method: 'POST',
@@ -770,14 +770,10 @@ Deno.serve(async (req) => {
       //   1. il dato viene dal poligono WFS (baricentro accurato) — sovrascrive sempre
       //   2. il record non ha ancora coordinate impostate
       // NON sovrascrivere coordinate esistenti con dati OnData-only (meno precisi)
-      const centroideGiaPresente = !!(queryRecord.centroid_lat && queryRecord.centroid_lng);
-      const haCentroideWfs = centroideFonte === 'ade_wfs_baricentro';
-
+      // OnData ha trovato la particella → salva sempre il centroide corretto (sovrascrive coords errate del microservizio)
       await base44.entities.CadastralQuery.update(query_id, {
-        ...(haCentroideWfs || !centroideGiaPresente ? {
-          centroid_lat: finalLat,
-          centroid_lng: finalLon,
-        } : {}),
+        centroid_lat: finalLat,
+        centroid_lng: finalLon,
         geometry_geojson: wfsResult?.geojson_polygon || undefined,
         codice_comune_catasto: codiceBelfiore,
         fonte_dati_catastali: 'catastomappe',
