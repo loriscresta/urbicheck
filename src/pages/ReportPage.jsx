@@ -339,6 +339,8 @@ export default function ReportPage() {
   const ferrorieTrovate = wfsFerroviario?.dati?.filter(d => d.trovato) || [];
   let vincoloFerroviarioEffettivo = null;
   let ferroviaStoricaCard = null;
+  let metroCard = null;
+  let tramCard = null;
 
   if (wfsFerroviario) {
     // WFS Liguria source
@@ -352,31 +354,29 @@ export default function ReportPage() {
     // Overpass source (catasto_resolver)
     const vf = r.vincolo_ferroviario;
 
-    // Ferrovia attiva
     if (vf.ferrovia_attiva?.presente) {
       const fa = vf.ferrovia_attiva;
       vincoloFerroviarioEffettivo = {
         presente: true,
         dettagli: fa.tipo === 'assoluta'
-          ? `🚆 Ferrovia attiva — Fascia di rispetto ASSOLUTA (DPR 753/1980 art. 49). Edificazione vietata entro 30m. Distanza: ${fa.distanza_m}m.`
+          ? `🚆 Ferrovia attiva — Fascia ASSOLUTA (DPR 753/1980 art. 49). Edificazione vietata entro 30m. Distanza: ${fa.distanza_m}m.`
           : fa.tipo === 'limitata'
-          ? `🚆 Ferrovia attiva — Fascia di rispetto 150m (DPR 753/1980). Interventi soggetti ad autorizzazione RFI. Distanza: ${fa.distanza_m}m. Richiedere CDU al Comune.`
-          : `🚆 Ferrovia attiva nelle vicinanze. Distanza: ${fa.distanza_m}m. Verificare fasce di rispetto DPR 753/1980.`,
+          ? `🚆 Ferrovia attiva — Fascia 150m (DPR 753/1980). Interventi soggetti ad autorizzazione RFI. Distanza: ${fa.distanza_m}m.`
+          : `🚆 ${fa.dettagli || `Ferrovia attiva nelle vicinanze. Distanza: ${fa.distanza_m}m.`}`,
       };
-    } else if (vf.tipo && vf.tipo !== 'assente' && vf.tipo !== 'storica' && !vf.ferrovia_attiva) {
-      // backward compat: old structure without categorization
+    } else if (vf.presente && vf.tipo && !['nessuna','storica','assente'].includes(vf.tipo) && !vf.ferrovia_attiva) {
+      // backward compat
       vincoloFerroviarioEffettivo = {
-        presente: vf.presente,
+        presente: true,
         dettagli: vf.tipo === 'assoluta'
-          ? `Fascia di rispetto ferroviaria ASSOLUTA — DPR 753/1980 art. 49. Edificazione vietata entro 30m. Distanza: ${vf.distanza_m}m.`
-          : `Zona soggetta a vincolo ferroviario — DPR 753/1980. Entro 150m si applicano limitazioni. Distanza: ${vf.distanza_m}m. Richiedere CDU.`,
+          ? `Fascia di rispetto ferroviaria ASSOLUTA — DPR 753/1980. Edificazione vietata entro 30m. Distanza: ${vf.distanza_m}m.`
+          : `Vincolo ferroviario DPR 753/1980. Distanza: ${vf.distanza_m}m.`,
       };
     }
 
-    // Ferrovia storica/turistica
-    if (vf.ferrovia_storica?.presente) {
-      ferroviaStoricaCard = vf.ferrovia_storica;
-    }
+    if (vf.ferrovia_storica?.presente) ferroviaStoricaCard = vf.ferrovia_storica;
+    if (vf.metro?.presente) metroCard = vf.metro;
+    if (vf.tram?.presente) tramCard = vf.tram;
   }
 
   const FIN_FINALITA = ["investimento", "sviluppo_immobiliare", "asta_giudiziaria"];
@@ -646,16 +646,74 @@ export default function ReportPage() {
               {ferroviaStoricaCard && (
                 <div className="rounded-lg border border-amber-300 bg-amber-50 p-3">
                   <div className="flex items-start gap-2">
-                    <span className="text-lg leading-none mt-0.5">🚂</span>
+                    <span className="text-lg leading-none mt-0.5">{ferroviaStoricaCard.icon || '🚂'}</span>
                     <div>
                       <p className="text-sm font-bold text-amber-900">{ferroviaStoricaCard.label}</p>
-                      {ferroviaStoricaCard.nome && (
-                        <p className="text-xs text-amber-800 font-semibold mt-0.5">{ferroviaStoricaCard.nome}</p>
-                      )}
+                      {ferroviaStoricaCard.nome && <p className="text-xs text-amber-800 font-semibold mt-0.5">{ferroviaStoricaCard.nome}</p>}
                       <p className="text-xs text-amber-700 mt-1 leading-relaxed">{ferroviaStoricaCard.dettagli}</p>
-                      <p className="text-[10px] text-amber-600 mt-1">Distanza: {ferroviaStoricaCard.distanza_m}m · Impatto: {ferroviaStoricaCard.impatto}</p>
+                      {ferroviaStoricaCard.operatore && <p className="text-[10px] text-amber-600 mt-0.5">Operatore: {ferroviaStoricaCard.operatore}</p>}
+                      <p className="text-[10px] text-amber-600 mt-1">Distanza: {ferroviaStoricaCard.distanza_m}m</p>
                     </div>
                   </div>
+                </div>
+              )}
+              {metroCard && (
+                <div className="rounded-lg border border-blue-300 bg-blue-50 p-3">
+                  <div className="flex items-start gap-2">
+                    <span className="text-lg leading-none mt-0.5">{metroCard.icon || '🚇'}</span>
+                    <div>
+                      <p className="text-sm font-bold text-blue-900">{metroCard.label}</p>
+                      {metroCard.nome && <p className="text-xs text-blue-800 font-semibold mt-0.5">{metroCard.nome}</p>}
+                      <p className="text-xs text-blue-700 mt-1 leading-relaxed">{metroCard.dettagli}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+              {tramCard && (
+                <div className="rounded-lg border border-yellow-300 bg-yellow-50 p-3">
+                  <div className="flex items-start gap-2">
+                    <span className="text-lg leading-none mt-0.5">{tramCard.icon || '🚊'}</span>
+                    <div>
+                      <p className="text-sm font-bold text-yellow-900">{tramCard.label}</p>
+                      {tramCard.nome && <p className="text-xs text-yellow-800 font-semibold mt-0.5">{tramCard.nome}</p>}
+                      <p className="text-xs text-yellow-700 mt-1 leading-relaxed">{tramCard.dettagli}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+              {/* Waterway elements from Overpass */}
+              {r.vincolo_idrico?.elementi?.map((el, i) => {
+                const isAlto = el.impatto === 'alto';
+                const isMedio = el.impatto === 'medio';
+                const colorCls = isAlto
+                  ? 'border-red-300 bg-red-50'
+                  : isMedio ? 'border-amber-300 bg-amber-50' : 'border-blue-200 bg-blue-50';
+                const textCls = isAlto ? 'text-red-900' : isMedio ? 'text-amber-900' : 'text-blue-900';
+                const subCls = isAlto ? 'text-red-700' : isMedio ? 'text-amber-700' : 'text-blue-700';
+                const smallCls = isAlto ? 'text-red-600' : isMedio ? 'text-amber-600' : 'text-blue-600';
+                return (
+                  <div key={`ww-${i}`} className={`rounded-lg border p-3 ${colorCls}`}>
+                    <div className="flex items-start gap-2">
+                      <span className="text-lg leading-none mt-0.5">{el.icon}</span>
+                      <div>
+                        <p className={`text-sm font-bold ${textCls}`}>{el.label}</p>
+                        {el.nome && <p className={`text-xs font-semibold mt-0.5 ${subCls}`}>{el.nome}</p>}
+                        <p className={`text-xs mt-1 leading-relaxed ${subCls}`}>{el.dettagli}</p>
+                        {el.link_pai && (
+                          <a href={el.link_pai} target="_blank" rel="noopener noreferrer"
+                            className={`text-[10px] underline mt-1 inline-block ${smallCls}`}>
+                            Piano di Assetto Idrogeologico Liguria →
+                          </a>
+                        )}
+                        <p className={`text-[10px] mt-1 ${smallCls}`}>Distanza: {el.distanza_m}m</p>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+              {r.vincolo_idrico?.presente && r.vincolo_idrico.footer && (
+                <div className="col-span-full text-[10px] text-muted-foreground italic border-t border-border pt-2 mt-1">
+                  ℹ️ {r.vincolo_idrico.footer}
                 </div>
               )}
             </div>

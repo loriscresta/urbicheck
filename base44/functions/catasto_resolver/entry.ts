@@ -286,33 +286,33 @@ function haversineM(lat1, lon1, lat2, lon2) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-// ── Overpass API — ferrovie entro 200m (attive + storiche/turistiche) ─────────
-async function checkRailwayVicinity(lat, lon) {
-  const q = `[out:json][timeout:12];(way["railway"~"rail|narrow_gauge|tram|monorail|light_rail|subway|preserved"](around:200,${lat},${lon}););out body tags;>;out skel qt;`;
+// ── Overpass API — Railway (full categorization, regional awareness) ───────────
+async function checkRailwayVicinity(lat, lon, regione = '') {
+  const regioneLower = (regione || '').toLowerCase();
+  const isLiguria = regioneLower.includes('liguria');
+
+  const q = `[out:json][timeout:15];(way["railway"~"rail|narrow_gauge|tram|light_rail|subway|preserved|monorail"](around:200,${lat},${lon}););out body tags;>;out skel qt;`;
   try {
     const res = await fetchWithTimeout('https://overpass-api.de/api/interpreter', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: `data=${encodeURIComponent(q)}`,
-    }, 12000);
-    if (!res.ok) { console.warn('Overpass HTTP', res.status); return null; }
+    }, 15000);
+    if (!res.ok) { console.warn('Overpass railway HTTP', res.status); return null; }
     const data = await res.json();
     const elements = data.elements || [];
     const nodes = {};
     for (const el of elements) { if (el.type === 'node') nodes[el.id] = el; }
     const ways = elements.filter(e => e.type === 'way');
-    if (!ways.length) return { presente: false, ferrovia_attiva: null, ferrovia_storica: null };
+    if (!ways.length) return { presente: false };
 
-    // Per ogni way: calcola distanza minima e categorizza
-    let minDistAttiva = Infinity, minDistStorica = Infinity;
-    let wayAttivaInfo = null, wayStoricaInfo = null;
+    let bestAttiva = null, bestStorica = null, bestMetro = null, bestTram = null;
 
     for (const way of ways) {
       const tags = way.tags || {};
-      const usage = (tags.usage || '').toLowerCase();
-      const preserved = tags['railway:preserved'] === 'yes' || tags.railway === 'preserved';
-      const isTouristicOrPreserved = usage === 'tourism' || preserved;
-      const isActive = !isTouristicOrPreserved && ['main', 'branch', 'regional', 'local', ''].includes(usage);
+      const railType = tags.railway || '';
+      // Skip non-relevant
+      if (['disused', 'razed', 'platform', 'abandoned'].includes(railType)) continue;
 
       let minDist = Infinity;
       for (const nid of (way.nodes || [])) {
@@ -323,48 +323,192 @@ async function checkRailwayVicinity(lat, lon) {
       }
       if (!isFinite(minDist)) continue;
 
+      const distM = Math.round(minDist);
       const name = tags.name || tags['name:it'] || tags.official_name || null;
+      const operator = tags.operator || tags['operator:it'] || null;
+      const usage = (tags.usage || '').toLowerCase();
+      const preserved = tags['railway:preserved'] === 'yes' || railType === 'preserved';
 
-      if (isTouristicOrPreserved && minDist < minDistStorica) {
-        minDistStorica = minDist;
-        wayStoricaInfo = { distanza_m: Math.round(minDist), nome: name, usage, preserved };
-      } else if (isActive && minDist < minDistAttiva) {
-        minDistAttiva = minDist;
-        wayAttivaInfo = { distanza_m: Math.round(minDist), usage };
+      if (railType === 'subway' || railType === 'monorail') {
+        if (!bestMetro || distM < bestMetro.distanza_m)
+          bestMetro = { distanza_m: distM, nome: name, operator };
+      } else if (railType === 'tram' || railType === 'light_rail') {
+        if (!bestTram || distM < bestTram.distanza_m)
+          bestTram = { distanza_m: distM, nome: name, railType };
+      } else if (railType === 'rail' || railType === 'narrow_gauge') {
+        const isTouristicOrPreserved = usage === 'tourism' || preserved;
+        if (isTouristicOrPreserved) {
+          if (!bestStorica || distM < bestStorica.distanza_m)
+            bestStorica = { distanza_m: distM, nome: name, operator };
+        } else {
+          if (!bestAttiva || distM < bestAttiva.distanza_m)
+            bestAttiva = { distanza_m: distM, nome: name, usage };
+        }
       }
     }
 
-    const ferrovia_attiva = wayAttivaInfo ? {
+    const ferrovia_attiva = bestAttiva ? (() => {
+      let dettagli = `Linea ferroviaria attiva nelle vicinanze. Possibile rumore, vibrazioni e impatto sul valore. Distanza: ${bestAttiva.distanza_m}m.`;
+      if (isLiguria) dettagli += ' Nelle zone costiere liguri la linea ferroviaria principale può essere a pochi metri dalle abitazioni — verificare la distanza esatta.';
+      return {
+        presente: true,
+        distanza_m: bestAttiva.distanza_m,
+        icon: '🚆',
+        label: 'Ferrovia attiva',
+        impatto: 'alto',
+        dettagli,
+        tipo: bestAttiva.distanza_m <= 30 ? 'assoluta' : bestAttiva.distanza_m <= 150 ? 'limitata' : 'oltre_fascia',
+        legge: 'DPR 753/1980',
+      };
+    })() : null;
+
+    const ferrovia_storica = bestStorica ? {
       presente: true,
-      distanza_m: wayAttivaInfo.distanza_m,
-      icon: '🚆',
-      label: 'Ferrovia attiva nelle vicinanze',
-      impatto: 'alto',
-      dettagli: `Distanza: ${wayAttivaInfo.distanza_m}m. Rumore, vibrazioni, valore immobiliare potenzialmente ridotto.`,
-      tipo: wayAttivaInfo.distanza_m <= 30 ? 'assoluta' : wayAttivaInfo.distanza_m <= 150 ? 'limitata' : 'oltre_fascia',
-      legge: 'DPR 753/1980',
+      distanza_m: bestStorica.distanza_m,
+      nome: bestStorica.nome,
+      icon: '🚂',
+      label: 'Ferrovia storica/turistica',
+      impatto: 'lieve',
+      dettagli: 'Linea ferroviaria storica a uso turistico. Transiti molto limitati (poche corse al giorno, prevalentemente stagionali). Infrastruttura fisica presente ma rumore occasionale. Può rappresentare un elemento caratteristico e di interesse paesaggistico del territorio.',
+      operatore: bestStorica.operator || null,
     } : null;
 
-    const ferrovia_storica = wayStoricaInfo ? {
+    const metro = bestMetro ? {
       presente: true,
-      distanza_m: wayStoricaInfo.distanza_m,
-      nome: wayStoricaInfo.nome,
-      icon: '🚂',
-      label: 'Ferrovia storica/turistica nelle vicinanze',
-      impatto: 'lieve',
-      dettagli: `Linea ferroviaria storica con servizio turistico — transiti limitati (pochi al giorno). Elemento caratteristico del territorio, può essere percepita come valore aggiunto dal punto di vista paesaggistico e turistico.`,
+      distanza_m: bestMetro.distanza_m,
+      nome: bestMetro.nome,
+      icon: '🚇',
+      label: 'Metropolitana nelle vicinanze',
+      impatto: 'medio',
+      dettagli: `Linea metropolitana. Possibili vibrazioni, impatto variabile a seconda della profondità e della distanza. Distanza: ${bestMetro.distanza_m}m.`,
+    } : null;
+
+    const tram = bestTram ? {
+      presente: true,
+      distanza_m: bestTram.distanza_m,
+      nome: bestTram.nome,
+      icon: '🚊',
+      label: bestTram.railType === 'light_rail' ? 'Ferrovia leggera' : 'Linea tranviaria',
+      impatto: 'lieve_medio',
+      dettagli: `Linea ${bestTram.railType === 'light_rail' ? 'ferroviaria leggera' : 'tranviaria'} nelle vicinanze. Distanza: ${bestTram.distanza_m}m.`,
     } : null;
 
     return {
-      presente: !!(ferrovia_attiva || ferrovia_storica),
+      presente: !!(ferrovia_attiva || ferrovia_storica || metro || tram),
       ferrovia_attiva,
       ferrovia_storica,
-      // backward compat fields
-      distanza_m: ferrovia_attiva?.distanza_m ?? ferrovia_storica?.distanza_m ?? null,
-      tipo: ferrovia_attiva ? (ferrovia_attiva.tipo) : 'storica',
+      metro,
+      tram,
+      // backward compat
+      distanza_m: ferrovia_attiva?.distanza_m ?? metro?.distanza_m ?? tram?.distanza_m ?? ferrovia_storica?.distanza_m ?? null,
+      tipo: ferrovia_attiva ? ferrovia_attiva.tipo : 'nessuna',
     };
   } catch (e) {
     console.warn('Overpass railway error:', e.message);
+    return null;
+  }
+}
+
+// ── Overpass API — Waterways entro 300m (rischio idrico, consapevolezza regionale) ──
+async function checkWaterwayVicinity(lat, lon, regione = '') {
+  const regioneLower = (regione || '').toLowerCase();
+  const isLiguria = regioneLower.includes('liguria');
+  const isLombardia = regioneLower.includes('lombard');
+
+  const q = `[out:json][timeout:15];(way["waterway"~"river|stream|canal|drain|ditch"](around:300,${lat},${lon});way["natural"="water"](around:300,${lat},${lon}););out body tags;>;out skel qt;`;
+  try {
+    const res = await fetchWithTimeout('https://overpass-api.de/api/interpreter', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: `data=${encodeURIComponent(q)}`,
+    }, 15000);
+    if (!res.ok) { console.warn('Overpass waterway HTTP', res.status); return null; }
+    const data = await res.json();
+    const elements = data.elements || [];
+    const nodes = {};
+    for (const el of elements) { if (el.type === 'node') nodes[el.id] = el; }
+    const ways = elements.filter(e => e.type === 'way');
+    if (!ways.length) return { presente: false, elementi: [] };
+
+    const FOOTER = 'Per la valutazione definitiva del rischio idrogeologico consultare la Carta ISPRA e il PAI regionale.';
+    const results = [];
+
+    for (const way of ways) {
+      const tags = way.tags || {};
+      const waterwayType = tags.waterway || '';
+      const naturalType = tags.natural || '';
+      const name = tags.name || tags['name:it'] || null;
+
+      let minDist = Infinity;
+      for (const nid of (way.nodes || [])) {
+        const n = nodes[nid];
+        if (!n) continue;
+        const d = haversineM(lat, lon, n.lat, n.lon);
+        if (d < minDist) minDist = d;
+      }
+      if (!isFinite(minDist) || minDist > 300) continue;
+      const distM = Math.round(minDist);
+
+      if (waterwayType === 'river') {
+        results.push({
+          tipo: 'fiume', nome: name, distanza_m: distM,
+          icon: '🌊', label: 'Fiume nelle vicinanze', impatto: 'alto',
+          dettagli: `Corso d'acqua principale (fiume) entro ${distM}m. ${FOOTER}`,
+        });
+      } else if (waterwayType === 'stream') {
+        if (isLiguria) {
+          // ALL streams in Liguria = high risk (many ligure torrenti not tagged intermittent)
+          results.push({
+            tipo: 'torrente_ligure', nome: name, distanza_m: distM,
+            icon: '⚠️', label: 'TORRENTE LIGURE — RISCHIO ALLUVIONALE ELEVATO', impatto: 'alto',
+            dettagli: 'I torrenti liguri sono spesso in secca in estate ma soggetti a piene improvvise e violente. Verificare la Carta del Rischio Idrogeologico ISPRA e il Piano di Assetto Idrogeologico (PAI) della Regione Liguria prima dell\'acquisto.',
+            link_pai: 'https://www.regione.liguria.it/homepage/territorio/difesa-del-suolo.html',
+            footer: FOOTER,
+          });
+        } else {
+          results.push({
+            tipo: 'corso_acqua_minore', nome: name, distanza_m: distM,
+            icon: '🏞️', label: 'Corso d\'acqua minore', impatto: 'medio',
+            dettagli: `Torrente/corso d'acqua minore entro ${distM}m. ${FOOTER}`,
+          });
+        }
+      } else if (waterwayType === 'canal') {
+        const isNavigli = isLombardia;
+        results.push({
+          tipo: 'canale', nome: name, distanza_m: distM,
+          icon: '🚢', label: 'Canale artificiale', impatto: isNavigli ? 'medio' : 'basso_medio',
+          dettagli: isNavigli
+            ? `Area Navigli — canale artificiale storico. Rischio esondazione verificare con ARPA Lombardia. ${FOOTER}`
+            : `Canale artificiale entro ${distM}m. ${FOOTER}`,
+        });
+      } else if (waterwayType === 'drain' || waterwayType === 'ditch') {
+        results.push({
+          tipo: 'scolo', nome: name, distanza_m: distM,
+          icon: 'ℹ️', label: 'Scolo/roggia presente', impatto: 'basso',
+          dettagli: `Canale di drenaggio/roggia entro ${distM}m. Presenza informativa, non costituisce rischio idrogeologico primario. ${FOOTER}`,
+        });
+      } else if (naturalType === 'water') {
+        results.push({
+          tipo: 'specchio_acqua', nome: name, distanza_m: distM,
+          icon: '🏔️', label: "Specchio d'acqua nelle vicinanze", impatto: 'basso',
+          dettagli: `Lago/specchio d'acqua entro ${distM}m. Presenza informativa. ${FOOTER}`,
+        });
+      }
+    }
+
+    // Deduplicate by tipo, keep closest
+    const seen = new Set();
+    const elementi = results
+      .sort((a, b) => a.distanza_m - b.distanza_m)
+      .filter(r => { if (seen.has(r.tipo)) return false; seen.add(r.tipo); return true; });
+
+    return {
+      presente: elementi.length > 0,
+      elementi,
+      footer: FOOTER,
+    };
+  } catch (e) {
+    console.warn('Overpass waterway error:', e.message);
     return null;
   }
 }
@@ -646,24 +790,28 @@ Deno.serve(async (req) => {
     }
   }
 
-  // Fix D — Overpass: verifica vincolo ferroviario
+  // Fix D — Overpass: verifica vincolo ferroviario e idrico (parallel)
   let vincoloFerroviaRelevato = null;
+  let vincoloIdricoRilevato = null;
   try {
-    vincoloFerroviaRelevato = await checkRailwayVicinity(finalLat, finalLon);
-    if (vincoloFerroviaRelevato) {
-      console.log(`Railway check: presente=${vincoloFerroviaRelevato.presente} dist=${vincoloFerroviaRelevato.distanza_m}m tipo=${vincoloFerroviaRelevato.tipo}`);
-      if (query_id && queryRecord) {
-        await base44.entities.CadastralQuery.update(query_id, {
-          report_data: {
-            ...(queryRecord.report_data || {}),
-            catasto_data,
-            vincolo_ferroviario: vincoloFerroviaRelevato,
-          },
-        });
-      }
+    [vincoloFerroviaRelevato, vincoloIdricoRilevato] = await Promise.all([
+      checkRailwayVicinity(finalLat, finalLon, regioneName),
+      checkWaterwayVicinity(finalLat, finalLon, regioneName),
+    ]);
+    console.log(`Railway: presente=${vincoloFerroviaRelevato?.presente} dist=${vincoloFerroviaRelevato?.distanza_m}m`);
+    console.log(`Waterway: presente=${vincoloIdricoRilevato?.presente} elementi=${vincoloIdricoRilevato?.elementi?.length || 0}`);
+    if (query_id && queryRecord) {
+      await base44.entities.CadastralQuery.update(query_id, {
+        report_data: {
+          ...(queryRecord.report_data || {}),
+          catasto_data,
+          vincolo_ferroviario: vincoloFerroviaRelevato,
+          vincolo_idrico: vincoloIdricoRilevato,
+        },
+      });
     }
   } catch (e) {
-    console.warn('Railway check failed:', e.message);
+    console.warn('Overpass checks failed:', e.message);
   }
 
   return Response.json({
@@ -676,5 +824,6 @@ Deno.serve(async (req) => {
     wfs_polygon: !!wfsResult?.geojson_polygon,
     catasto_data,
     vincolo_ferroviario: vincoloFerroviaRelevato,
+    vincolo_idrico: vincoloIdricoRilevato,
   });
 });
