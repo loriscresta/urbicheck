@@ -439,7 +439,7 @@ async function queryOverpass(lat, lon, includeLakes = false) {
 
   const q = `[out:json][timeout:15];
 (
-  way["railway"~"^(rail|tram|light_rail|narrow_gauge|subway)$"](around:250,${lat},${lon});
+  way["railway"~"^(rail|tram|light_rail|narrow_gauge|subway)$"](around:500,${lat},${lon});
   way["waterway"~"^(river|stream|canal)$"](around:250,${lat},${lon});
   relation["waterway"="river"](around:250,${lat},${lon});${lakesQuery}
 );
@@ -583,14 +583,12 @@ async function runAnalisiLiguria({ comune, provincia, indirizzo, comuneLower, pr
   const riferimento_normativo_sismica = 'OPCM 3274/2003 — classificazione vigente Regione Liguria';
 
   const ferrovie = railways.length > 0
-    ? railways.map(r => ({ trovato: true, nome: r.nome, tipo_infrastruttura: r.tipo, operatore: r.operatore, livello: 'VERIFICA_NECESSARIA', riferimento_normativo: 'DPR 11 luglio 1980 n.753', fascia_rispetto: "30m dall'asse del binario (art.49)", fonte: 'OpenStreetMap / Overpass API', descrizione: `Rilevata ferrovia (${r.nome}) entro 250m. Il DPR 753/1980 vieta nuove costruzioni entro 30m dall'asse del binario.` }))
-    : [{ trovato: false, nota: geocodingError ? 'Non verificabile (geocoding fallito).' : !overpass_ok ? 'Non verificabile (Overpass API non raggiungibile — verificare manualmente su openrailwaymap.org).' : 'Nessuna ferrovia rilevata entro 250m dal punto analizzato.' }];
+    ? railways.map(r => ({ trovato: true, nome: r.nome, tipo_infrastruttura: r.tipo, operatore: r.operatore, livello: 'VERIFICA_NECESSARIA', riferimento_normativo: 'DPR 11 luglio 1980 n.753', fascia_rispetto: "30m dall'asse del binario (art.49)", fonte: 'OpenStreetMap / Overpass API', descrizione: `Rilevata ferrovia (${r.nome}) entro 500m. Il DPR 753/1980 vieta nuove costruzioni entro 30m dall'asse del binario.` }))
+    : [{ trovato: false, nota: geocodingError ? 'Non verificabile (geocoding fallito).' : !overpass_ok ? 'Non verificabile (Overpass API non raggiungibile — verificare manualmente su openrailwaymap.org).' : 'Nessuna ferrovia rilevata entro 500m dal punto analizzato.' }];
 
   const corsi_acqua_vincolo = waterways.length > 0
     ? waterways.map(w => ({ trovato: true, nome: w.nome, tipo: w.tipo, livello: w.tipo === 'river' ? 'POSSIBILE_VINCOLO_ALTO' : 'POSSIBILE_VINCOLO_DA_VERIFICARE', riferimento_normativo: 'Art.142 c.1 lett. c) D.Lgs 42/2004', fascia_tutela: '150m dal ciglio di sponda', fonte: 'OpenStreetMap / Overpass API', descrizione: w.tipo === 'river' ? `Rilevato fiume (${w.nome}) entro 250m. Alta probabilità di vincolo. Verificare con Catasto delle Acque Regione Liguria.` : `Rilevato corso d'acqua (${w.nome}) entro 250m. Se iscritto nelle acque pubbliche, si applica il vincolo di 150m.` }))
     : [{ trovato: false, nota: geocodingError ? 'Non verificabile (geocoding fallito).' : !overpass_ok ? "Non verificabile (Overpass API non raggiungibile — verificare su liguriavincoli.it)." : "Nessun corso d'acqua rilevato entro 250m dal punto analizzato." }];
-
-
 
   return {
     coordinate: lat !== null ? { lat, lon, x_gauss_boaga: x3003, y_gauss_boaga: y3003 } : null,
@@ -684,8 +682,8 @@ async function runAnalisiPiemonte({ comune, provincia, indirizzo, comuneLower, p
 
   // Ferrovia
   const ferrovie = railways.length > 0
-    ? railways.map(r => ({ trovato: true, nome: r.nome, tipo_infrastruttura: r.tipo, operatore: r.operatore, livello: 'VERIFICA_NECESSARIA', riferimento_normativo: 'DPR 11 luglio 1980 n.753', fascia_rispetto: "30m dall'asse del binario (art.49)", fonte: 'OpenStreetMap / Overpass API', descrizione: `Rilevata ferrovia (${r.nome}) entro 250m. Il DPR 753/1980 vieta nuove costruzioni entro 30m dall'asse del binario.` }))
-    : [{ trovato: false, nota: geocodingError ? 'Non verificabile (geocoding fallito).' : !overpass_ok ? 'Non verificabile (Overpass API non raggiungibile — verificare manualmente su openrailwaymap.org).' : 'Nessuna ferrovia rilevata entro 250m dal punto analizzato.' }];
+    ? railways.map(r => ({ trovato: true, nome: r.nome, tipo_infrastruttura: r.tipo, operatore: r.operatore, livello: 'VERIFICA_NECESSARIA', riferimento_normativo: 'DPR 11 luglio 1980 n.753', fascia_rispetto: "30m dall'asse del binario (art.49)", fonte: 'OpenStreetMap / Overpass API', descrizione: `Rilevata ferrovia (${r.nome}) entro 500m. Il DPR 753/1980 vieta nuove costruzioni entro 30m dall'asse del binario.` }))
+    : [{ trovato: false, nota: geocodingError ? 'Non verificabile (geocoding fallito).' : !overpass_ok ? 'Non verificabile (Overpass API non raggiungibile — verificare manualmente su openrailwaymap.org).' : 'Nessuna ferrovia rilevata entro 500m dal punto analizzato.' }];
 
   // Corsi d'acqua
   const corsi_acqua_vincolo = waterways.length > 0
