@@ -263,16 +263,6 @@ export default function ReportPage() {
   const ntaLocal = INDICI_NTA_LOCAL[query.comune] || null;
 
   const isPiemonte = (query.regione || '').toLowerCase().includes('piemonte');
-
-  // FIX 5 — PRG mismatch: categoria residenziale vs zona servizi/impianti
-  const isResiCategory = /^A\//i.test(categoriaRaw || '');
-  const isPrgServizi = r.zonizzazione && (
-    r.zonizzazione.zona_codice === '19' ||
-    /servizi.*(impianti|pubblici)/i.test(r.zonizzazione.destinazione_prevalente || '') ||
-    /area.*servizi/i.test(r.zonizzazione.destinazione_prevalente || '') ||
-    /servizi.impianti/i.test(r.zonizzazione.zona_codice || '')
-  );
-  const showPrgMismatchNote = isResiCategory && isPrgServizi;
   const isLiguria = (query.regione || '').toLowerCase().includes('liguria');
   const wfsRis = r.wfs_liguria?.risultati;
   const wfsSismica = wfsRis?.sismica;
@@ -397,6 +387,16 @@ export default function ReportPage() {
   const categoriaRaw = query.categoria_catastale || r.dati_catastali?.categoria;
   const categoriaGroup = detectCategoriaGroup(categoriaRaw);
   const categoriaBadge = categoriaGroup ? CATEGORIA_LABELS[categoriaGroup] : null;
+
+  // FIX 5 — PRG mismatch: categoria residenziale vs zona servizi/impianti (MUST be after categoriaRaw)
+  const isResiCategory = /^A\//i.test(categoriaRaw || '');
+  const isPrgServizi = r.zonizzazione && (
+    r.zonizzazione.zona_codice === '19' ||
+    /servizi.*(impianti|pubblici)/i.test(r.zonizzazione.destinazione_prevalente || '') ||
+    /area.*servizi/i.test(r.zonizzazione.destinazione_prevalente || '') ||
+    /servizi.impianti/i.test(r.zonizzazione.zona_codice || '')
+  );
+  const showPrgMismatchNote = isResiCategory && isPrgServizi;
 
   const complessitaRaw = r.valutazione_sintetica?.livello_complessita;
   const complessitaNorm = normalizeComplessita(complessitaRaw);
