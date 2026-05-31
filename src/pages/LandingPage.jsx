@@ -305,15 +305,18 @@ export default function LandingPage() {
         <div className="max-w-2xl mx-auto text-center">
           <p style={{ color: AC, fontSize: "0.62rem", fontWeight: 700, letterSpacing: "4px", textTransform: "uppercase", marginBottom: "1.25rem" }}>Sei tra i primi</p>
           <h2 style={{ color: W, fontFamily: MONO, fontWeight: 700, fontSize: "clamp(1.5rem, 3.5vw, 2.25rem)", lineHeight: 1.2, marginBottom: "1.25rem" }}>
-            Entra nella beta.<br />2 query gratuite per i primi 100.
+            Entra nella beta.<br />Prime 3 analisi gratis.
           </h2>
-          <p style={{ color: "rgba(244,239,230,0.7)", fontFamily: SERIF, fontSize: "1rem", lineHeight: 1.7, marginBottom: "2.5rem" }}>
-            UrbiCheck è in accesso anticipato. Piemonte e Liguria disponibili da subito. Nuove regioni in arrivo.
+          <p style={{ color: "rgba(244,239,230,0.7)", fontFamily: SERIF, fontSize: "1rem", lineHeight: 1.7, marginBottom: "1rem" }}>
+            UrbiCheck è in accesso anticipato. Piemonte, Liguria e Lombardia disponibili da subito. Nuove regioni in arrivo.
+          </p>
+          <p style={{ color: AC, fontFamily: MONO, fontSize: "0.68rem", letterSpacing: "1px", marginBottom: "2rem" }}>
+            3 gratis → €2,99/report → fino a 6 report totali in beta · Prezzo speciale beta · Valido 30 giorni dal lancio
           </p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <button onClick={handleLogin}
               style={{ background: AC, color: W, fontFamily: MONO, fontWeight: 700, fontSize: "0.8rem", letterSpacing: "1.5px", textTransform: "uppercase", border: "none", padding: "0 2rem", height: "3.25rem", cursor: "pointer" }}>
-              Inizia ora — €9,90 →
+              3 gratis → poi €2,99/report →
             </button>
             <Link to="/waitlist"
               style={{ display: "flex", alignItems: "center", justifyContent: "center", background: "transparent", color: "rgba(244,239,230,0.7)", fontFamily: MONO, fontSize: "0.78rem", letterSpacing: "1px", border: `1px solid rgba(244,239,230,0.25)`, padding: "0 1.5rem", height: "3.25rem", textDecoration: "none" }}
@@ -378,7 +381,7 @@ export default function LandingPage() {
               <p style={{ fontFamily: MONO, fontWeight: 700, color: P, fontSize: "0.72rem" }}>✓ Operazione fattibile — Score 7/10</p>
             </div>
             <button onClick={handleLogin} style={{ width: "100%", marginTop: "1rem", background: AC, color: W, fontFamily: MONO, fontWeight: 700, fontSize: "0.75rem", letterSpacing: "1.5px", textTransform: "uppercase", border: "none", padding: "0.85rem", cursor: "pointer" }}>
-              Ottieni il tuo report — €9,90 →
+              Prime 3 analisi gratis · poi €2,99/report →
             </button>
           </motion.div>
         </div>
