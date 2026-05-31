@@ -4,7 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, ChevronDown, ChevronUp, Info, Plus, X, Building2, AlertTriangle } from "lucide-react";
+import { Loader2, ChevronDown, ChevronUp, Info, Plus, X, Building2, AlertTriangle, CheckCircle2 } from "lucide-react";
+import { calculatePlanimetriaArea } from "@/functions/calculatePlanimetriaArea";
 import ComuneAutocomplete from "@/components/search/ComuneAutocomplete";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import VisuraUploader from "@/components/search/VisuraUploader";
@@ -88,6 +89,9 @@ export default function CadastralSearchForm({ onSubmit, isLoading, submitLabel =
   const [showFinancial, setShowFinancial] = useState(false);
   const [visuraDati, setVisuraDati] = useState(null);
   const [planimetriaFile, setPlanimetriaFile] = useState(null);
+  const [planimetriaFormato, setPlanimetriaFormato] = useState(null);
+  const [planimetriaSuperficie, setPlanimetriaSuperficie] = useState(null); // number | 'failed' | null
+  const [planimetriaCalcoloLoading, setPlanimetriaCalcoloLoading] = useState(false);
   const [superficieMq, setSuperficieMq] = useState("");
   const [totalAcquisitionPrice, setTotalAcquisitionPrice] = useState("");
   const [prezzoBaseAsta, setPrezzoBaseAsta] = useState("");
@@ -142,6 +146,29 @@ export default function CadastralSearchForm({ onSubmit, isLoading, submitLabel =
 
   const removeParcel = (pid) => {
     setParcels(ps => ps.length > 1 ? ps.filter(p => p.id !== pid) : ps);
+  };
+
+  // ── Planimetria format selection + surface calculation ────────────────────────
+  const handlePlanimetriaFormato = async (formato) => {
+    setPlanimetriaFormato(formato);
+    setPlanimetriaSuperficie(null);
+    if (!planimetriaFile) return;
+    setPlanimetriaCalcoloLoading(true);
+    try {
+      const { file_url } = await base44.integrations.Core.UploadFile({ file: planimetriaFile });
+      const res = await calculatePlanimetriaArea({ file_url, formato });
+      const mq = res?.data?.superficie_mq;
+      if (mq && mq > 0 && mq < 5000) {
+        setPlanimetriaSuperficie(mq);
+        setSuperficieMq(String(mq));
+      } else {
+        setPlanimetriaSuperficie('failed');
+      }
+    } catch {
+      setPlanimetriaSuperficie('failed');
+    } finally {
+      setPlanimetriaCalcoloLoading(false);
+    }
   };
 
   // ── Visura pre-fill ─────────────────────────────────────────────────────────
@@ -399,12 +426,86 @@ export default function CadastralSearchForm({ onSubmit, isLoading, submitLabel =
         <input
           type="file"
           accept=".pdf,.jpg,.jpeg,.png"
-          onChange={e => setPlanimetriaFile(e.target.files?.[0] || null)}
+          onChange={e => {
+            const f = e.target.files?.[0] || null;
+            setPlanimetriaFile(f);
+            setPlanimetriaFormato(null);
+            setPlanimetriaSuperficie(null);
+          }}
           className="block text-xs text-muted-foreground w-full cursor-pointer file:mr-3 file:py-1 file:px-3 file:border-0 file:text-xs file:font-semibold file:bg-primary file:text-primary-foreground file:cursor-pointer hover:file:opacity-90"
         />
         <p className="text-[10px] text-muted-foreground">Hai la planimetria? Allegala per calcoli più precisi — PDF, JPG o PNG · Max 10MB</p>
         <p className="text-[10px] text-muted-foreground italic">Documento riservato — accessibile solo al proprietario o a professionisti abilitati con autorizzazione scritta</p>
-        {planimetriaFile && <p className="text-xs text-emerald-700 font-semibold">✓ {planimetriaFile.name} allegata</p>}
+
+        {/* Format selector — shown after file upload */}
+        {planimetriaFile && !planimetriaSuperficie && !planimetriaCalcoloLoading && (
+          <div className="mt-2 p-3 rounded border border-primary/30 bg-blue-50/60 space-y-2">
+            <p className="text-xs font-semibold" style={{ color: '#1A3A6B', fontFamily: "'IBM Plex Mono', monospace" }}>
+              Formato foglio planimetria:
+            </p>
+            <div className="flex gap-2">
+              {['A4', 'A3'].map(fmt => (
+                <button
+                  key={fmt}
+                  type="button"
+                  onClick={() => handlePlanimetriaFormato(fmt)}
+                  className="px-5 py-2 text-sm font-bold border-2 transition-colors"
+                  style={{
+                    fontFamily: "'IBM Plex Mono', monospace",
+                    background: planimetriaFormato === fmt ? '#1A3A6B' : 'white',
+                    color: planimetriaFormato === fmt ? 'white' : '#1A3A6B',
+                    borderColor: '#1A3A6B',
+                  }}
+                >
+                  {fmt}
+                </button>
+              ))}
+            </div>
+            <p className="text-[10px] text-muted-foreground italic" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
+              Selezionando il formato ti assumi la responsabilità della correttezza. La superficie verrà calcolata automaticamente.
+            </p>
+          </div>
+        )}
+
+        {/* Loading */}
+        {planimetriaCalcoloLoading && (
+          <div className="mt-2 flex items-center gap-2 text-xs text-primary" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
+            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            Calcolo superficie in corso (formato {planimetriaFormato})…
+          </div>
+        )}
+
+        {/* Success result */}
+        {planimetriaSuperficie && planimetriaSuperficie !== 'failed' && (
+          <div className="mt-2 p-3 rounded border border-emerald-300 bg-emerald-50 space-y-1">
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+              <p className="text-xs font-bold text-emerald-800" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
+                Superficie calcolata: {planimetriaSuperficie} m² (da planimetria {planimetriaFormato} in scala 1:200)
+              </p>
+            </div>
+            <p className="text-[10px] text-emerald-700 italic pl-6" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
+              Stima automatica ±5% — basata sul formato foglio selezionato dall'utente
+            </p>
+          </div>
+        )}
+
+        {/* Failed — show manual input inline */}
+        {planimetriaSuperficie === 'failed' && (
+          <div className="mt-2 p-3 rounded border border-amber-300 bg-amber-50 space-y-2">
+            <p className="text-xs font-semibold text-amber-800" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
+              ⚠️ Calcolo automatico non riuscito — inserisci manualmente la superficie:
+            </p>
+            <Input
+              type="number"
+              value={superficieMq}
+              onChange={e => setSuperficieMq(e.target.value)}
+              placeholder="es. 85 mq"
+              className="h-8 text-sm"
+            />
+          </div>
+        )}
+
         <div className="mt-2 p-3 rounded bg-blue-50 border border-blue-200 text-[10px] text-blue-800 space-y-2">
           <p className="font-semibold">ℹ️ Visura catastale vs Planimetria catastale</p>
           <div>

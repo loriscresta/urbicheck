@@ -1,7 +1,8 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
-import sharp from 'npm:sharp@0.33.5';
+import Jimp from 'npm:jimp@0.22.12';
+import { Buffer } from 'node:buffer';
 
-// Known short-side dimensions per format (mm)
+// Short-side dimensions per format (mm)
 const PAPER_SHORT_SIDE_MM = { A4: 210, A3: 297 };
 
 Deno.serve(async (req) => {
@@ -21,50 +22,67 @@ Deno.serve(async (req) => {
 
     // Fetch image bytes
     const imgRes = await fetch(file_url);
-    if (!imgRes.ok) return Response.json({ error: 'Impossibile scaricare l\'immagine' }, { status: 400 });
-    const buffer = Buffer.from(await imgRes.arrayBuffer());
+    if (!imgRes.ok) return Response.json({ error: "Impossibile scaricare l'immagine" }, { status: 400 });
+    const arrayBuf = await imgRes.arrayBuffer();
+    const buffer = Buffer.from(arrayBuf);
 
-    // Resize to max 1200px on the long side for speed, then grayscale → raw pixels
+    // Load with Jimp, resize to max 1200px on long side for performance
+    let image = await Jimp.read(buffer);
     const MAX_PX = 1200;
-    const { data, info } = await sharp(buffer)
-      .resize(MAX_PX, MAX_PX, { fit: 'inside', withoutEnlargement: true })
-      .grayscale()
-      .raw()
-      .toBuffer({ resolveWithObject: true });
+    if (image.getWidth() > MAX_PX || image.getHeight() > MAX_PX) {
+      image = image.scaleToFit(MAX_PX, MAX_PX);
+    }
+    image.greyscale();
 
-    const { width, height } = info;
-    console.log(`Image: ${width}x${height}px, format: ${formato}`);
+    const width = image.getWidth();
+    const height = image.getHeight();
+    const bitmapData = image.bitmap.data; // Uint8Array/Buffer, 4 bytes per pixel (RGBA)
 
-    // mm per pixel (use short side of image = short side of paper)
+    console.log(`Image processed: ${width}x${height}px, format: ${formato}`);
+
+    // mm per pixel using the short side of the image = short side of paper
     const shortSidePx = Math.min(width, height);
     const mmPerPx = paperShortMm / shortSidePx;
     const realMmPerPx = mmPerPx * 200; // 1:200 scale
 
-    // Threshold: gray >= 200 = white/background candidate
-    const THRESHOLD = 200;
-    const isWhite = new Uint8Array(width * height);
-    for (let i = 0; i < data.length; i++) {
-      isWhite[i] = data[i] >= THRESHOLD ? 1 : 0;
+    // Build grayscale flat array (1 byte per pixel)
+    const total = width * height;
+    const gray = new Uint8Array(total);
+    for (let i = 0; i < total; i++) {
+      gray[i] = bitmapData[i * 4]; // R channel (same as G=B after greyscale)
     }
 
-    // BFS flood fill from all 4 edges to identify exterior background
-    const exterior = new Uint8Array(width * height);
-    const queue = [];
+    // Threshold: >= 220 = white background candidate
+    const THRESHOLD = 220;
+    const isWhite = new Uint8Array(total);
+    for (let i = 0; i < total; i++) {
+      isWhite[i] = gray[i] >= THRESHOLD ? 1 : 0;
+    }
+
+    // BFS flood fill from all edges to identify exterior background
+    const exterior = new Uint8Array(total);
+    const queue = new Int32Array(total); // pre-allocated queue
+    let qHead = 0, qTail = 0;
+
     const seed = (idx) => {
-      if (isWhite[idx] && !exterior[idx]) { exterior[idx] = 1; queue.push(idx); }
+      if (isWhite[idx] && !exterior[idx]) {
+        exterior[idx] = 1;
+        queue[qTail++] = idx;
+      }
     };
+
+    // Seed from all edge pixels
     for (let x = 0; x < width; x++) {
-      seed(x);                          // top row
-      seed((height - 1) * width + x);  // bottom row
+      seed(x);
+      seed((height - 1) * width + x);
     }
     for (let y = 1; y < height - 1; y++) {
-      seed(y * width);                  // left column
-      seed(y * width + width - 1);     // right column
+      seed(y * width);
+      seed(y * width + width - 1);
     }
 
-    let qi = 0;
-    while (qi < queue.length) {
-      const idx = queue[qi++];
+    while (qHead < qTail) {
+      const idx = queue[qHead++];
       const x = idx % width;
       const y = (idx - x) / width;
       if (x > 0)          seed(idx - 1);
@@ -73,24 +91,22 @@ Deno.serve(async (req) => {
       if (y < height - 1) seed(idx + width);
     }
 
-    // Count non-exterior pixels = floor plan interior (walls + interior space)
+    // Count non-exterior pixels = floor plan interior
     let interiorPx = 0;
-    for (let i = 0; i < width * height; i++) {
+    for (let i = 0; i < total; i++) {
       if (!exterior[i]) interiorPx++;
     }
 
-    // Convert to m²: area = pixels × (real_mm_per_px / 1000)²
+    // Convert to m²
     const areaM2 = interiorPx * Math.pow(realMmPerPx / 1000, 2);
     const superficieMq = Math.round(areaM2 * 10) / 10;
 
-    console.log(`Interior pixels: ${interiorPx}, area: ${superficieMq} m²`);
+    console.log(`Interior pixels: ${interiorPx}/${total}, area: ${superficieMq} m²`);
 
     return Response.json({
       superficie_mq: superficieMq,
       formato,
       scala: '1:200',
-      width_px: width,
-      height_px: height,
       disclaimer: "Stima automatica ±5% — basata sul formato foglio selezionato dall'utente",
     });
   } catch (error) {
