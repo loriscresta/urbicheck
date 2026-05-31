@@ -337,29 +337,46 @@ export default function ReportPage() {
 
   const wfsFerroviario = wfsRis?.vincolo_ferroviario;
   const ferrorieTrovate = wfsFerroviario?.dati?.filter(d => d.trovato) || [];
-  let vincoloFerroviarioEffettivo;
+  let vincoloFerroviarioEffettivo = null;
+  let ferroviaStoricaCard = null;
+
   if (wfsFerroviario) {
+    // WFS Liguria source
     vincoloFerroviarioEffettivo = {
       presente: ferrorieTrovate.length > 0,
       dettagli: ferrorieTrovate.length > 0
         ? ferrorieTrovate.map(d => `${d.nome} — fascia rispetto 30m (DPR 753/1980)`).join(' | ')
         : (wfsFerroviario.dati?.[0]?.nota || 'Nessuna ferrovia rilevata entro 250m.'),
     };
-  } else if (r.vincolo_ferroviario?.tipo) {
-    // Fix D — da Overpass check in catasto_resolver
+  } else if (r.vincolo_ferroviario) {
+    // Overpass source (catasto_resolver)
     const vf = r.vincolo_ferroviario;
-    if (vf.tipo === 'assente') {
-      vincoloFerroviarioEffettivo = null; // non mostrare se fuori fascia
-    } else {
+
+    // Ferrovia attiva
+    if (vf.ferrovia_attiva?.presente) {
+      const fa = vf.ferrovia_attiva;
+      vincoloFerroviarioEffettivo = {
+        presente: true,
+        dettagli: fa.tipo === 'assoluta'
+          ? `🚆 Ferrovia attiva — Fascia di rispetto ASSOLUTA (DPR 753/1980 art. 49). Edificazione vietata entro 30m. Distanza: ${fa.distanza_m}m.`
+          : fa.tipo === 'limitata'
+          ? `🚆 Ferrovia attiva — Fascia di rispetto 150m (DPR 753/1980). Interventi soggetti ad autorizzazione RFI. Distanza: ${fa.distanza_m}m. Richiedere CDU al Comune.`
+          : `🚆 Ferrovia attiva nelle vicinanze. Distanza: ${fa.distanza_m}m. Verificare fasce di rispetto DPR 753/1980.`,
+      };
+    } else if (vf.tipo && vf.tipo !== 'assente' && vf.tipo !== 'storica' && !vf.ferrovia_attiva) {
+      // backward compat: old structure without categorization
       vincoloFerroviarioEffettivo = {
         presente: vf.presente,
         dettagli: vf.tipo === 'assoluta'
-          ? `Fascia di rispetto ferroviaria ASSOLUTA — DPR 753/1980 art. 49. Edificazione vietata entro 30m dall'asse ferroviario. Distanza rilevata: ${vf.distanza_m}m.`
-          : `Zona soggetta a vincolo ferroviario — DPR 753/1980. Entro 150m dall'asse ferroviario si applicano limitazioni alla costruzione. Distanza rilevata: ${vf.distanza_m}m. Richiedere CDU al Comune.`,
+          ? `Fascia di rispetto ferroviaria ASSOLUTA — DPR 753/1980 art. 49. Edificazione vietata entro 30m. Distanza: ${vf.distanza_m}m.`
+          : `Zona soggetta a vincolo ferroviario — DPR 753/1980. Entro 150m si applicano limitazioni. Distanza: ${vf.distanza_m}m. Richiedere CDU.`,
       };
     }
-  } else {
-    vincoloFerroviarioEffettivo = null;
+
+    // Ferrovia storica/turistica
+    if (vf.ferrovia_storica?.presente) {
+      ferroviaStoricaCard = vf.ferrovia_storica;
+    }
   }
 
   const FIN_FINALITA = ["investimento", "sviluppo_immobiliare", "asta_giudiziaria"];
@@ -625,6 +642,21 @@ export default function ReportPage() {
               )}
               {vincoloFerroviarioEffettivo && (
                 <VincoloCard label="Vincolo Ferroviario" presente={vincoloFerroviarioEffettivo.presente} dettagli={vincoloFerroviarioEffettivo.dettagli} unverified={!hasVerifiedVincoli} />
+              )}
+              {ferroviaStoricaCard && (
+                <div className="rounded-lg border border-amber-300 bg-amber-50 p-3">
+                  <div className="flex items-start gap-2">
+                    <span className="text-lg leading-none mt-0.5">🚂</span>
+                    <div>
+                      <p className="text-sm font-bold text-amber-900">{ferroviaStoricaCard.label}</p>
+                      {ferroviaStoricaCard.nome && (
+                        <p className="text-xs text-amber-800 font-semibold mt-0.5">{ferroviaStoricaCard.nome}</p>
+                      )}
+                      <p className="text-xs text-amber-700 mt-1 leading-relaxed">{ferroviaStoricaCard.dettagli}</p>
+                      <p className="text-[10px] text-amber-600 mt-1">Distanza: {ferroviaStoricaCard.distanza_m}m · Impatto: {ferroviaStoricaCard.impatto}</p>
+                    </div>
+                  </div>
+                </div>
               )}
             </div>
             {r.vincoli?.altri_vincoli?.length > 0 && !wfsRis && (

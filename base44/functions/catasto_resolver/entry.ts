@@ -286,9 +286,9 @@ function haversineM(lat1, lon1, lat2, lon2) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-// ── Overpass API — ferrovie entro 200m ─────────────────────────────────────
+// ── Overpass API — ferrovie entro 200m (attive + storiche/turistiche) ─────────
 async function checkRailwayVicinity(lat, lon) {
-  const q = `[out:json][timeout:10];(way["railway"~"^(rail|mainline|branch|secondary|tertiary)$"](around:200,${lat},${lon}););out body;>;out skel qt;`;
+  const q = `[out:json][timeout:12];(way["railway"~"rail|narrow_gauge|tram|monorail|light_rail|subway|preserved"](around:200,${lat},${lon}););out body tags;>;out skel qt;`;
   try {
     const res = await fetchWithTimeout('https://overpass-api.de/api/interpreter', {
       method: 'POST',
@@ -300,20 +300,69 @@ async function checkRailwayVicinity(lat, lon) {
     const elements = data.elements || [];
     const nodes = {};
     for (const el of elements) { if (el.type === 'node') nodes[el.id] = el; }
-    let minDist = Infinity;
     const ways = elements.filter(e => e.type === 'way');
+    if (!ways.length) return { presente: false, ferrovia_attiva: null, ferrovia_storica: null };
+
+    // Per ogni way: calcola distanza minima e categorizza
+    let minDistAttiva = Infinity, minDistStorica = Infinity;
+    let wayAttivaInfo = null, wayStoricaInfo = null;
+
     for (const way of ways) {
+      const tags = way.tags || {};
+      const usage = (tags.usage || '').toLowerCase();
+      const preserved = tags['railway:preserved'] === 'yes' || tags.railway === 'preserved';
+      const isTouristicOrPreserved = usage === 'tourism' || preserved;
+      const isActive = !isTouristicOrPreserved && ['main', 'branch', 'regional', 'local', ''].includes(usage);
+
+      let minDist = Infinity;
       for (const nid of (way.nodes || [])) {
         const n = nodes[nid];
         if (!n) continue;
         const d = haversineM(lat, lon, n.lat, n.lon);
         if (d < minDist) minDist = d;
       }
+      if (!isFinite(minDist)) continue;
+
+      const name = tags.name || tags['name:it'] || tags.official_name || null;
+
+      if (isTouristicOrPreserved && minDist < minDistStorica) {
+        minDistStorica = minDist;
+        wayStoricaInfo = { distanza_m: Math.round(minDist), nome: name, usage, preserved };
+      } else if (isActive && minDist < minDistAttiva) {
+        minDistAttiva = minDist;
+        wayAttivaInfo = { distanza_m: Math.round(minDist), usage };
+      }
     }
-    if (!ways.length || minDist > 200) return { presente: false, distanza_m: null, tipo: 'assente' };
-    if (minDist <= 30)  return { presente: true,  distanza_m: Math.round(minDist), tipo: 'assoluta' };
-    if (minDist <= 150) return { presente: true,  distanza_m: Math.round(minDist), tipo: 'limitata' };
-    return { presente: false, distanza_m: Math.round(minDist), tipo: 'assente' };
+
+    const ferrovia_attiva = wayAttivaInfo ? {
+      presente: true,
+      distanza_m: wayAttivaInfo.distanza_m,
+      icon: '🚆',
+      label: 'Ferrovia attiva nelle vicinanze',
+      impatto: 'alto',
+      dettagli: `Distanza: ${wayAttivaInfo.distanza_m}m. Rumore, vibrazioni, valore immobiliare potenzialmente ridotto.`,
+      tipo: wayAttivaInfo.distanza_m <= 30 ? 'assoluta' : wayAttivaInfo.distanza_m <= 150 ? 'limitata' : 'oltre_fascia',
+      legge: 'DPR 753/1980',
+    } : null;
+
+    const ferrovia_storica = wayStoricaInfo ? {
+      presente: true,
+      distanza_m: wayStoricaInfo.distanza_m,
+      nome: wayStoricaInfo.nome,
+      icon: '🚂',
+      label: 'Ferrovia storica/turistica nelle vicinanze',
+      impatto: 'lieve',
+      dettagli: `Linea ferroviaria storica con servizio turistico — transiti limitati (pochi al giorno). Elemento caratteristico del territorio, può essere percepita come valore aggiunto dal punto di vista paesaggistico e turistico.`,
+    } : null;
+
+    return {
+      presente: !!(ferrovia_attiva || ferrovia_storica),
+      ferrovia_attiva,
+      ferrovia_storica,
+      // backward compat fields
+      distanza_m: ferrovia_attiva?.distanza_m ?? ferrovia_storica?.distanza_m ?? null,
+      tipo: ferrovia_attiva ? (ferrovia_attiva.tipo) : 'storica',
+    };
   } catch (e) {
     console.warn('Overpass railway error:', e.message);
     return null;
