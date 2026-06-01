@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { motion } from "framer-motion";
-import { getOMIData, getOMIDataByNome, calcolaTariffaNotteOMI } from "@/lib/omiData";
+import { getOMIData, getOMIDataByNome, calcolaTariffaNotteOMI, isIndirizzoRurale } from "@/lib/omiData";
 
 // ── Costi ristrutturazione 2025 ─────────────────────────────────────────────
 const RISTR_COSTS = {
@@ -68,10 +68,12 @@ export default function FinancialDueDiligence({ query, finData, onSnapshotReady 
   const codiceBelfioreRaw = query.codice_comune_catasto || null;
   const codiceBelfiore = codiceBelfioreRaw ? codiceBelfioreRaw.replace(/[_\s]/g, '').toUpperCase() : null;
   const isZonaCentrale  = false; // default: fascia B/C periferica
-  // FIX 7 — Fallback to name-based lookup when no codice belfiore in entity
+  const indirizzo = query.indirizzo_immobile || query.indirizzo_catastale || null;
+  const rurale = isIndirizzoRurale(indirizzo);
+  const sigla_prov = query.sigla_provincia || query.provincia || null;
   const omi = codiceBelfiore
-    ? getOMIData(codiceBelfiore, query.categoria_catastale, isZonaCentrale)
-    : getOMIDataByNome(query.comune, isZonaCentrale);
+    ? getOMIData(codiceBelfiore, query.categoria_catastale, isZonaCentrale, rurale)
+    : getOMIDataByNome(query.comune, isZonaCentrale, sigla_prov, indirizzo);
   console.log('OMI lookup:', query.comune, '| belfiore:', codiceBelfiore, '| is_default:', omi.is_default);
 
   // ── Calcoli investimento (solo se superficie disponibile) ─────────────────
@@ -266,11 +268,18 @@ Fornisci punteggio e analisi sintetica.`,
         </div>
         <div className="p-5">
           <div className="flex flex-wrap gap-2 mb-4">
-            <Badge className="bg-blue-100 text-blue-800 border-blue-200">{omi.fascia_omi}</Badge>
-            <Badge variant="outline" className="text-xs">{omi.semestre_riferimento}</Badge>
+            <Badge className="bg-blue-100 text-blue-800 border-blue-200">
+              {omi.zona_omi_codice || 'B1'} — {omi.fascia_omi}
+            </Badge>
+            <Badge variant="outline" className="text-xs">
+              {omi.tipologia || 'Abitazioni civili'}
+            </Badge>
+            <Badge variant="outline" className="text-xs">
+              {omi.semestre_label || omi.semestre_riferimento || '2° sem. 2025'}
+            </Badge>
             {omi.is_default ? (
               <Badge className="bg-amber-100 text-amber-800 border-amber-200 text-xs">
-                ⚠ Comune non nel DB OMI — medie provinciali
+                ⚠ Media provinciale (comune non nel DB OMI)
               </Badge>
             ) : (
               <Badge className="bg-emerald-100 text-emerald-800 border-emerald-200 text-xs">
@@ -295,10 +304,16 @@ Fornisci punteggio e analisi sintetica.`,
             <Info className="w-3 h-3 inline mr-1" />
             {omi.note_mercato}
           </p>
-          <a href={omi.fonte_url} target="_blank" rel="noopener noreferrer"
-            className="mt-1 text-xs text-primary flex items-center gap-1 hover:underline">
-            <ExternalLink className="w-3 h-3" /> Banca Dati OMI — Agenzia delle Entrate
-          </a>
+          <div className="mt-2 flex flex-wrap gap-3">
+            <a href={omi.fonte_url} target="_blank" rel="noopener noreferrer"
+              className="text-xs text-primary flex items-center gap-1 hover:underline">
+              <ExternalLink className="w-3 h-3" /> Banca Dati OMI — Agenzia delle Entrate
+            </a>
+            <a href="https://www1.agenziaentrate.gov.it/servizi/Consultazione/ricerca.htm" target="_blank" rel="noopener noreferrer"
+              className="text-xs text-emerald-700 flex items-center gap-1 hover:underline font-semibold">
+              <ExternalLink className="w-3 h-3" /> Verifica su AdE →
+            </a>
+          </div>
         </div>
       </motion.div>
 

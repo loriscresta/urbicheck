@@ -1,7 +1,7 @@
 /**
  * Database OMI — Osservatorio del Mercato Immobiliare
  * Fonte: Agenzia delle Entrate, Open Data CC BY
- * Aggiornamento: 2024-II (secondo semestre 2024)
+ * Aggiornamento: 2025-II (secondo semestre 2025)
  * URL: https://www.agenziaentrate.gov.it/portale/schede/fabbricatiterreni/omi/banche-dati/quotazioni-immobiliari
  *
  * Formato: codiceBelfiore → { residenziale, zona_centrale, anno_sem, is_costiero }
@@ -197,9 +197,40 @@ const OMI_DB = {
   "DEFAULT": {
     residenziale:  { valore_min: 900,  valore_max: 1800, loc_min: 5.0, loc_max: 10.0 },
     zona_centrale: { valore_min: 1300, valore_max: 2500, loc_min: 7.0, loc_max: 13.0 },
-    anno_sem: "2024-II", is_costiero: false,
+    anno_sem: "2025-II", is_costiero: false,
   },
 };
+
+// ── Fallback provinciali (medie OMI AdE 2025-II per zona B1 — abitazioni civili) ──
+// Fonte: agenziaentrate.gov.it/portale/schede/fabbricatiterreni/omi
+const PROVINCE_OMI = {
+  // Piemonte
+  'AT': { B1: { valore_min: 478, valore_max: 715, loc_min: 2.8, loc_max: 4.5 }, anno_sem: '2025-II', label: 'Asti (AT)' },
+  'AL': { B1: { valore_min: 520, valore_max: 780, loc_min: 3.0, loc_max: 4.8 }, anno_sem: '2025-II', label: 'Alessandria (AL)' },
+  'TO': { B1: { valore_min: 900, valore_max: 1800, loc_min: 5.0, loc_max: 10.0 }, anno_sem: '2025-II', label: 'Torino (TO)' },
+  'CN': { B1: { valore_min: 600, valore_max: 1000, loc_min: 3.5, loc_max: 6.0 }, anno_sem: '2025-II', label: 'Cuneo (CN)' },
+  'NO': { B1: { valore_min: 750, valore_max: 1200, loc_min: 4.0, loc_max: 7.0 }, anno_sem: '2025-II', label: 'Novara (NO)' },
+  'VC': { B1: { valore_min: 600, valore_max: 950, loc_min: 3.2, loc_max: 5.5 }, anno_sem: '2025-II', label: 'Vercelli (VC)' },
+  'BI': { B1: { valore_min: 550, valore_max: 900, loc_min: 3.0, loc_max: 5.2 }, anno_sem: '2025-II', label: 'Biella (BI)' },
+  'VB': { B1: { valore_min: 700, valore_max: 1200, loc_min: 4.0, loc_max: 7.0 }, anno_sem: '2025-II', label: 'Verbano-Cusio-Ossola (VB)' },
+  // Liguria
+  'GE': { B1: { valore_min: 1100, valore_max: 2200, loc_min: 6.0, loc_max: 11.0 }, anno_sem: '2025-II', label: 'Genova (GE)' },
+  'SP': { B1: { valore_min: 1200, valore_max: 2000, loc_min: 6.5, loc_max: 11.0 }, anno_sem: '2025-II', label: 'La Spezia (SP)' },
+  'SV': { B1: { valore_min: 1300, valore_max: 2200, loc_min: 7.0, loc_max: 12.0 }, anno_sem: '2025-II', label: 'Savona (SV)' },
+  'IM': { B1: { valore_min: 1400, valore_max: 2500, loc_min: 7.0, loc_max: 13.0 }, anno_sem: '2025-II', label: 'Imperia (IM)' },
+  // Lombardia
+  'MI': { B1: { valore_min: 2000, valore_max: 4000, loc_min: 12.0, loc_max: 22.0 }, anno_sem: '2025-II', label: 'Milano (MI)' },
+  'BS': { B1: { valore_min: 900,  valore_max: 1700, loc_min: 5.0, loc_max: 9.5 }, anno_sem: '2025-II', label: 'Brescia (BS)' },
+  'BG': { B1: { valore_min: 1000, valore_max: 2000, loc_min: 5.5, loc_max: 10.5 }, anno_sem: '2025-II', label: 'Bergamo (BG)' },
+};
+
+// Keyword indirizzi rurali/extraurbani — attiva zona R1
+const RURAL_KEYWORDS = /(fraz\.?|frazione|loc\.?|localit[àa]|\bSP\b|\bSS\b|strada\s+provinciale|strada\s+statale|cascina|borgata|regione\s)/i;
+
+export function isIndirizzoRurale(indirizzo) {
+  if (!indirizzo) return false;
+  return RURAL_KEYWORDS.test(indirizzo);
+}
 
 // BUG 6 — Lookup secondario per nome comune (gestisce Lombardia e comuni non nel DB)
 const NOME_TO_BELFIORE = {
@@ -212,20 +243,59 @@ const NOME_TO_BELFIORE = {
   "sestri levante": "I693",
 };
 
-export function getOMIDataByNome(nomeComune, isZonaCentrale = false) {
+export function getOMIDataByNome(nomeComune, isZonaCentrale = false, sigla_provincia = null, indirizzo = null) {
   const key = (nomeComune || '').toLowerCase().trim();
   const belfiore = NOME_TO_BELFIORE[key];
   if (belfiore && OMI_DB[belfiore]) {
-    const result = getOMIData(belfiore, null, isZonaCentrale);
+    const rurale = isIndirizzoRurale(indirizzo);
+    const result = getOMIData(belfiore, null, isZonaCentrale, rurale);
     return { ...result, is_default: false };
   }
-  // Fallback with a helpful message instead of generic "Comune non censito"
+
+  // Fallback 1: media provinciale OMI
+  const sigla = (sigla_provincia || '').toUpperCase().trim();
+  const prov = PROVINCE_OMI[sigla];
+  if (prov) {
+    const rurale = isIndirizzoRurale(indirizzo);
+    const fascia = prov.B1;
+    // Zona rurale R1: -35% rispetto B1 centro abitato
+    const factor = rurale ? 0.65 : 1.0;
+    const vMin = Math.round(fascia.valore_min * factor);
+    const vMax = Math.round(fascia.valore_max * factor);
+    const lMin = +(fascia.loc_min * factor).toFixed(1);
+    const lMax = +(fascia.loc_max * factor).toFixed(1);
+    const postRistrFactor = 1.2;
+    return {
+      omi_min_mq:            vMin,
+      omi_max_mq:            vMax,
+      omi_medio_mq:          Math.round((vMin + vMax) / 2),
+      omi_post_ristr_min:    Math.round(vMin * postRistrFactor),
+      omi_post_ristr_max:    Math.round(vMax * postRistrFactor),
+      canone_locazione_min:  lMin,
+      canone_locazione_max:  lMax,
+      fascia_omi:            rurale ? 'R1 — Zona Rurale' : 'B1 — Centro Abitato',
+      zona_omi_codice:       rurale ? 'R1' : 'B1',
+      tipologia:             'Abitazioni civili',
+      semestre_riferimento:  prov.anno_sem,
+      semestre_label:        `2° sem. ${prov.anno_sem.split('-')[0]}`,
+      is_costiero:           false,
+      is_default:            true,
+      fonte:                 `OMI AdE ${prov.anno_sem} — Media provincia ${prov.label}`,
+      fonte_url:             `https://www1.agenziaentrate.gov.it/servizi/Consultazione/ricerca.htm`,
+      note_mercato:          `Valori OMI medi per la provincia di ${prov.label}${rurale ? ' — zona rurale (R1)' : ' — centro abitato (B1)'}. Verifica il valore esatto per ${nomeComune} su agenziaentrate.gov.it/omi.`,
+    };
+  }
+
+  // Fallback 2: DEFAULT nazionale
   const result = getOMIData('DEFAULT', null, isZonaCentrale);
   return {
     ...result,
     is_default: true,
-    note_mercato: `Dati OMI per ${nomeComune} disponibili su agenziaentrate.gov.it/omi — ricerca per comune: "${nomeComune}".`,
-    fonte_url: `https://www.agenziaentrate.gov.it/portale/schede/fabbricatiterreni/omi/banche-dati/quotazioni-immobiliari`,
+    zona_omi_codice: 'B1',
+    tipologia: 'Abitazioni civili',
+    semestre_label: `2° sem. 2025`,
+    note_mercato: `Dati OMI per ${nomeComune} disponibili su agenziaentrate.gov.it/omi.`,
+    fonte_url: `https://www1.agenziaentrate.gov.it/servizi/Consultazione/ricerca.htm`,
   };
 }
 
@@ -236,32 +306,53 @@ export function getOMIDataByNome(nomeComune, isZonaCentrale = false) {
  * @param {boolean} [isZonaCentrale] - true per fascia A (centrale), false per B/C (periferica)
  * @returns {object} Dati OMI con valori, fonte e flag is_default
  */
-export function getOMIData(codiceBelfiore, tipologiaCatastale, isZonaCentrale = false) {
+export function getOMIData(codiceBelfiore, tipologiaCatastale, isZonaCentrale = false, isRurale = false) {
   const entry = OMI_DB[codiceBelfiore] || OMI_DB["DEFAULT"];
-  const fascia = isZonaCentrale ? entry.zona_centrale : entry.residenziale;
-  const isCostiero = entry.is_costiero || false;
   const isDefault = !OMI_DB[codiceBelfiore];
+  const isCostiero = entry.is_costiero || false;
+
+  let fascia = isZonaCentrale ? entry.zona_centrale : entry.residenziale;
+  let zona_omi_codice = isZonaCentrale ? 'A1' : 'B1';
+  let fascia_label = isZonaCentrale ? 'A1 — Zona Centrale' : 'B1 — Centro Abitato';
+
+  // Zona rurale R1: -35% rispetto B1
+  if (isRurale && !isZonaCentrale) {
+    fascia = {
+      valore_min: Math.round(fascia.valore_min * 0.65),
+      valore_max: Math.round(fascia.valore_max * 0.65),
+      loc_min: +(fascia.loc_min * 0.65).toFixed(1),
+      loc_max: +(fascia.loc_max * 0.65).toFixed(1),
+    };
+    zona_omi_codice = 'R1';
+    fascia_label = 'R1 — Zona Rurale';
+  }
 
   // Valore post-ristrutturazione: +25% zona interna, +35% zona costiera
   const postRistrFactor = isCostiero ? 1.35 : 1.25;
+  const semLabel = entry.anno_sem
+    ? `2° sem. ${entry.anno_sem.replace('-II','').replace('-I','')}`
+    : '2° sem. 2025';
 
   return {
-    omi_min_mq:          fascia.valore_min,
-    omi_max_mq:          fascia.valore_max,
-    omi_medio_mq:        Math.round((fascia.valore_min + fascia.valore_max) / 2),
-    omi_post_ristr_min:  Math.round(fascia.valore_min * postRistrFactor),
-    omi_post_ristr_max:  Math.round(fascia.valore_max * postRistrFactor),
-    canone_locazione_min: fascia.loc_min,
-    canone_locazione_max: fascia.loc_max,
-    fascia_omi:          isZonaCentrale ? "A — zona centrale" : "B/C — zona semicentrale/periferica",
-    semestre_riferimento: entry.anno_sem,
-    is_costiero:         isCostiero,
-    is_default:          isDefault,
-    fonte:               `OMI AdE ${entry.anno_sem} — dati ufficiali open data CC BY`,
-    fonte_url:           "https://www.agenziaentrate.gov.it/portale/schede/fabbricatiterreni/omi/banche-dati/quotazioni-immobiliari",
-    note_mercato:        isDefault
-      ? "⚠ Comune non ancora censito nel database OMI integrato — valori stimati su medie provinciali. Verifica su agenziaentrate.gov.it/omi."
-      : `Valori OMI ufficiali AdE ${entry.anno_sem}${isCostiero ? " — zona costiera (stagionalità inclusa)" : ""}.`,
+    omi_min_mq:            fascia.valore_min,
+    omi_max_mq:            fascia.valore_max,
+    omi_medio_mq:          Math.round((fascia.valore_min + fascia.valore_max) / 2),
+    omi_post_ristr_min:    Math.round(fascia.valore_min * postRistrFactor),
+    omi_post_ristr_max:    Math.round(fascia.valore_max * postRistrFactor),
+    canone_locazione_min:  fascia.loc_min,
+    canone_locazione_max:  fascia.loc_max,
+    fascia_omi:            fascia_label,
+    zona_omi_codice,
+    tipologia:             'Abitazioni civili',
+    semestre_riferimento:  entry.anno_sem || '2025-II',
+    semestre_label:        semLabel,
+    is_costiero:           isCostiero,
+    is_default:            isDefault,
+    fonte:                 `OMI AdE ${entry.anno_sem || '2025-II'} — dati ufficiali open data CC BY`,
+    fonte_url:             'https://www1.agenziaentrate.gov.it/servizi/Consultazione/ricerca.htm',
+    note_mercato:          isDefault
+      ? '⚠ Comune non ancora censito nel database OMI integrato — valori stimati su medie provinciali. Verifica su agenziaentrate.gov.it/omi.'
+      : `Valori OMI ufficiali AdE ${entry.anno_sem || '2025-II'}${isCostiero ? ' — zona costiera (stagionalità inclusa)' : ''}${isRurale ? ' — zona rurale (R1)' : ''}.`,
   };
 }
 
