@@ -183,7 +183,7 @@ async function queryCoastlineOverpass(lat, lon) {
   for (const endpoint of MIRRORS) {
     try {
       const res = await fetchWithTimeout(endpoint, {
-        method: 'POST', body: q, headers: { 'Content-Type': 'text/plain' },
+        method: 'POST', body: new URLSearchParams({ data: q }).toString(), headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       }, 18000);
       const data = await res.json();
       const elements = data.elements || [];
@@ -459,8 +459,8 @@ out skel qt;`;
     try {
       const res = await fetchWithTimeout(endpoint, {
         method: 'POST',
-        body: q,
-        headers: { 'Content-Type': 'text/plain' },
+        body: new URLSearchParams({ data: q }).toString(),
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       }, 20000);
       const data = await res.json();
       const railways = [], waterways = [], lakes = [], seen = new Set();
