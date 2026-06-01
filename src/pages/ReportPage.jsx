@@ -342,18 +342,21 @@ export default function ReportPage() {
   let metroCard = null;
   let tramCard = null;
 
+  // New simplified backend structure: { presente, vicina, ferrovia, distanza_m, tipo, usage }
+  const vfNew = r.vincolo_ferroviario;
+  const isNewStructure = vfNew && typeof vfNew.vicina !== 'undefined';
+
   if (wfsFerroviario) {
     // WFS Liguria source
     vincoloFerroviarioEffettivo = {
       presente: ferrorieTrovate.length > 0,
       dettagli: ferrorieTrovate.length > 0
         ? ferrorieTrovate.map(d => `${d.nome} — fascia rispetto 30m (DPR 753/1980)`).join(' | ')
-        : (wfsFerroviario.dati?.[0]?.nota || 'Nessuna ferrovia rilevata entro 250m.'),
+        : (wfsFerroviario.dati?.[0]?.nota || 'Nessuna ferrovia rilevata entro 500m.'),
     };
-  } else if (r.vincolo_ferroviario) {
-    // Overpass source (catasto_resolver)
-    const vf = r.vincolo_ferroviario;
-
+  } else if (!isNewStructure && vfNew) {
+    // Legacy overpass source (ferrovia_attiva / ferrovia_storica structure)
+    const vf = vfNew;
     if (vf.ferrovia_attiva?.presente) {
       const fa = vf.ferrovia_attiva;
       vincoloFerroviarioEffettivo = {
@@ -365,7 +368,6 @@ export default function ReportPage() {
           : `🚆 ${fa.dettagli || `Ferrovia attiva nelle vicinanze. Distanza: ${fa.distanza_m}m.`}`,
       };
     } else if (vf.presente && vf.tipo && !['nessuna','storica','assente'].includes(vf.tipo) && !vf.ferrovia_attiva) {
-      // backward compat
       vincoloFerroviarioEffettivo = {
         presente: true,
         dettagli: vf.tipo === 'assoluta'
@@ -373,7 +375,6 @@ export default function ReportPage() {
           : `Vincolo ferroviario DPR 753/1980. Distanza: ${vf.distanza_m}m.`,
       };
     }
-
     if (vf.ferrovia_storica?.presente) ferroviaStoricaCard = vf.ferrovia_storica;
     if (vf.metro?.presente) metroCard = vf.metro;
     if (vf.tram?.presente) tramCard = vf.tram;
@@ -658,10 +659,45 @@ export default function ReportPage() {
               {vincoloCorsiAcquaEffettivo && (
                 <VincoloCard label="Corsi d'Acqua (art.142)" presente={vincoloCorsiAcquaEffettivo.presente} dettagli={vincoloCorsiAcquaEffettivo.dettagli} unverified={!hasVerifiedVincoli} />
               )}
-              {vincoloFerroviarioEffettivo && (
+              {/* New simplified vincolo ferroviario (presente / vicina) */}
+              {isNewStructure && (() => {
+                const vf = vfNew;
+                const isStorica = /turist|storica?/i.test(vf.ferrovia || '') || vf.usage === 'tourism';
+                if (vf.presente) {
+                  return (
+                    <div className="rounded-lg border-2 border-red-400 bg-red-50 p-3">
+                      <p className="text-sm font-bold text-red-900">⚠️ VINCOLO FERROVIARIO — ferrovia entro fascia di rispetto (30m)</p>
+                      {vf.ferrovia && <p className="text-xs font-semibold text-red-800 mt-1">{vf.ferrovia}</p>}
+                      {vf.distanza_m != null && <p className="text-xs text-red-700 mt-0.5">Distanza: {vf.distanza_m}m</p>}
+                      {vf.tipo && <p className="text-xs text-red-700">Tipo: {vf.tipo}</p>}
+                      <p className="text-xs text-red-800 mt-1 font-semibold">Rif. DPR 753/1980 — edificazione vietata entro 30m dall’asse del binario.</p>
+                    </div>
+                  );
+                } else if (vf.vicina) {
+                  return (
+                    <div className="rounded-lg border border-amber-400 bg-amber-50 p-3">
+                      <p className="text-sm font-bold text-amber-900">🚂 Ferrovia nelle vicinanze — {vf.distanza_m != null ? `${vf.distanza_m}m` : 'distanza n/d'}</p>
+                      {vf.ferrovia && <p className="text-xs font-semibold text-amber-800 mt-1">{vf.ferrovia}</p>}
+                      <p className="text-xs text-amber-800 mt-1 leading-relaxed">
+                        Ferrovia rilevata nelle vicinanze ma fuori dalla fascia di rispetto legale (30m). Nessun vincolo DPR 753/1980 applicabile, ma la presenza della ferrovia è rilevante per valutazione acustica e valore immobiliare.
+                      </p>
+                      {isStorica && <p className="text-xs text-amber-700 mt-1 font-semibold">Linea a carattere storico/turistico — transiti limitati.</p>}
+                    </div>
+                  );
+                } else {
+                  return (
+                    <div className="rounded-lg border border-emerald-300 bg-emerald-50 p-3 flex items-center gap-2">
+                      <span className="text-base">✅</span>
+                      <p className="text-sm text-emerald-800">Nessuna ferrovia entro 500m</p>
+                    </div>
+                  );
+                }
+              })()}
+              {/* Legacy vincolo ferroviario (old structure) */}
+              {!isNewStructure && vincoloFerroviarioEffettivo && (
                 <VincoloCard label="Vincolo Ferroviario" presente={vincoloFerroviarioEffettivo.presente} dettagli={vincoloFerroviarioEffettivo.dettagli} unverified={!hasVerifiedVincoli} />
               )}
-              {ferroviaStoricaCard && (
+              {!isNewStructure && ferroviaStoricaCard && (
                 <div className="rounded-lg border border-amber-300 bg-amber-50 p-3">
                   <div className="flex items-start gap-2">
                     <span className="text-lg leading-none mt-0.5">{ferroviaStoricaCard.icon || '🚂'}</span>
@@ -675,7 +711,7 @@ export default function ReportPage() {
                   </div>
                 </div>
               )}
-              {metroCard && (
+              {!isNewStructure && metroCard && (
                 <div className="rounded-lg border border-blue-300 bg-blue-50 p-3">
                   <div className="flex items-start gap-2">
                     <span className="text-lg leading-none mt-0.5">{metroCard.icon || '🚇'}</span>
@@ -687,7 +723,7 @@ export default function ReportPage() {
                   </div>
                 </div>
               )}
-              {tramCard && (
+              {!isNewStructure && tramCard && (
                 <div className="rounded-lg border border-yellow-300 bg-yellow-50 p-3">
                   <div className="flex items-start gap-2">
                     <span className="text-lg leading-none mt-0.5">{tramCard.icon || '🚊'}</span>
