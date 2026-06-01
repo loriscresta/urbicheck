@@ -457,9 +457,10 @@ out skel qt;`;
     if (mirrorIdx > 0) await sleep(1500);
     const endpoint = OVERPASS_MIRRORS[mirrorIdx];
     try {
+      const formBody = 'data=' + encodeURIComponent(q);
       const res = await fetchWithTimeout(endpoint, {
         method: 'POST',
-        body: new URLSearchParams({ data: q }).toString(),
+        body: formBody,
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       }, 20000);
       const data = await res.json();
