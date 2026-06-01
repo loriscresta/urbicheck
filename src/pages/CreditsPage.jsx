@@ -138,12 +138,21 @@ export default function CreditsPage() {
       >
         <div>
           <p className="text-[10px] uppercase tracking-[2px] mb-1" style={{ color: 'rgba(244,239,230,0.45)', fontFamily: "'IBM Plex Mono', monospace" }}>SALDO ATTUALE</p>
-          <p className="text-4xl font-bold mt-1" style={{ color: '#B33A2A', fontFamily: "'IBM Plex Mono', monospace" }}>
-            {creditsLoading ? <Loader2 className="w-6 h-6 animate-spin text-white" /> : `€ ${(credits?.balance || 0).toFixed(2)}`}
-          </p>
-          <p className="text-xs mt-1" style={{ color: 'rgba(244,239,230,0.4)', fontFamily: "'IBM Plex Mono', monospace" }}>
-            ≈ {Math.floor((credits?.balance || 0) / 9.90)} analisi disponibili
-          </p>
+          {adminUser?.role === 'admin' ? (
+            <>
+              <p className="text-2xl font-bold mt-1" style={{ color: '#B33A2A', fontFamily: "'IBM Plex Mono', monospace" }}>Account Admin</p>
+              <p className="text-xs mt-1" style={{ color: 'rgba(244,239,230,0.7)', fontFamily: "'IBM Plex Mono', monospace" }}>accesso illimitato — nessuna deduzione crediti</p>
+            </>
+          ) : (
+            <>
+              <p className="text-4xl font-bold mt-1" style={{ color: '#B33A2A', fontFamily: "'IBM Plex Mono', monospace" }}>
+                {creditsLoading ? <Loader2 className="w-6 h-6 animate-spin text-white" /> : `€ ${(credits?.balance || 0).toFixed(2)}`}
+              </p>
+              <p className="text-xs mt-1" style={{ color: 'rgba(244,239,230,0.4)', fontFamily: "'IBM Plex Mono', monospace" }}>
+                ≈ {Math.floor((credits?.balance || 0) / 9.90)} analisi disponibili
+              </p>
+            </>
+          )}
         </div>
         <div className="w-14 h-14 flex items-center justify-center" style={{ background: 'rgba(179,58,42,0.15)', border: '1px solid rgba(179,58,42,0.3)' }}>
           <CreditCard className="w-7 h-7" style={{ color: '#B33A2A' }} />

@@ -14,6 +14,18 @@ Deno.serve(async (req) => {
     const { query_id } = await req.json();
     if (!query_id) return Response.json({ error: 'query_id required' }, { status: 400 });
 
+    // Admin bypass — free access, no credit deduction
+    if (user.role === 'admin') {
+      console.log(`chargeReport: ADMIN bypass for ${user.email}`);
+      const adminQueries = await base44.asServiceRole.entities.CadastralQuery.filter({ id: query_id });
+      const adminQuery = adminQueries[0];
+      if (!adminQuery) return Response.json({ error: 'Query not found' }, { status: 404 });
+      if (!adminQuery.paid) {
+        await base44.asServiceRole.entities.CadastralQuery.update(query_id, { paid: true, status: 'completed', cost: 0 });
+      }
+      return Response.json({ ok: true, deducted: 0, tier: 'admin_free' });
+    }
+
     // Verify query belongs to user
     const queries = await base44.asServiceRole.entities.CadastralQuery.filter({ id: query_id });
     const query = queries[0];
