@@ -286,7 +286,7 @@ export default function ParcellaMap({ record, query, item }) {
       const d = res?.data;
       if (!d?.lat || !d?.lng || isNaN(d.lat) || isNaN(d.lng)) return;
       // Accetta SOLO coordinate precise — scarta GEOMETRIC_CENTER e APPROXIMATE
-      const precise = d.location_type === 'ROOFTOP' || d.location_type === 'RANGE_INTERPOLATED';
+      const precise = d.location_type === 'ROOFTOP' || d.location_type === 'RANGE_INTERPOLATED' || d.source === 'nominatim';
       if (precise) {
         setAddressCoords({ lat: d.lat, lng: d.lng, formatted: d.formatted_address, source: 'rooftop' });
         console.log('[ParcellaMap] geocoded ROOFTOP/RANGE_INTERPOLATED:', d.lat, d.lng);
@@ -400,7 +400,7 @@ export default function ParcellaMap({ record, query, item }) {
           {hasPolygon
             ? '— poligono catastale AdE'
             : addressCoords?.source === 'rooftop'
-            ? '— indirizzo geocodificato (ROOFTOP)'
+            ? '— indirizzo geocodificato (' + (addressCoords?.location_type || 'ok') + ')'
             : (initLat && initLon)
             ? '— centroide particella catastale'
             : '— posizione approssimata — verificare'}
