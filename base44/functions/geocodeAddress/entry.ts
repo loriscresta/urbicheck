@@ -49,8 +49,9 @@ Deno.serve(async (req) => {
     ) || data.results[0];
 
     const loc = itResult.geometry.location;
-    console.log('[geocodeAddress] ok:', loc.lat, loc.lng, '|', itResult.formatted_address);
-    return Response.json({ lat: loc.lat, lng: loc.lng, formatted_address: itResult.formatted_address });
+    const locationType = itResult.geometry.location_type;
+    console.log('[geocodeAddress] ok:', loc.lat, loc.lng, '| location_type:', locationType, '|', itResult.formatted_address);
+    return Response.json({ lat: loc.lat, lng: loc.lng, location_type: locationType, formatted_address: itResult.formatted_address });
 
   } catch (error) {
     console.error('[geocodeAddress] errore:', error.message);

@@ -284,9 +284,14 @@ export default function ParcellaMap({ record, query, item }) {
     }).then(res => {
       if (cancelled) return;
       const d = res?.data;
-      if (d?.lat && d?.lng && !isNaN(d.lat) && !isNaN(d.lng)) {
-        setAddressCoords({ lat: d.lat, lng: d.lng, formatted: d.formatted_address });
-        console.log('[ParcellaMap] geocoded address:', d.lat, d.lng, d.formatted_address);
+      if (!d?.lat || !d?.lng || isNaN(d.lat) || isNaN(d.lng)) return;
+      // Accetta SOLO coordinate precise — scarta GEOMETRIC_CENTER e APPROXIMATE
+      const precise = d.location_type === 'ROOFTOP' || d.location_type === 'RANGE_INTERPOLATED';
+      if (precise) {
+        setAddressCoords({ lat: d.lat, lng: d.lng, formatted: d.formatted_address, source: 'rooftop' });
+        console.log('[ParcellaMap] geocoded ROOFTOP/RANGE_INTERPOLATED:', d.lat, d.lng);
+      } else {
+        console.log('[ParcellaMap] geocoding scartato (location_type=' + d.location_type + ') — uso centroide catastale');
       }
     }).catch(() => {});
     return () => { cancelled = true; };
@@ -392,7 +397,13 @@ export default function ParcellaMap({ record, query, item }) {
       <p className="text-sm text-gray-500">
         📍 WGS84: {displayLat?.toFixed(5)}, {displayLon?.toFixed(5)}{" "}
         <span className="italic text-xs text-gray-400">
-          {hasPolygon ? "— poligono catastale AdE" : addressCoords ? "— indirizzo geocodificato" : "— centroide GIS"}
+          {hasPolygon
+            ? '— poligono catastale AdE'
+            : addressCoords?.source === 'rooftop'
+            ? '— indirizzo geocodificato (ROOFTOP)'
+            : (initLat && initLon)
+            ? '— centroide particella catastale'
+            : '— posizione approssimata — verificare'}
         </span>
       </p>
 
