@@ -40,13 +40,14 @@ function ScoreCircle({ score }) {
 }
 
 export default function FinancialDueDiligence({ query, finData, onSnapshotReady }) {
+  // MUST be declared before any useState that references them (avoid TDZ)
+  const r  = query.report_data || {};
+  const fd = finData || {};
+
   const [scoreData, setScoreData] = useState(null);
   const [loadingScore, setLoadingScore] = useState(false);
   const [mqOverride, setMqOverride] = useState(() => fd.superficie ? parseFloat(fd.superficie) : null);
   const [inputMq, setInputMq] = useState('');
-
-  const r   = query.report_data || {};
-  const fd  = finData || {};
 
   // ── Superficie: usa sempre il valore reale, mai fallback numerico ──────────
   const mqRaw = query.superficie_mq || null;
