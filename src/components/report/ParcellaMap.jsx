@@ -200,7 +200,11 @@ export default function ParcellaMap({ record, query, item }) {
 
     const initMap = () => {
       const L = window.L;
-      if (!L) return;
+      if (!L || !mapDivRef.current) return;
+      // Remove any stale Leaflet instance on the DOM node (prevents "already initialized" error)
+      if (mapDivRef.current._leaflet_id != null) {
+        delete mapDivRef.current._leaflet_id;
+      }
       const map = L.map(mapDivRef.current, {
         zoomControl: true,
         attributionControl: true,
