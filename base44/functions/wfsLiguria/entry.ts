@@ -121,11 +121,10 @@ const CAPOLUOGHI = {
 };
 
 // ============================================================
-// GEOCODING — Nominatim OSM con doppio fallback + capoluogo
+// GEOCODING — Google Maps (primario, trova frazioni rurali) + Nominatim fallback
 // ============================================================
 async function geocodeAddress(indirizzo, comune, provincia, regione) {
   const regioneLabel = regione || 'Italy';
-  // Pulisci l'indirizzo: rimuovi designatori di piano e interni
   const indirizzoClean = indirizzo
     ? indirizzo
         .replace(/\s+[Pp]iano\s+(?:[TtRrSsBb]|[0-9]+)\b.*/i, '')
@@ -135,34 +134,46 @@ async function geocodeAddress(indirizzo, comune, provincia, regione) {
         .trim()
     : null;
 
-  const HEADERS = { 'User-Agent': 'URBICHECK/1.0 (info@urbicheck.it)', 'Accept': 'application/json' };
+  // ── Tentativo 1: Google Maps (trova frazioni, regioni, indirizzi rurali italiani) ──
+  const GOOGLE_KEY = Deno.env.get('GOOGLE_MAPS_API_KEY');
+  if (GOOGLE_KEY && indirizzoClean) {
+    try {
+      const gq = `${indirizzoClean}, ${comune}, ${provincia}, Italia`;
+      const gurl = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(gq)}&key=${GOOGLE_KEY}&language=it&region=it`;
+      const gres = await fetchWithTimeout(gurl, {}, 10000);
+      const gdata = await gres.json();
+      if (gdata.status === 'OK' && gdata.results && gdata.results.length > 0) {
+        const loc = gdata.results[0].geometry.location;
+        return { lat: loc.lat, lon: loc.lng, source: 'google_maps' };
+      }
+    } catch (_e) { /* try Nominatim */ }
+  }
 
-  // Tentativo 1 — con indirizzo completo (o solo comune+regione se no indirizzo)
+  // ── Tentativo 2: Nominatim (fallback per indirizzi standard) ──
+  const HEADERS = { 'User-Agent': 'URBICHECK/1.0 (info@urbicheck.it)', 'Accept': 'application/json' };
   const q1 = indirizzoClean
     ? `${indirizzoClean}, ${comune}, ${regioneLabel}, Italy`
     : `${comune}, ${regioneLabel}, Italy`;
   try {
     const url1 = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q1)}&format=json&limit=1&addressdetails=1`;
     const res1 = await fetchWithTimeout(url1, { headers: HEADERS }, 10000);
-    const text1 = await res1.text();
-    const data1 = JSON.parse(text1);
+    const data1 = JSON.parse(await res1.text());
     if (Array.isArray(data1) && data1.length > 0) {
-      return { lat: parseFloat(data1[0].lat), lon: parseFloat(data1[0].lon) };
+      return { lat: parseFloat(data1[0].lat), lon: parseFloat(data1[0].lon), source: 'nominatim' };
     }
-  } catch (_e) { /* try fallback */ }
+  } catch (_e) {}
 
-  // Tentativo 2 — solo comune + regione
+  // ── Tentativo 3: solo comune ──
   try {
     const url2 = `https://nominatim.openstreetmap.org/search?city=${encodeURIComponent(comune)}&state=${encodeURIComponent(regioneLabel)}&country=Italy&format=json&limit=1`;
     const res2 = await fetchWithTimeout(url2, { headers: HEADERS }, 10000);
-    const text2 = await res2.text();
-    const data2 = JSON.parse(text2);
+    const data2 = JSON.parse(await res2.text());
     if (Array.isArray(data2) && data2.length > 0) {
-      return { lat: parseFloat(data2[0].lat), lon: parseFloat(data2[0].lon) };
+      return { lat: parseFloat(data2[0].lat), lon: parseFloat(data2[0].lon), source: 'nominatim_comune' };
     }
-  } catch (_e) { /* try capoluogo */ }
+  } catch (_e) {}
 
-  // Fallback finale — coordinate capoluogo di regione
+  // ── Fallback finale: capoluogo di regione ──
   const regioneLower = (regione || '').toLowerCase();
   const fallback = CAPOLUOGHI[regioneLower.includes('piemonte') ? 'piemonte' : 'liguria'];
   return { lat: fallback.lat, lon: fallback.lon, isFallbackCapoluogo: true };
@@ -457,10 +468,9 @@ out skel qt;`;
     if (mirrorIdx > 0) await sleep(1500);
     const endpoint = OVERPASS_MIRRORS[mirrorIdx];
     try {
-      const formBody = 'data=' + encodeURIComponent(q);
       const res = await fetchWithTimeout(endpoint, {
         method: 'POST',
-        body: formBody,
+        body: new URLSearchParams({ data: q }).toString(),
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       }, 20000);
       const data = await res.json();
@@ -492,7 +502,15 @@ out skel qt;`;
 // ANALISI LIGURIA
 // ============================================================
 async function runAnalisiLiguria({ comune, provincia, indirizzo, comuneLower, prefill_lat, prefill_lon }) {
-  let lat = prefill_lat || null, lon = prefill_lon || null, x3003 = null, y3003 = null, geocodingError = null;
+  // SEMPRE prova Google Maps se indirizzo disponibile
+  let lat = null, lon = null, x3003 = null, y3003 = null, geocodingError = null;
+  if (indirizzo) {
+    try {
+      const coords = await geocodeAddress(indirizzo, comune, provincia, 'Liguria');
+      if (!coords.isFallbackCapoluogo) { lat = coords.lat; lon = coords.lon; }
+    } catch (_e) {}
+  }
+  if (lat === null) { lat = prefill_lat || null; lon = prefill_lon || null; }
   let pai = [{ layer: 'Rischio idrogeologico', trovato: false, errore: 'Non eseguito' }, { layer: 'Rischio idraulico', trovato: false, errore: 'Non eseguito' }];
   let paiArpa = [];
   let overpassResult = { railways: [], waterways: [], lakes: [], overpass_ok: false };
@@ -630,13 +648,30 @@ async function runAnalisiLiguria({ comune, provincia, indirizzo, comuneLower, pr
 // ANALISI PIEMONTE
 // ============================================================
 async function runAnalisiPiemonte({ comune, provincia, indirizzo, comuneLower, prefill_lat, prefill_lon }) {
-  let lat = prefill_lat || null, lon = prefill_lon || null, geocodingError = null;
+  // SEMPRE prova Google Maps se indirizzo disponibile (trova frazioni rurali)
+  // prefill_lat/lon è il centroide comune — usato solo come ultimo fallback
+  let lat = null, lon = null, geocodingError = null;
   let paiResult = [];
   let overpassResult = { railways: [], waterways: [], lakes: [], overpass_ok: false };
 
-  if (lat === null) {
+  if (indirizzo) {
     try {
       const coords = await geocodeAddress(indirizzo, comune, provincia, 'Piemonte');
+      if (!coords.isFallbackCapoluogo) {
+        lat = coords.lat; lon = coords.lon;
+      }
+    } catch (err) {
+      geocodingError = err.message;
+    }
+  }
+  // Fallback al centroide comune se geocoding specifico fallito
+  if (lat === null) {
+    lat = prefill_lat || null;
+    lon = prefill_lon || null;
+  }
+  if (lat === null && !indirizzo) {
+    try {
+      const coords = await geocodeAddress(null, comune, provincia, 'Piemonte');
       lat = coords.lat; lon = coords.lon;
     } catch (err) {
       geocodingError = err.message;
