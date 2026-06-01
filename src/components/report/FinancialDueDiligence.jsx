@@ -42,7 +42,7 @@ function ScoreCircle({ score }) {
 export default function FinancialDueDiligence({ query, finData, onSnapshotReady }) {
   const [scoreData, setScoreData] = useState(null);
   const [loadingScore, setLoadingScore] = useState(false);
-  const [mqOverride, setMqOverride] = useState(null);
+  const [mqOverride, setMqOverride] = useState(() => fd.superficie ? parseFloat(fd.superficie) : null);
   const [inputMq, setInputMq] = useState('');
 
   const r   = query.report_data || {};
@@ -210,7 +210,24 @@ Fornisci punteggio e analisi sintetica.`,
               <Button
                 size="sm"
                 className="bg-amber-700 hover:bg-amber-800 text-white"
-                onClick={() => { const v = parseFloat(inputMq); if (v > 0) setMqOverride(v); }}
+                onClick={async () => {
+                  const v = parseFloat(inputMq);
+                  if (v > 0) {
+                    setMqOverride(v);
+                    try {
+                      const records = await base44.entities.CadastralQuery.filter({ id: query.id });
+                      const current = records[0];
+                      if (current) {
+                        await base44.entities.CadastralQuery.update(query.id, {
+                          report_data: {
+                            ...current.report_data,
+                            fin_data: { ...(current.report_data?.fin_data || {}), superficie: String(v) },
+                          },
+                        });
+                      }
+                    } catch (_e) { /* non bloccante */ }
+                  }
+                }}
                 disabled={!inputMq || parseFloat(inputMq) <= 0}
               >
                 Calcola →
