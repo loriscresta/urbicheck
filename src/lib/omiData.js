@@ -225,7 +225,7 @@ const PROVINCE_OMI = {
 };
 
 // Keyword indirizzi rurali/extraurbani — attiva zona R1
-const RURAL_KEYWORDS = /(fraz\.?|frazione|loc\.?|localit[àa]|\bSP\b|\bSS\b|strada\s+provinciale|strada\s+statale|cascina|borgata|regione\s)/i;
+const RURAL_KEYWORDS = /(fraz\.?|frazione|loc\.?|localit[\u00e0a]|\bSP\b|\bSS\b|strada\s+provinciale|strada\s+statale|cascina|borgata|regione\s|podere|masseria|contrada)/i;
 
 export function isIndirizzoRurale(indirizzo) {
   if (!indirizzo) return false;
@@ -351,7 +351,7 @@ export function getOMIData(codiceBelfiore, tipologiaCatastale, isZonaCentrale = 
     fonte:                 `OMI AdE ${entry.anno_sem || '2025-II'} — dati ufficiali open data CC BY`,
     fonte_url:             'https://www1.agenziaentrate.gov.it/servizi/Consultazione/ricerca.htm',
     note_mercato:          isDefault
-      ? '⚠ Comune non ancora censito nel database OMI integrato — valori stimati su medie provinciali. Verifica su agenziaentrate.gov.it/omi.'
+      ? 'Stima da dati OMI AdE — medie provinciali. Valore indicativo; verifica la zona specifica su agenziaentrate.gov.it/omi.'
       : `Valori OMI ufficiali AdE ${entry.anno_sem || '2025-II'}${isCostiero ? ' — zona costiera (stagionalità inclusa)' : ''}${isRurale ? ' — zona rurale (R1)' : ''}.`,
   };
 }

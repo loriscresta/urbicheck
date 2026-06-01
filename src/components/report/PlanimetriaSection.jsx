@@ -7,6 +7,13 @@ import { motion } from "framer-motion";
 import { useQueryClient } from "@tanstack/react-query";
 
 export default function PlanimetriaSection({ query, onUpdated }) {
+  // Superficie da catasto/visura
+  const superficieCatasto = query.superficie_mq ? parseFloat(query.superficie_mq) : null;
+  // Stima da vani (categoria A): vani × 17 m²
+  const isCategA = /^A\//.test(query.categoria_catastale || '');
+  const stimaVani = isCategA && query.vani && parseFloat(query.vani) > 0
+    ? Math.round(parseFloat(query.vani) * 17)
+    : null;
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState(null);
   const queryClient = useQueryClient();
@@ -66,34 +73,35 @@ export default function PlanimetriaSection({ query, onUpdated }) {
       </div>
 
       <div className="p-5">
-        {/* Risultato superficie */}
-        {superficiePlanimetrica ? (
-          <div className="flex items-center gap-3 mb-4 p-3 rounded-lg border border-emerald-300 bg-emerald-50">
-            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-            <div>
-              <p className="text-sm font-semibold text-emerald-800">
-                Superficie planimetrica:{" "}
-                {Number(superficiePlanimetrica).toLocaleString("it-IT", {
-                  minimumFractionDigits: 1,
-                  maximumFractionDigits: 1,
-                })}{" "}
-                m² (da planimetria AdE)
-              </p>
-              {planimetriaData?.method && (
-                <p className="text-xs text-emerald-700 mt-0.5">
-                  Metodo: {planimetriaData.method === "testo" ? "Estratto dal testo del documento" : "Ricavato dalla planimetria grafica"}
-                </p>
-              )}
+        {/* Righe superficie */}
+        <div className="space-y-2 mb-4">
+          {superficieCatasto && (
+            <div className="flex items-center justify-between p-2 rounded bg-muted/30 border border-border">
+              <span className="text-xs text-muted-foreground">Da visura/catasto</span>
+              <span className="text-sm font-semibold">{superficieCatasto.toLocaleString('it-IT', { minimumFractionDigits: 0 })} m²</span>
             </div>
-          </div>
-        ) : (
-          <div className="flex items-center gap-3 mb-4 p-3 rounded-lg border border-red-200 bg-red-50">
-            <AlertTriangle className="w-4 h-4 text-red-500 shrink-0" />
-            <p className="text-sm font-semibold text-red-700">
-              Verifica manuale necessaria — superficie non ancora calcolata da planimetria
-            </p>
-          </div>
-        )}
+          )}
+          {superficiePlanimetrica && (
+            <div className="flex items-center justify-between p-2 rounded bg-emerald-50 border border-emerald-200">
+              <span className="text-xs text-emerald-700">Da planimetria AdE</span>
+              <span className="text-sm font-semibold text-emerald-800">
+                {Number(superficiePlanimetrica).toLocaleString('it-IT', { minimumFractionDigits: 1 })} m²
+              </span>
+            </div>
+          )}
+          {stimaVani && !superficieCatasto && !superficiePlanimetrica && (
+            <div className="flex items-center justify-between p-2 rounded bg-amber-50 border border-amber-200">
+              <span className="text-xs text-amber-700">Stima da {query.vani} vani catastali</span>
+              <span className="text-sm font-semibold text-amber-800">{stimaVani} m² <span className="font-normal text-xs">(indicativa)</span></span>
+            </div>
+          )}
+          {!superficieCatasto && !superficiePlanimetrica && !stimaVani && (
+            <div className="flex items-center gap-2 p-2 rounded bg-red-50 border border-red-200">
+              <AlertTriangle className="w-3 h-3 text-red-500 shrink-0" />
+              <p className="text-xs text-red-700">Superficie non disponibile — carica la planimetria PDF</p>
+            </div>
+          )}
+        </div>
 
         {/* Nessuna campitura azzurra — avviso arancione */}
         {noBlue && (
