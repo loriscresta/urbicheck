@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { base44 } from "@/api/base44Client";
+import { geocodeAddress } from "@/functions/geocodeAddress";
 
 const WFS_URL = "https://wfs.cartografia.agenziaentrate.gov.it/inspire/wfs/ows";
 
@@ -52,6 +53,9 @@ export default function ParcellaMap({ record, query, item }) {
   const [polygonLoaded, setPolygonLoaded] = useState(false);
   const [wfsStatus,     setWfsStatus]     = useState("");
   const [geocodedMunPos, setGeocodedMunPos] = useState(null);
+  // Coordinate geocodificate dall'indirizzo reale (priorità su centroid GIS)
+  const [addressCoords, setAddressCoords] = useState(null);
+  const addressMarkerRef = useRef(null);
 
   const addPolygonToMap = useCallback((feature) => {
     const L   = window.L;
@@ -269,6 +273,48 @@ export default function ParcellaMap({ record, query, item }) {
 
 
 
+  // ── Geocoding indirizzo immobile (priorità su centroid GIS per frazioni/rurali) ──
+  useEffect(() => {
+    if (!entity.indirizzo_immobile) return;
+    let cancelled = false;
+    geocodeAddress({
+      indirizzo: entity.indirizzo_immobile,
+      comune: entity.comune || '',
+      provincia: entity.provincia || entity.sigla_provincia || '',
+    }).then(res => {
+      if (cancelled) return;
+      const d = res?.data;
+      if (d?.lat && d?.lng && !isNaN(d.lat) && !isNaN(d.lng)) {
+        setAddressCoords({ lat: d.lat, lng: d.lng, formatted: d.formatted_address });
+        console.log('[ParcellaMap] geocoded address:', d.lat, d.lng, d.formatted_address);
+      }
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [entity.indirizzo_immobile, entity.comune]);
+
+  // ── Pan mappa all'indirizzo reale quando arriva il geocoding ──
+  useEffect(() => {
+    if (!addressCoords || !leafletMapRef.current) return;
+    const L = window.L;
+    const map = leafletMapRef.current;
+    if (!L || !map) return;
+
+    // Se non c'è già un poligono preciso, pan all'indirizzo e aggiorna marker
+    if (!hasPolygon) {
+      map.setView([addressCoords.lat, addressCoords.lng], 17);
+      // Rimuovi eventuale marker precedente
+      if (addressMarkerRef.current) {
+        map.removeLayer(addressMarkerRef.current);
+      }
+      // Aggiungi marker all'indirizzo reale
+      addressMarkerRef.current = L.circleMarker([addressCoords.lat, addressCoords.lng], {
+        radius: 8, color: '#1A3A6B', fillColor: '#2563eb', fillOpacity: 0.9, weight: 2,
+      }).addTo(map).bindPopup(
+        `<strong>📍 ${entity.indirizzo_immobile}</strong><br/>${addressCoords.formatted || entity.comune}<br/><small style="color:#666">Posizione geocodificata da indirizzo</small>`
+      ).openPopup();
+    }
+  }, [addressCoords, hasPolygon]);
+
   // Geocode municipality when no cadastral position available — use comune + provincia for accuracy
   useEffect(() => {
     if (hasPosition || !entity.comune) return;
@@ -337,12 +383,16 @@ export default function ParcellaMap({ record, query, item }) {
     );
   }
 
+  // Coordinate effettive per la visualizzazione
+  const displayLat = addressCoords?.lat ?? initLat;
+  const displayLon = addressCoords?.lng ?? initLon;
+
   return (
     <div className="space-y-2">
       <p className="text-sm text-gray-500">
-        📍 WGS84: {initLat?.toFixed(5)}, {initLon?.toFixed(5)}{" "}
+        📍 WGS84: {displayLat?.toFixed(5)}, {displayLon?.toFixed(5)}{" "}
         <span className="italic text-xs text-gray-400">
-          {hasPolygon ? "— poligono catastale AdE" : "— centroide GIS"}
+          {hasPolygon ? "— poligono catastale AdE" : addressCoords ? "— indirizzo geocodificato" : "— centroide GIS"}
         </span>
       </p>
 
