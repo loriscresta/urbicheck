@@ -23,6 +23,7 @@ import WfsLiguriaPanel from "@/components/report/WfsLiguriaPanel";
 import ParcellaMap from "@/components/report/ParcellaMap";
 import PaymentGate from "@/components/report/PaymentGate";
 import IndiciEdiliziSection from "@/components/report/IndiciEdiliziSection";
+import PlanimetriaSection from "@/components/report/PlanimetriaSection";
 import VincoliRischiPiemonte from "@/components/report/VincoliRischiPiemonte";
 
 const CATEGORIA_GROUPS = {
@@ -575,6 +576,9 @@ export default function ReportPage() {
             )}
           </ReportSection>
         )}
+
+        {/* Planimetria Catastale */}
+        <PlanimetriaSection query={query} onUpdated={refetch} />
 
         {/* Zonizzazione */}
         {r.zonizzazione && (

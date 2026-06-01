@@ -1,9 +1,4 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
-import Jimp from 'npm:jimp@0.22.12';
-import { Buffer } from 'node:buffer';
-
-// Short-side dimensions per format (mm)
-const PAPER_SHORT_SIDE_MM = { A4: 210, A3: 297 };
 
 Deno.serve(async (req) => {
   try {
@@ -11,104 +6,81 @@ Deno.serve(async (req) => {
     const user = await base44.auth.me();
     if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
-    const { file_url, formato } = await req.json();
-    if (!file_url || !formato) {
-      return Response.json({ error: 'file_url e formato richiesti' }, { status: 400 });
-    }
-    const paperShortMm = PAPER_SHORT_SIDE_MM[formato];
-    if (!paperShortMm) {
-      return Response.json({ error: 'Formato non valido — usa A4 o A3' }, { status: 400 });
-    }
+    const { file_url, query_id } = await req.json();
+    if (!file_url) return Response.json({ error: 'file_url richiesto' }, { status: 400 });
 
-    // Fetch image bytes
-    const imgRes = await fetch(file_url);
-    if (!imgRes.ok) return Response.json({ error: "Impossibile scaricare l'immagine" }, { status: 400 });
-    const arrayBuf = await imgRes.arrayBuffer();
-    const buffer = Buffer.from(arrayBuf);
+    console.log('calculatePlanimetriaArea — file_url:', file_url, 'query_id:', query_id);
 
-    // Load with Jimp, resize to max 1200px on long side for performance
-    let image = await Jimp.read(buffer);
-    const MAX_PX = 1200;
-    if (image.getWidth() > MAX_PX || image.getHeight() > MAX_PX) {
-      image = image.scaleToFit(MAX_PX, MAX_PX);
-    }
-    image.greyscale();
-
-    const width = image.getWidth();
-    const height = image.getHeight();
-    const bitmapData = image.bitmap.data; // Uint8Array/Buffer, 4 bytes per pixel (RGBA)
-
-    console.log(`Image processed: ${width}x${height}px, format: ${formato}`);
-
-    // mm per pixel using the short side of the image = short side of paper
-    const shortSidePx = Math.min(width, height);
-    const mmPerPx = paperShortMm / shortSidePx;
-    const realMmPerPx = mmPerPx * 200; // 1:200 scale
-
-    // Build grayscale flat array (1 byte per pixel)
-    const total = width * height;
-    const gray = new Uint8Array(total);
-    for (let i = 0; i < total; i++) {
-      gray[i] = bitmapData[i * 4]; // R channel (same as G=B after greyscale)
-    }
-
-    // Threshold: >= 220 = white background candidate
-    const THRESHOLD = 220;
-    const isWhite = new Uint8Array(total);
-    for (let i = 0; i < total; i++) {
-      isWhite[i] = gray[i] >= THRESHOLD ? 1 : 0;
-    }
-
-    // BFS flood fill from all edges to identify exterior background
-    const exterior = new Uint8Array(total);
-    const queue = new Int32Array(total); // pre-allocated queue
-    let qHead = 0, qTail = 0;
-
-    const seed = (idx) => {
-      if (isWhite[idx] && !exterior[idx]) {
-        exterior[idx] = 1;
-        queue[qTail++] = idx;
-      }
-    };
-
-    // Seed from all edge pixels
-    for (let x = 0; x < width; x++) {
-      seed(x);
-      seed((height - 1) * width + x);
-    }
-    for (let y = 1; y < height - 1; y++) {
-      seed(y * width);
-      seed(y * width + width - 1);
-    }
-
-    while (qHead < qTail) {
-      const idx = queue[qHead++];
-      const x = idx % width;
-      const y = (idx - x) / width;
-      if (x > 0)          seed(idx - 1);
-      if (x < width - 1)  seed(idx + 1);
-      if (y > 0)          seed(idx - width);
-      if (y < height - 1) seed(idx + width);
-    }
-
-    // Count non-exterior pixels = floor plan interior
-    let interiorPx = 0;
-    for (let i = 0; i < total; i++) {
-      if (!exterior[i]) interiorPx++;
-    }
-
-    // Convert to m²
-    const areaM2 = interiorPx * Math.pow(realMmPerPx / 1000, 2);
-    const superficieMq = Math.round(areaM2 * 10) / 10;
-
-    console.log(`Interior pixels: ${interiorPx}/${total}, area: ${superficieMq} m²`);
-
-    return Response.json({
-      superficie_mq: superficieMq,
-      formato,
-      scala: '1:200',
-      disclaimer: "Stima automatica ±5% — basata sul formato foglio selezionato dall'utente",
+    // Extract superficie from PDF using AI (supports PDF, reads both text and visual content)
+    const extraction = await base44.integrations.Core.ExtractDataFromUploadedFile({
+      file_url,
+      json_schema: {
+        type: 'object',
+        properties: {
+          superficie_mq: {
+            type: 'number',
+            description: 'Superficie netta in m² della planimetria catastale. Cerca valori numerici vicino a parole chiave SUP, SUPERFICIE, MQ, superficie netta, superficie utile, superficie catastale. Se non trovato nel testo, stima visivamente l\'area del locale dalla planimetria grafica usando la barra scala se presente.'
+          },
+          method: {
+            type: 'string',
+            enum: ['testo', 'visivo'],
+            description: '"testo" se il valore numerico è scritto esplicitamente nel documento, "visivo" se stimato dalla rappresentazione grafica della planimetria'
+          }
+        },
+        required: ['superficie_mq', 'method']
+      },
     });
+
+    console.log('Extraction result:', JSON.stringify(extraction));
+
+    if (extraction.status !== 'success' || !extraction.output) {
+      return Response.json({
+        error: 'Impossibile estrarre la superficie dal PDF',
+        details: extraction.details || 'Nessun dato estratto'
+      }, { status: 422 });
+    }
+
+    const area_mq = extraction.output.superficie_mq;
+    const method = extraction.output.method || 'visivo';
+
+    if (!area_mq || isNaN(Number(area_mq)) || Number(area_mq) <= 0) {
+      return Response.json({ error: 'Superficie non trovata nel documento — verifica manuale necessaria' }, { status: 422 });
+    }
+
+    const areaMqNumber = Math.round(Number(area_mq) * 10) / 10;
+
+    // Save to CadastralQuery
+    if (query_id) {
+      try {
+        const queries = await base44.entities.CadastralQuery.filter({ id: query_id });
+        const current = queries[0];
+        if (current) {
+          const updateData = {
+            report_data: {
+              ...current.report_data,
+              superficie_planimetrica_mq: areaMqNumber,
+              planimetria_data: {
+                ...(current.report_data?.planimetria_data || {}),
+                source: 'planimetria_upload',
+                was_uploaded: true,
+                superficie_mq: areaMqNumber,
+                method,
+              },
+            },
+          };
+          // Update superficie_mq only if it was empty
+          if (!current.superficie_mq) {
+            updateData.superficie_mq = areaMqNumber;
+          }
+          await base44.entities.CadastralQuery.update(query_id, updateData);
+          console.log('CadastralQuery updated — area_mq:', areaMqNumber, 'method:', method);
+        }
+      } catch (e) {
+        console.error('Errore salvataggio superficie:', e.message);
+      }
+    }
+
+    return Response.json({ area_mq: areaMqNumber, method });
   } catch (error) {
     console.error('calculatePlanimetriaArea error:', error.message);
     return Response.json({ error: error.message }, { status: 500 });
