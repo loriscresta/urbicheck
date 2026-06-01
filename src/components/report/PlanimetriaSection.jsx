@@ -14,6 +14,8 @@ export default function PlanimetriaSection({ query, onUpdated }) {
   const planimetriaData = query.report_data?.planimetria_data;
   const superficiePlanimetrica = query.report_data?.superficie_planimetrica_mq || planimetriaData?.superficie_mq;
 
+  const [noBlue, setNoBlue] = useState(false);
+
   const handleFileChange = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -22,16 +24,23 @@ export default function PlanimetriaSection({ query, onUpdated }) {
       return;
     }
     setError(null);
+    setNoBlue(false);
     setUploading(true);
     try {
       // 1. Upload PDF
       const { file_url } = await base44.integrations.Core.UploadFile({ file });
 
-      // 2. Extract area server-side
+      // 2. Calcola area server-side
       const result = await calculatePlanimetriaArea({ file_url, query_id: query.id });
 
-      if (result?.data?.error) {
-        throw new Error(result.data.error);
+      const resData = result?.data;
+      if (resData?.error) {
+        if (/campitura|azzurra/i.test(resData.error)) {
+          setNoBlue(true);
+        } else {
+          throw new Error(resData.error);
+        }
+        return;
       }
 
       // Refresh report data
@@ -41,7 +50,6 @@ export default function PlanimetriaSection({ query, onUpdated }) {
       setError(err.message || "Errore durante l'elaborazione del PDF");
     } finally {
       setUploading(false);
-      // Reset input
       e.target.value = "";
     }
   };
@@ -87,7 +95,18 @@ export default function PlanimetriaSection({ query, onUpdated }) {
           </div>
         )}
 
-        {/* Error */}
+        {/* Nessuna campitura azzurra — avviso arancione */}
+        {noBlue && (
+          <div className="mb-4 p-3 rounded-lg border border-orange-300 bg-orange-50 flex items-start gap-2">
+            <AlertTriangle className="w-4 h-4 text-orange-500 shrink-0 mt-0.5" />
+            <p className="text-xs text-orange-800 font-semibold">
+              Nessuna campitura azzurra rilevata — verifica il PDF caricato.
+              Assicurati che sia la planimetria catastale AdE (con campiture azzurre del subalterno).
+            </p>
+          </div>
+        )}
+
+        {/* Errori generici */}
         {error && (
           <div className="mb-4 p-3 rounded-lg border border-red-300 bg-red-50 flex items-start gap-2">
             <AlertTriangle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
