@@ -231,13 +231,13 @@ function FerroviaCard({ data }) {
               Vincolo Ferroviario
             </p>
             <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.58rem', color: '#7A7268', marginTop: 2 }}>
-              DPR 753/1980 — Overpass API (raggio 250m)
+              DPR 753/1980 — Overpass API (raggio 500m)
             </p>
           </div>
         </div>
         {hasFerr
           ? <Badge className="text-[10px] bg-amber-100 text-amber-800 border-amber-200 whitespace-nowrap">⚠ Ferrovia rilevata</Badge>
-          : <Badge className="text-[10px] bg-emerald-100 text-emerald-800 border-emerald-200 whitespace-nowrap">✓ Nessuna entro 250m</Badge>
+          : <Badge className="text-[10px] bg-emerald-100 text-emerald-800 border-emerald-200 whitespace-nowrap">✓ Nessuna entro 500m</Badge>
         }
       </div>
 
