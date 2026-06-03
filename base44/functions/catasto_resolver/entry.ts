@@ -612,8 +612,40 @@ Deno.serve(async (req) => {
   }
 
   if (!sezioniTrovate.length) {
-    // Fix B — Nominatim fallback: salva centroid SOLO se non già valorizzato in DB
-    // (evita di sovrascrivere le coordinate corrette dall'enrichment API Google Maps)
+    // Fix B — OnData non trovato: prova WFS diretto se abbiamo coordinate valide in DB
+    // Le coordinate vengono dall'enrichment API (Google Maps) salvate da SearchPage
+    // WFS AdE con quelle coordinate → restituisce il poligono esatto della particella
+    const dbLat = queryRecord?.centroid_lat ? parseFloat(String(queryRecord.centroid_lat)) : null;
+    const dbLon = queryRecord?.centroid_lng ? parseFloat(String(queryRecord.centroid_lng)) : null;
+    if (query_id && queryRecord && dbLat && dbLon && !isNaN(dbLat) && !isNaN(dbLon)) {
+      console.log(`OnData non trovato — provo WFS diretto con coord DB: ${dbLat},${dbLon}`);
+      // Prova WMS GetFeatureInfo + WFS con cascade di BBOX crescenti
+      for (const delta of [0.002, 0.008, 0.02]) {
+        const wfsAttempt = await searchWfsAde(dbLat, dbLon, codiceBelfiore, foglio, particella, '');
+        if (wfsAttempt?.geojson_polygon) {
+          const centroid = calculatePolygonCentroid(wfsAttempt.geojson_polygon);
+          const finalLat2 = centroid?.lat ?? dbLat;
+          const finalLon2 = centroid?.lon ?? dbLon;
+          console.log(`WFS diretto OK: centroide=${finalLat2},${finalLon2}`);
+          try {
+            await base44.entities.CadastralQuery.update(query_id, {
+              centroid_lat: finalLat2,
+              centroid_lng: finalLon2,
+              geometry_geojson: wfsAttempt.geojson_polygon,
+              codice_comune_catasto: codiceBelfiore,
+              fonte_dati_catastali: 'wfs_direct',
+            });
+          } catch (_e) {}
+          return Response.json({ success: true, lat: finalLat2, lon: finalLon2,
+            fonte: 'wfs_direct', wfs_polygon: true, catasto_data: { lat: finalLat2, lon: finalLon2,
+            geojson_polygon: wfsAttempt.geojson_polygon, fonte: 'wfs_direct', calcolato_il: new Date().toISOString() }
+          });
+        }
+        if (delta < 0.02) await new Promise(r => setTimeout(r, 200));
+      }
+      console.log('WFS diretto fallito — uso coordinate DB come centroide');
+    }
+    // Nominatim fallback SOLO se non abbiamo coordinate valide in DB
     if (query_id && queryRecord && !queryRecord.centroid_lat && !queryRecord.centroid_lng) {
       const indirizzoQ = queryRecord.indirizzo_immobile || queryRecord.indirizzo_catastale || null;
       const siglaProv = queryRecord.sigla_provincia || null;
