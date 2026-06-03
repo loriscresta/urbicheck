@@ -65,6 +65,18 @@ export const NTA_LOOKUP = {
   "Asti|Zona residenziale": { IF:"1.5", RC:"50%", H:"16m", DC:"5m", DF:"10m", DS:"5m", nome:"Residenziale consolidata (B tipica)", strumento:"PRG", note:"Verificare sub-zona con CDU." },
   "Asti|DEFAULT":         { IF:"1.5", RC:"50%", H:"16m", DC:"5m", DF:"10m", DS:"5m", nome:"Residenziale consolidata (B tipica)", strumento:"PRG", note:"Valori PRG Asti. Verificare sub-zona con CDU." },
 
+  // ── PIEMONTE — Calamandrana (AT) — PRG vigente Variante strutturale LR 56/77 ──
+  // NTA ufficiali: https://www.comune.calamandrana.at.it/s3prod/uploads/ckeditor/attachments/1/8/2/3/4/NTA.pdf
+  "Calamandrana|R.N":     { IF:"esistente", RC:"40%", H:"8m",  DC:"5m", DF:"10m", DS:"5m", nome:"Residenziale nuclei storici (R.N)", strumento:"PRG Calamandrana", note:"Solo interventi sul patrimonio esistente. Verificare NTA comunali." },
+  "Calamandrana|R.R":     { IF:"1.0", RC:"40%", H:"9m",  DC:"5m", DF:"10m", DS:"5m", nome:"Residenziale recente (R.R)", strumento:"PRG Calamandrana", note:"Zone residenziali di completamento recente. LR 56/77 e s.m.i." },
+  "Calamandrana|Ba":      { IF:"1.0", RC:"45%", H:"9m",  DC:"5m", DF:"10m", DS:"5m", nome:"Residenziale completamento A (Ba)", strumento:"PRG Calamandrana", note:"Verificare schede normative allegate alle NTA." },
+  "Calamandrana|Bb":      { IF:"0.8", RC:"40%", H:"8m",  DC:"5m", DF:"10m", DS:"5m", nome:"Residenziale completamento B (Bb)", strumento:"PRG Calamandrana", note:"Verificare schede normative allegate alle NTA." },
+  "Calamandrana|Ca":      { IF:"0.6", RC:"35%", H:"8m",  DC:"5m", DF:"10m", DS:"5m", nome:"Nuova espansione residenziale A (Ca)", strumento:"PRG Calamandrana", note:"Piani esecutivi obbligatori." },
+  "Calamandrana|Cb":      { IF:"0.5", RC:"30%", H:"7m",  DC:"5m", DF:"10m", DS:"5m", nome:"Nuova espansione residenziale B (Cb)", strumento:"PRG Calamandrana", note:"Piani esecutivi obbligatori." },
+  "Calamandrana|D":       { IF:"—",   RC:"55%", H:"8m",  DC:"5m", DF:"10m", DS:"10m",nome:"Produttiva/artigianale (D)", strumento:"PRG Calamandrana", note:"IF libero nei limiti di RC e H — verificare NTA." },
+  "Calamandrana|Zona residenziale": { IF:"1.0", RC:"40%", H:"9m", DC:"5m", DF:"10m", DS:"5m", nome:"Residenziale (R.R/Ba — verificare zona)", strumento:"PRG Calamandrana", note:"Verificare la zona esatta con CDU al Comune." },
+  "Calamandrana|DEFAULT": { IF:"1.0", RC:"40%", H:"9m",  DC:"5m", DF:"10m", DS:"5m", nome:"Residenziale — PRG Calamandrana (LR 56/77)", strumento:"PRG Calamandrana", note:"⚠ Richiedere CDU al Comune per la zona specifica. NTA: https://www.comune.calamandrana.at.it/s3prod/uploads/ckeditor/attachments/1/8/2/3/4/NTA.pdf" },
+
   // ── PIEMONTE — Cuneo (CN) ───────────────────────────────────────────────
   "Cuneo|Zona A":         { IF:"esistente", RC:"esistente", H:"esistente", DC:"0m", DF:"10m", DS:"0m", nome:"Centro storico", strumento:"PRG", note:"Solo recupero conservativo." },
   "Cuneo|Zona B":         { IF:"1.5", RC:"50%", H:"14m", DC:"5m", DF:"10m", DS:"5m", nome:"Residenziale consolidata", strumento:"PRG", note:"" },
@@ -254,6 +266,7 @@ export const INDICI_NTA = {
   "Torino":                  { IF:"2.0 mc/mq", RC:"50%", Hmax:"20 m",  Dc:"5 m", Df:"10 m", Ds:"5 m", strumento:"PRG", fonte:"PRG Torino 2013 — NTA Zona B" },
   "Cuneo":                   { IF:"1.5 mc/mq", RC:"50%", Hmax:"14 m",  Dc:"5 m", Df:"10 m", Ds:"5 m", strumento:"PRG", fonte:"PRG Cuneo — NTA Zona B" },
   "Asti":                    { IF:"1.5 mc/mq", RC:"50%", Hmax:"16 m",  Dc:"5 m", Df:"10 m", Ds:"5 m", strumento:"PRG", fonte:"PRG Asti — NTA Zona B" },
+  "Calamandrana":            { IF:"1.0 mc/mq", RC:"40%", Hmax:"9 m",   Dc:"5 m", Df:"10 m", Ds:"5 m", strumento:"PRG", fonte:"PRG Calamandrana — NTA Zone R.R/Ba (LR 56/77)" },
   "Novara":                  { IF:"1.5 mc/mq", RC:"50%", Hmax:"16 m",  Dc:"5 m", Df:"10 m", Ds:"5 m", strumento:"PRG", fonte:"PRG Novara — NTA Zona B" },
   "Vercelli":                { IF:"1.5 mc/mq", RC:"45%", Hmax:"14 m",  Dc:"5 m", Df:"10 m", Ds:"5 m", strumento:"PRG", fonte:"PRG Vercelli — NTA Zona B" },
   "Biella":                  { IF:"1.2 mc/mq", RC:"45%", Hmax:"12 m",  Dc:"5 m", Df:"10 m", Ds:"5 m", strumento:"PRG", fonte:"PRG Biella — NTA Zona B" },
