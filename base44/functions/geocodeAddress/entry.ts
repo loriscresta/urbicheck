@@ -99,8 +99,10 @@ Deno.serve(async (req) => {
         }
 
         console.log('[geocodeAddress] Google result:', loc.lat, loc.lng, lt);
-        // FIX v5: per frazioni/rurali accetta GEOMETRIC_CENTER (più preciso del centroide comunale)
-        if (lt === 'ROOFTOP' || lt === 'RANGE_INTERPOLATED' || lt === 'GEOMETRIC_CENTER') {
+        // FIX v6: per frazioni/rurali accetta QUALSIASI risultato Google (ROOFTOP, GEOMETRIC_CENTER, APPROXIMATE)
+        // Il filtro location_type causava il fallback al centroide comunale sbagliato per le frazioni
+        const isRuraleAddress = /fraz|frazione|loc\.|borgh|cascina|regione\s|localit/i.test(q || '');
+        if (lt === 'ROOFTOP' || lt === 'RANGE_INTERPOLATED' || isRuraleAddress) {
           return { lat: loc.lat, lng: loc.lng, location_type: lt,
             formatted_address: r.formatted_address, source: 'google' };
         }
