@@ -1,6 +1,6 @@
 // wfsLiguria.ts — URBICHECK Analisi Urbanistica (Liguria + Piemonte) — v2.2 prg-agent
 const PRG_AGENT_URL = Deno.env.get("PRG_AGENT_URL") ?? "https://urbicheck-prg-agent-production.up.railway.app";
-const ENRICHMENT_API_URL = Deno.env.get("ENRICHMENT_API_URL") ?? "https://urbicheck-enrichment-api-production.up.railway.app";
+const ENRICHMENT_API_URL = Deno.env.get("ENRICHMENT_API_URL") ?? "https://web-production-6e951.up.railway.app";
 // Approccio ibrido: logica legale (vincoli ope legis) + WFS PAI + Overpass API (ferrovie/acque)
 
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
@@ -812,14 +812,17 @@ async function runAnalisiPiemonte({ comune, provincia, indirizzo, comuneLower, p
     if (zona_urbanistica?.zona_codice || zona_urbanistica?.destinazione) {
       try {
         const comuneKey = comuneLower.replace(/\s+/g, '_');
-        // FIX NTA: usa sigla_piano (es. 'Ec') non zona_codice numerico (es. '14')
-        const zonaCodice = zona_urbanistica?.nta_zona || zona_urbanistica?.sigla_piano || zona_urbanistica?.zona_codice || '';
+        // FIX NTA v2: passa zona solo se è un codice letterale (es. 'Ec', 'Ba')
+        // I codici numerici (es. '19') vengono dal WMS mosaicatura e NON corrispondono ai
+        // codici di zona delle NTA comunali → chiamare senza zona per avere parametri_generali
+        const zonaRaw = zona_urbanistica?.nta_zona || zona_urbanistica?.sigla_piano || '';
+        const isLetterCode = zonaRaw && /^[A-Za-z]/.test(zonaRaw.trim());
         const ntaUrl = `${ENRICHMENT_API_URL}/nta/${encodeURIComponent(comuneKey)}` +
-          (zonaCodice ? `?zona=${encodeURIComponent(zonaCodice)}` : '');
+          (isLetterCode ? `?zona=${encodeURIComponent(zonaRaw.trim())}` : '');
         const ntaResp = await fetchWithTimeout(ntaUrl, {}, 20000);
         if (ntaResp.ok) {
           nta_data = await ntaResp.json();
-          // Arricchisci zona_urbanistica con parametri NTA
+          // Arricchisci zona_urbanistica con parametri NTA (zone specifiche o generali)
           if (nta_data?.zona_trovata) {
             const z = nta_data.zona_trovata;
             zona_urbanistica.nta_if = z.if_mc_mq;
@@ -828,6 +831,11 @@ async function runAnalisiPiemonte({ comune, provincia, indirizzo, comuneLower, p
             zona_urbanistica.nta_note = z.note;
             zona_urbanistica.nta_fonte = nta_data.fonte_url;
             zona_urbanistica.nta_disponibile = true;
+          } else if (nta_data?.parametri_generali) {
+            // Nessuna zona specifica trovata ma NTA comunale disponibile
+            zona_urbanistica.nta_fonte = nta_data.fonte_url;
+            zona_urbanistica.nta_disponibile = true;
+            zona_urbanistica.nta_zone_disponibili = nta_data.parametri_generali.zone_disponibili || [];
           }
         }
       } catch (_e) {
