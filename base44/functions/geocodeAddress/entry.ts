@@ -124,10 +124,13 @@ Deno.serve(async (req) => {
         .trim();
       console.log('[geocodeAddress] nomeFrazione pulito:', nomeFrazione);
 
+      // FIX v6: per frazioni, NON includere il fallback "${comune}" nelle query Nominatim
+      // Se "Frazione Boidi, Calamandrana" non trova nulla → Nominatim restituirebbe il centroide
+      // comunale, bloccando Google Maps. Rimuovere la query comune-only → Google Maps trova la
+      // frazione con GEOMETRIC_CENTER (corretto e molto più preciso del centroide comunale).
       const queries = [
         `${nomeFrazione}, ${comune}, ${sigla}, Italia`,
         `${nomeFrazione}, ${comune}, Italia`,
-        `${comune}, ${sigla}, Italia`,
       ];
       result = await tryNominatim(queries, comuneCentroid, 30);
 
