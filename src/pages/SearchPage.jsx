@@ -7,6 +7,7 @@ import ErrorBoundary from "@/components/ErrorBoundary";
 import { Shield, Info, Search, Loader2, CheckCircle2, XCircle } from "lucide-react";
 import { motion } from "framer-motion";
 import { useQuery } from "@tanstack/react-query";
+import { calculatePlanimetriaArea } from '@/functions/calculatePlanimetriaArea';
 
 const BETA_REGIONS = ['piemonte', 'liguria', 'lombardia'];
 
@@ -50,24 +51,20 @@ export default function SearchPage() {
     if (formData.planimetriaFile) {
       try {
         const { file_url } = await base44.integrations.Core.UploadFile({ file: formData.planimetriaFile });
-        const extracted = await base44.integrations.Core.InvokeLLM({
-          prompt: `Sei un esperto di planimetrie catastali italiane. Analizza questa planimetria e estrai: superficie totale in mq, numero di vani/stanze, presenza di balconi/terrazze con relativa superficie se indicata, scala del disegno se leggibile. Se non riesci a leggere chiaramente la planimetria, imposta tutti i valori a null.`,
-          file_urls: [file_url],
-          response_json_schema: {
-            type: "object",
-            properties: {
-              superficie_mq: { type: "number" },
-              vani: { type: "number" },
-              balconi_mq: { type: "number" },
-              scala: { type: "string" },
-              leggibile: { type: "boolean" },
-              note: { type: "string" },
-            }
-          }
-        });
-        if (extracted?.superficie_mq) {
-          planimetriaData = { ...extracted, source: 'planimetria_upload', file_url, was_uploaded: true };
-          if (!superficieEffettiva) superficieEffettiva = extracted.superficie_mq;
+        // Usa Railway /pdf-area (stesso endpoint del report) — preciso per planimetrie AdE
+        const result = await calculatePlanimetriaArea({ file_url, query_id: null });
+        const resData = result?.data;
+        if (resData?.area_mq && resData.area_mq > 5) {
+          planimetriaData = {
+            superficie_mq: resData.area_mq,
+            method: resData.method,
+            scale: resData.scale_px_per_m,
+            confidence: resData.confidence,
+            source: 'planimetria_upload',
+            file_url,
+            was_uploaded: true,
+          };
+          if (!superficieEffettiva) superficieEffettiva = resData.area_mq;
         } else {
           planimetriaData = { leggibile: false, file_url, source: 'planimetria_upload', was_uploaded: true };
         }
