@@ -265,6 +265,11 @@ Deno.serve(async (req) => {
     const base44 = createClientFromRequest(req);
     const user = await base44.auth.me();
     if (!user) return Response.json({ error: "Unauthorized" }, { status: 401 });
+    // Authorization: solo utenti autenticati con ruolo valido
+    const allowedRoles = ['user', 'admin', 'pro', 'beta'];
+    if (user.role && !allowedRoles.includes(user.role)) {
+      return Response.json({ error: "Forbidden — ruolo non autorizzato" }, { status: 403 });
+    }
 
     const body = await req.json();
     const { nomeComune, regione, bbox, codiceISTAT, queryId } = body;
