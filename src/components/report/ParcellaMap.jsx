@@ -326,12 +326,24 @@ export default function ParcellaMap({ record, query, item }) {
       if (cancelled) return;
       const d = res?.data;
       if (!d?.lat || !d?.lng || isNaN(d.lat) || isNaN(d.lng)) return;
-      // FIX v2: accetta qualsiasi risultato Google per indirizzi rurali (frazioni, borgate)
-      // Scarta SOLO i fallback comunali (COMUNE_CENTROID, COMUNE_FALLBACK) che sono troppo generici
+      // FIX v3: scarta fallback comunali E risultati Nominatim troppo generici
+      // Il vecchio geocodeAddress usava "Calamandrana, AT" come fallback Nominatim → ritorna 44.737
+      // ma è il centroide del comune, non l'indirizzo specifico.
+      // Se il DB ha già un centroid valido (da enrichment API) e il geocoding ritorna source:nominatim
+      // con coordinate VICINE al centroide DB (< 2km), non sovrascrivere — è già nella posizione giusta.
       const isComuneFallback = d.location_type === 'COMUNE_CENTROID' || d.location_type === 'COMUNE_FALLBACK';
       const hasValidCoords = d.lat && d.lng && !isNaN(d.lat) && !isNaN(d.lng);
       const inItaly = d.lat > 35 && d.lat < 48 && d.lng > 6 && d.lng < 19;
-      if (hasValidCoords && inItaly && !isComuneFallback) {
+      // Se DB ha già un centroid e il geocoding source è nominatim, verifica che non sia un "retrocesso"
+      // (es. Nominatim ritorna il centroide comunale che è più lontano dal centroide DB)
+      const dbLat = initLat ? parseFloat(String(initLat)) : null;
+      const dbLng = initLon ? parseFloat(String(initLon)) : null;
+      const isNominatimComune = d.source === 'nominatim' && dbLat && dbLng;
+      const distFromDb = isNominatimComune ? Math.hypot(d.lat - dbLat, d.lng - dbLng) : 0;
+      // Se nominatim ritorna qualcosa di più di 0.5° lontano dal DB centroid, è quasi certamente sbagliato
+      // Se nominatim ritorna qualcosa più vicino al centroide DB che non, accettalo — è miglioramento
+      const isNominatimWorserethan = isNominatimComune && distFromDb > 0.015; // >~1.5km — probabile fallback comunale
+      if (hasValidCoords && inItaly && !isComuneFallback && !isNominatimWorserethan) {
         setAddressCoords({ lat: d.lat, lng: d.lng, formatted: d.formatted_address, source: 'rooftop' });
         console.log('[ParcellaMap] geocoded OK:', d.lat, d.lng, d.location_type);
         // Aggiorna DB centroid se diverso da quello attuale (fix permanente per reload successivi)
