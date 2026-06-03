@@ -338,6 +338,68 @@ export default function ParcellaMap({ record, query, item }) {
     return () => { cancelled = true; };
   }, [entity.indirizzo_immobile, entity.comune]);
 
+  // ── Re-lancia WFS dalle coordinate geocodificate (fix centroide DB sbagliato) ──
+  // Quando il geocoding trova l'indirizzo, ri-cerca la particella da quelle coordinate
+  useEffect(() => {
+    if (!addressCoords || hasPolygon || !entity.id || !foglio || !particella) return;
+    let cancelled = false;
+    const { foglio: foglioNum } = parseFoglio(foglio);
+
+    const retryWfsFromAddress = async () => {
+      setWfsStatus("🔍 Ri-cerco geometria dall'indirizzo geocodificato…");
+      const deltas = [0.003, 0.01, 0.04];
+      for (const delta of deltas) {
+        if (cancelled) return;
+        const minLon = (addressCoords.lng - delta).toFixed(7);
+        const minLat = (addressCoords.lat - delta).toFixed(7);
+        const maxLon = (addressCoords.lng + delta).toFixed(7);
+        const maxLat = (addressCoords.lat + delta).toFixed(7);
+        const wfsUrl = `${WFS_URL}?service=WFS&version=2.0.0&request=GetFeature` +
+          `&typeNames=CP:CadastralParcel&outputFormat=application%2Fjson` +
+          `&BBOX=${minLon},${minLat},${maxLon},${maxLat},EPSG:4326`;
+        let fetched = null;
+        try {
+          const res = await fetch(wfsUrl, { headers: { Accept: "application/json" }, signal: AbortSignal.timeout(10000) });
+          if (res.ok) { const d = await res.json(); if (d?.features?.length) fetched = d; }
+        } catch (_e) {}
+        if (!fetched?.features?.length) {
+          try {
+            const proxyUrl = `https://corsproxy.io/?url=${encodeURIComponent(wfsUrl)}`;
+            const res = await fetch(proxyUrl, { signal: AbortSignal.timeout(20000) });
+            if (res.ok) { const t = await res.text(); if (t.trim().startsWith("{")) { const d = JSON.parse(t); if (d?.features?.length) fetched = d; } }
+          } catch (_e) {}
+        }
+        if (fetched?.features?.length && !cancelled) {
+          // Cerca match esatto foglio+particella
+          const exact = fetched.features.find(f => {
+            const lbl = String(f.properties?.label || f.properties?.nationalCadastralReference || "").toUpperCase();
+            return (lbl.includes(`/${particella}`) || lbl.includes(`/${particella.padStart(5,"0")}`)) &&
+                   (lbl.includes(`${foglioNum}/`) || lbl.includes(`${foglioNum.padStart(4,"0")}/`));
+          });
+          if (exact) {
+            addPolygonToMap(exact);
+            try {
+              const ring = exact?.geometry?.coordinates?.[0];
+              const updateData = { geometry_geojson: exact };
+              if (ring?.length > 2) {
+                const cLat = ring.reduce((s,c) => s+c[1], 0) / ring.length;
+                const cLon = ring.reduce((s,c) => s+c[0], 0) / ring.length;
+                updateData.centroid_lat = cLat;
+                updateData.centroid_lng = cLon;
+              }
+              await base44.entities.CadastralQuery.update(entity.id, updateData);
+            } catch (e) { console.warn("DB update from address WFS:", e); }
+            setWfsStatus("✅ Particella trovata via geocoding indirizzo");
+            return;
+          }
+        }
+      }
+      if (!cancelled) setWfsStatus("🗺️ Confini catastali visibili nel layer WMS — zoom per vedere la particella");
+    };
+    retryWfsFromAddress();
+    return () => { cancelled = true; };
+  }, [addressCoords, hasPolygon, entity.id, foglio, particella, addPolygonToMap]);
+
   // ── Pan mappa all'indirizzo reale quando arriva il geocoding ──
   useEffect(() => {
     if (!addressCoords || !leafletMapRef.current) return;
