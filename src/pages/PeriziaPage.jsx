@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { FileText, Upload, Loader2, ArrowRight, ArrowLeft, Building2, AlertCircle, CheckCircle2, CreditCard } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-const MICROSERVICE = "https://web-production-6e951.up.railway.app";
+import { ENRICHMENT_API_URL as MICROSERVICE } from '@/lib/config';
 const REGIONI = ["Abruzzo","Basilicata","Calabria","Campania","Emilia-Romagna","Friuli-Venezia Giulia","Lazio","Liguria","Lombardia","Marche","Molise","Piemonte","Puglia","Sardegna","Sicilia","Toscana","Trentino-Alto Adige","Umbria","Valle d'Aosta","Veneto"];
 const EMPTY = { tribunale:"", rge:"", indirizzo:"", comune:"", provincia:"", regione:"", foglio:"", particella:"", subalterni:"", prezzo_base_asta:"", superficie_totale:"", categoria:"" };
 const mono = { fontFamily:"'IBM Plex Mono', monospace" };
