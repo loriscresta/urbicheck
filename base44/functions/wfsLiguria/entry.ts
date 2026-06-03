@@ -279,46 +279,66 @@ async function queryPAIArpaLiguria(lat, lon) {
 }
 
 // ============================================================
-// PAI FRANE via WFS ARPA Piemonte — multi-endpoint con fallback
-// ============================================================
-const ARPA_WFS_ENDPOINTS = [
-  // Endpoint primario (geoservizi) — tenta prima
-  (bbox, typeName) => `https://geoservizi.arpa.piemonte.it/geoserver/ows?SERVICE=WFS&VERSION=2.0.0&REQUEST=GetFeature&typeName=${typeName}&outputFormat=application/json&BBOX=${bbox},EPSG:4326&count=20`,
-  // Endpoint alternativo (webgis) — fallback
-  (bbox, typeName) => `https://webgis.arpa.piemonte.it/geoserver/wfs?service=WFS&version=1.1.0&request=GetFeature&typeName=${typeName}&outputFormat=application/json&BBOX=${bbox},EPSG:4326&maxFeatures=20`,
-];
-
-const ARPA_TYPE_NAMES = [
-  { primaryName: 'pai:frana_poligonale', fallbackName: 'wfs_esterni:wfs_POLIGONALI', label: 'Frane poligonali' },
-  { primaryName: 'pai:frana_puntuale',   fallbackName: 'wfs_esterni:wfs_PIFF',        label: 'Frane puntuali (PIFF)' },
-];
-
+// PAI PIEMONTE via WMS GetFeatureInfo — Regione Piemonte (confermato funzionante)
+// Endpoints: geomap.reteunitaria.piemonte.it — PAIAreeFrana, FasceFluviali, RME
 async function queryPAIPiemonte(lat, lon) {
-  const margin = 0.002;
-  const bbox = `${lon - margin},${lat - margin},${lon + margin},${lat + margin}`;
-  const results = [];
+  const delta = 0.005;
+  const minLon = (lon - delta).toFixed(7);
+  const minLat = (lat - delta).toFixed(7);
+  const maxLon = (lon + delta).toFixed(7);
+  const maxLat = (lat + delta).toFixed(7);
+  const bbox = `${minLon},${minLat},${maxLon},${maxLat}`;
 
-  for (const layerDef of ARPA_TYPE_NAMES) {
-    let success = false;
-    // Prova prima endpoint geoservizi con primaryName, poi webgis con fallbackName
-    const attempts = [
-      { endpointFn: ARPA_WFS_ENDPOINTS[0], typeName: layerDef.primaryName, timeout: 15000 },
-      { endpointFn: ARPA_WFS_ENDPOINTS[0], typeName: layerDef.fallbackName, timeout: 15000 },
-      { endpointFn: ARPA_WFS_ENDPOINTS[1], typeName: layerDef.fallbackName, timeout: 15000 },
-    ];
-    for (const attempt of attempts) {
-      try {
-        const url = attempt.endpointFn(bbox, attempt.typeName);
-        const res = await fetchWithTimeout(url, {}, attempt.timeout);
-        if (!res.ok) continue;
-        const json = await res.json();
-        const count = (json.features || []).length;
-        results.push({ layer: layerDef.label, trovato: count > 0, features_count: count, fonte_ok: true });
-        success = true;
-        break;
-      } catch (_e) {
-        await sleep(1000);
+  const layers = [
+    {
+      label: 'Frane PAI',
+      wms: 'https://geomap.reteunitaria.piemonte.it/ws/vtdifsuolo/rp-01/disspaiwms/wms_vtdifsuolo_dissesti_pai',
+      layer: 'PAIAreeFrana',
+    },
+    {
+      label: 'Fasce fluviali PAI',
+      wms: 'https://geomap.reteunitaria.piemonte.it/ws/vtdifsuolo/rp-01/fascpaiwms/wms_vtdifsuolo_fasce_fluviali',
+      layer: 'FasceFluvialiAreali',
+    },
+    {
+      label: 'Aree RME',
+      wms: 'https://geomap.reteunitaria.piemonte.it/ws/vtdifsuolo/rp-01/rmepaiwms/wms_vtdifsuolo_aree_rme',
+      layer: 'AreeRME',
+    },
+  ];
+
+  const results = [];
+  for (const lyr of layers) {
+    const url = `${lyr.wms}?service=WMS&version=1.1.1&request=GetFeatureInfo` +
+      `&layers=${lyr.layer}&query_layers=${lyr.layer}` +
+      `&bbox=${bbox}&width=101&height=101&x=50&y=50` +
+      `&info_format=application/vnd.ogc.gml&srs=EPSG:4326&feature_count=5`;
+    try {
+      const res = await fetchWithTimeout(url, {}, 12000);
+      if (!res.ok) {
+        results.push({ layer: lyr.label, trovato: false, features_count: 0, fonte_ok: false, nota: `HTTP ${res.status}` });
+        continue;
       }
+      const gml = await res.text();
+      const count = (gml.match(/<gml:featureMember|<gml:member/g) || []).length;
+      const tipoMatch = gml.match(/tipo_diss[^>]*>([^<]+)/);
+      const tipo = tipoMatch ? tipoMatch[1].trim() : null;
+      const fasciaMatch = gml.match(/fascia[^>]*>([^<]+)/i);
+      const fascia = fasciaMatch ? fasciaMatch[1].trim() : null;
+      results.push({
+        layer: lyr.label,
+        trovato: count > 0,
+        features_count: count,
+        fonte_ok: true,
+        ...(tipo && { tipo_dissesto: tipo }),
+        ...(fascia && { fascia_fluviale: fascia }),
+      });
+    } catch (_e) {
+      results.push({ layer: lyr.label, trovato: false, features_count: 0, fonte_ok: false, nota: 'Timeout' });
+    }
+  }
+  return results;
+}
     }
     if (!success) {
       // Non è un errore bloccante — frame come verifica manuale raccomandata
