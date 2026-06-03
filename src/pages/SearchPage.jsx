@@ -1,3 +1,4 @@
+import { ENRICHMENT_API_URL } from '@/lib/config';
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
@@ -406,7 +407,7 @@ function isValidItalianCoord(lat, lon) {
 async function callUrbiCheckEnrichment(formData, lat = null, lon = null) {
   try {
     const res = await Promise.race([
-      fetch('https://web-production-6e951.up.railway.app/analyze', {
+      fetch(`${ENRICHMENT_API_URL}/analyze`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
