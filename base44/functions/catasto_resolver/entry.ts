@@ -612,9 +612,9 @@ Deno.serve(async (req) => {
   }
 
   if (!sezioniTrovate.length) {
-    // Fix B — Nominatim fallback: salva centroid anche se OnData non trova la particella
-    if (query_id && queryRecord) {
-      // Nominatim fallback: salva centroid anche se OnData non trova la particella
+    // Fix B — Nominatim fallback: salva centroid SOLO se non già valorizzato in DB
+    // (evita di sovrascrivere le coordinate corrette dall'enrichment API Google Maps)
+    if (query_id && queryRecord && !queryRecord.centroid_lat && !queryRecord.centroid_lng) {
       const indirizzoQ = queryRecord.indirizzo_immobile || queryRecord.indirizzo_catastale || null;
       const siglaProv = queryRecord.sigla_provincia || null;
       const provinciaQ = siglaProv || queryRecord.provincia || null;
