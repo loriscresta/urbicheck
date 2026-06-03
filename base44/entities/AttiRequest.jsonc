@@ -152,7 +152,7 @@
     "read": {
       "$or": [
         {
-          "data.user_email": "{{user.email}}"
+          "created_by_id": "{{user.id}}"
         },
         {
           "user_condition": {
