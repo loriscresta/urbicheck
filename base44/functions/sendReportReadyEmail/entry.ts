@@ -2,10 +2,12 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 
 const APP_URL = Deno.env.get('APP_URL') || 'https://urbicheck.base44.app';
 
-function buildEmailHtml({ userName, comune, foglio, particella, score, elementi, queryId }) {
+function buildEmailHtml({ userName, comune, foglio, particella, score, elementi, queryId, publicToken }) {
   const scoreColor = score >= 7 ? '#059669' : score >= 5 ? '#d97706' : '#dc2626';
   const scoreLabel = score >= 7 ? 'Basso Rischio' : score >= 5 ? 'Rischio Medio' : 'Alto Rischio';
-  const reportUrl = APP_URL;
+  const reportUrl = publicToken
+    ? `${APP_URL}/report/public/${queryId}?token=${publicToken}`
+    : APP_URL;
 
   const elementiHtml = (elementi || []).map(e => `
     <tr>
@@ -227,6 +229,7 @@ Deno.serve(async (req) => {
       score,
       elementi: elementi.slice(0, 4),
       queryId: query_id,
+      publicToken: query.public_token || null,
     });
 
     await base44.asServiceRole.integrations.Core.SendEmail({
