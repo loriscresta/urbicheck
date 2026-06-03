@@ -439,6 +439,7 @@ async function queryZonaUrbanisticaPiemonte(lat, lon, comune) {
       zona_codice: defGen || 'N/D',
       destinazione_uso: defGenerale || 'Vedi PRG comunale',
       sigla_piano: siglaPiano || null,
+      nta_zona: siglaPiano || null,  // codice zona per lookup NTA (es. 'Ec', 'Ba', 'D')
       distretto: distretto || null,
       features_totali: nFeatures,
       messaggio: `Mosaicatura PRG Piemonte: ${defGenerale || 'zona rilevata'} (codice ${defGen || 'N/D'}).`,
@@ -811,7 +812,8 @@ async function runAnalisiPiemonte({ comune, provincia, indirizzo, comuneLower, p
     if (zona_urbanistica?.zona_codice || zona_urbanistica?.destinazione) {
       try {
         const comuneKey = comuneLower.replace(/\s+/g, '_');
-        const zonaCodice = zona_urbanistica?.zona_codice || '';
+        // FIX NTA: usa sigla_piano (es. 'Ec') non zona_codice numerico (es. '14')
+        const zonaCodice = zona_urbanistica?.nta_zona || zona_urbanistica?.sigla_piano || zona_urbanistica?.zona_codice || '';
         const ntaUrl = `${ENRICHMENT_API_URL}/nta/${encodeURIComponent(comuneKey)}` +
           (zonaCodice ? `?zona=${encodeURIComponent(zonaCodice)}` : '');
         const ntaResp = await fetchWithTimeout(ntaUrl, {}, 20000);
