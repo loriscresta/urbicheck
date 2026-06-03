@@ -99,7 +99,8 @@ Deno.serve(async (req) => {
         }
 
         console.log('[geocodeAddress] Google result:', loc.lat, loc.lng, lt);
-        if (lt === 'ROOFTOP' || lt === 'RANGE_INTERPOLATED') {
+        // FIX v5: per frazioni/rurali accetta GEOMETRIC_CENTER (più preciso del centroide comunale)
+        if (lt === 'ROOFTOP' || lt === 'RANGE_INTERPOLATED' || lt === 'GEOMETRIC_CENTER') {
           return { lat: loc.lat, lng: loc.lng, location_type: lt,
             formatted_address: r.formatted_address, source: 'google' };
         }
