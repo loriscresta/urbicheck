@@ -326,13 +326,28 @@ export default function ParcellaMap({ record, query, item }) {
       if (cancelled) return;
       const d = res?.data;
       if (!d?.lat || !d?.lng || isNaN(d.lat) || isNaN(d.lng)) return;
-      // FIX: accetta GEOMETRIC_CENTER per frazioni/rurali (Google Maps lo usa per i centroidi di frazione)
-      const precise = d.location_type === 'ROOFTOP' || d.location_type === 'RANGE_INTERPOLATED' || d.location_type === 'GEOMETRIC_CENTER' || d.source === 'nominatim';
-      if (precise) {
+      // FIX v2: accetta qualsiasi risultato Google per indirizzi rurali (frazioni, borgate)
+      // Scarta SOLO i fallback comunali (COMUNE_CENTROID, COMUNE_FALLBACK) che sono troppo generici
+      const isComuneFallback = d.location_type === 'COMUNE_CENTROID' || d.location_type === 'COMUNE_FALLBACK';
+      const hasValidCoords = d.lat && d.lng && !isNaN(d.lat) && !isNaN(d.lng);
+      const inItaly = d.lat > 35 && d.lat < 48 && d.lng > 6 && d.lng < 19;
+      if (hasValidCoords && inItaly && !isComuneFallback) {
         setAddressCoords({ lat: d.lat, lng: d.lng, formatted: d.formatted_address, source: 'rooftop' });
-        console.log('[ParcellaMap] geocoded ROOFTOP/RANGE_INTERPOLATED:', d.lat, d.lng);
+        console.log('[ParcellaMap] geocoded OK:', d.lat, d.lng, d.location_type);
+        // Aggiorna DB centroid se diverso da quello attuale (fix permanente per reload successivi)
+        if (entity.id) {
+          const currLat = parseFloat(entity.centroid_lat);
+          const currLng = parseFloat(entity.centroid_lng);
+          const dist = Math.hypot(d.lat - currLat, d.lng - currLng);
+          if (dist > 0.001) { // >~100m di differenza → aggiorna DB
+            import("@/api/entities").then(({ CadastralQuery }) => {
+              CadastralQuery.update(entity.id, { centroid_lat: d.lat, centroid_lng: d.lng })
+                .catch(() => {});
+            }).catch(() => {});
+          }
+        }
       } else {
-        console.log('[ParcellaMap] geocoding scartato (location_type=' + d.location_type + ') — uso centroide catastale');
+        console.log('[ParcellaMap] geocoding scartato:', d.location_type, '— uso centroide da DB');
       }
     }).catch(() => {});
     return () => { cancelled = true; };
