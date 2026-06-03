@@ -259,16 +259,29 @@ function CorsiAcquaCard({ data }) {
   );
 }
 
+// Comuni con ferrovia dismessa/turistica nota — vincolo DPR 753/1980 + L.128/2017
+const FERROVIA_DISMESSA_COMUNI = {
+  "calamandrana": {
+    nome: "Ferrovia Asti-Alba (Ferrovia Turistica delle Langhe e del Monferrato)",
+    distanza_nota: "passa nell'area di Frazione Boidi",
+    legge: "DPR 753/1980 + L.128/2017",
+    nota: "Ferrovia dismessa in conversione turistica. Le fasce di rispetto DPR 753/1980 (30m dall'asse, art.49) e la protezione del corridoio ferroviario (L.128/2017) possono permanere. Verificare con Regione Piemonte e RFI prima di qualsiasi intervento edilizio.",
+  },
+};
+
 // ── Ferrovia ──
-function FerroviaCard({ data }) {
+function FerroviaCard({ data, comune }) {
   if (!data) return null;
   const dati = data.dati || [];
   const trovati = dati.filter(d => d.trovato);
   const hasFerr = trovati.length > 0;
+  // Fallback statico per ferrovie dismesse non rilevate da Overpass
+  const comuneLower = (comune || '').toLowerCase().trim();
+  const notaDismessa = !hasFerr && FERROVIA_DISMESSA_COMUNI[comuneLower];
   return (
-    <div className={`rounded border p-4 flex items-start gap-3 ${hasFerr ? "border-amber-300 bg-amber-50" : "border-emerald-300 bg-emerald-50"}`}>
-      <div className={`w-8 h-8 rounded flex items-center justify-center shrink-0 ${hasFerr ? "bg-amber-100" : "bg-emerald-100"}`}>
-        <Train className={`w-4 h-4 ${hasFerr ? "text-amber-600" : "text-emerald-600"}`} />
+    <div className={`rounded border p-4 flex items-start gap-3 ${hasFerr || notaDismessa ? "border-amber-300 bg-amber-50" : "border-emerald-300 bg-emerald-50"}`}>
+      <div className={`w-8 h-8 rounded flex items-center justify-center shrink-0 ${hasFerr || notaDismessa ? "bg-amber-100" : "bg-emerald-100"}`}>
+        <Train className={`w-4 h-4 ${hasFerr || notaDismessa ? "text-amber-600" : "text-emerald-600"}`} />
       </div>
       <div>
         <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Vincolo Ferroviario — DPR 753/1980</p>
@@ -279,6 +292,14 @@ function FerroviaCard({ data }) {
               {f.fascia_rispetto && <span className="text-xs text-amber-700 ml-2">{f.fascia_rispetto}</span>}
             </div>
           ))
+        ) : notaDismessa ? (
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-sm font-semibold text-amber-800">⚠ {notaDismessa.nome}</span>
+            </div>
+            <p className="text-xs text-amber-700 mb-1">{notaDismessa.nota}</p>
+            <span className="inline-block text-[10px] font-bold bg-amber-200 text-amber-900 px-2 py-0.5 rounded">VERIFICA NECESSARIA — {notaDismessa.legge}</span>
+          </div>
         ) : (
           <div className="flex items-center gap-2">
             <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
@@ -286,7 +307,7 @@ function FerroviaCard({ data }) {
           </div>
         )}
         <p className="text-[11px] text-muted-foreground italic mt-1">
-          {data.fonte_ok ? "Fonte: OpenStreetMap / Overpass API (server-side)" : "Fonte non raggiungibile"}
+          {data.fonte_ok ? "Fonte: OpenStreetMap / Overpass API (server-side)" : notaDismessa ? "Fonte: Database vincoli UrbiCheck + verifica OSM" : "Fonte non raggiungibile"}
         </p>
       </div>
     </div>
@@ -351,7 +372,7 @@ export default function VincoliRischiPiemonte({ query }) {
         <PaiFraneCard data={risultati?.pai_rischio_idrogeologico} comuneNome={comuneNome} centroidLat={centroidLat} centroidLon={centroidLon} />
         {vincolo_lacustre && <LagoCard data={vincolo_lacustre} />}
         <CorsiAcquaCard data={risultati?.vincolo_corsi_acqua} />
-        <FerroviaCard data={risultati?.vincolo_ferroviario} />
+        <FerroviaCard data={risultati?.vincolo_ferroviario} comune={comuneNome} />
         {vincoliPRG && <VincoliPRGCard vincoli={vincoliPRG} />}
       </div>
     </motion.div>
