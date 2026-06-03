@@ -111,13 +111,27 @@ export default function ParcellaMap({ record, query, item }) {
     const fetchWfs = async () => {
       setWfsStatus("🔍 Recupero geometria catastale...");
 
-      // Cascading BBOX: parte piccolo, cresce se non trova la particella
-      // Serve perché il centroide catastale può essere lontano dalla particella reale
-      const deltas = [0.002, 0.01, 0.03];
+      // Cascading BBOX: parte piccolo, cresce finché non trova foglio+particella ESATTI
+      // BUG FIX: non interrompe al primo risultato generico — allarga finché trova match esatto
+      const deltas = [0.002, 0.01, 0.03, 0.06];
       let data = null;
+      let exactMatchFound = false;
+
+      const isExactLabel = (feature) => {
+        const lbl = String(
+          feature?.properties?.label ||
+          feature?.properties?.nationalCadastralReference || ""
+        ).toUpperCase();
+        const { foglio: foglioNum } = parseFoglio(foglio);
+        const pMatch = lbl.includes(`/${particella}`) ||
+          lbl.includes(`/${particella.padStart(5, "0")}`);
+        const fMatch = lbl.includes(`${foglioNum}/`) ||
+          lbl.includes(`${foglioNum.padStart(4, "0")}/`);
+        return pMatch && fMatch;
+      };
 
       for (const delta of deltas) {
-        if (data?.features?.length) break;
+        if (exactMatchFound) break;
         const minLon = (initLon - delta).toFixed(7);
         const minLat = (initLat - delta).toFixed(7);
         const maxLon = (initLon + delta).toFixed(7);
@@ -127,18 +141,21 @@ export default function ParcellaMap({ record, query, item }) {
           `&BBOX=${minLon},${minLat},${maxLon},${maxLat},EPSG:4326`;
 
         if (cancelled) return;
-        setWfsStatus(delta > 0.005 ? `🔄 Allargo la ricerca (±${(delta*111).toFixed(0)}km)…` : "🔍 Recupero geometria catastale...");
+        setWfsStatus(delta > 0.005
+          ? `🔄 Allargo la ricerca (±${(delta * 111).toFixed(0)} km)…`
+          : "🔍 Recupero geometria catastale...");
 
         // Tentativo diretto
+        let fetched = null;
         try {
           const res = await fetch(wfsUrl, { headers: { Accept: "application/json" }, signal: AbortSignal.timeout(8000) });
-          if (res.ok) { const d = await res.json(); if (d?.features?.length) { data = d; break; } }
+          if (res.ok) { const d = await res.json(); if (d?.features?.length) fetched = d; }
         } catch (_e) {}
 
         if (cancelled) return;
 
-        // Via proxy
-        if (!data?.features?.length) {
+        // Via proxy se diretto non ha dato risultati
+        if (!fetched?.features?.length) {
           try {
             const proxyUrl = `https://corsproxy.io/?url=${encodeURIComponent(wfsUrl)}`;
             const proxyRes = await fetch(proxyUrl, { signal: AbortSignal.timeout(20000) });
@@ -146,10 +163,23 @@ export default function ParcellaMap({ record, query, item }) {
               const text = await proxyRes.text();
               if (text.trim().startsWith("{")) {
                 const d = JSON.parse(text);
-                if (d?.features?.length) { data = d; break; }
+                if (d?.features?.length) fetched = d;
               }
             }
           } catch (_e) {}
+        }
+
+        if (fetched?.features?.length) {
+          // Controlla se c'è un match esatto foglio+particella
+          const hasExact = fetched.features.some(isExactLabel);
+          if (hasExact) {
+            data = fetched;
+            exactMatchFound = true;
+          } else {
+            // Nessun match esatto: salva come fallback e continua ad allargare
+            data = fetched;
+            // continua il loop con delta più grande
+          }
         }
       }
 
