@@ -253,7 +253,7 @@ export default function ParcellaMap({ record, query, item }) {
       const map = L.map(mapDivRef.current, {
         zoomControl: true,
         attributionControl: true,
-      }).setView([initLat, initLon], 18);
+      }).setView([initLat, initLon], 15); // zoom 15: mostra contesto ampio (ferrovia, SP592, frazione)
       leafletMapRef.current = map;
 
       L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
@@ -436,7 +436,7 @@ export default function ParcellaMap({ record, query, item }) {
 
     // Se non c'è già un poligono preciso, pan all'indirizzo e aggiorna marker
     if (!hasPolygon) {
-      map.setView([addressCoords.lat, addressCoords.lng], 17);
+      map.setView([addressCoords.lat, addressCoords.lng], 15); // zoom 15: contesto ampio
       // Rimuovi eventuale marker precedente
       if (addressMarkerRef.current) {
         map.removeLayer(addressMarkerRef.current);
