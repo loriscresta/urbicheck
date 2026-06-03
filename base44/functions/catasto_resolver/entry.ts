@@ -291,7 +291,8 @@ async function checkRailwayVicinity(lat, lon, regione = '') {
   const regioneLower = (regione || '').toLowerCase();
   const isLiguria = regioneLower.includes('liguria');
 
-  const q = `[out:json][timeout:15];(way["railway"~"rail|narrow_gauge|tram|light_rail|subway|preserved|monorail"](around:500,${lat},${lon}););out body tags;>;out skel qt;`;
+  // FIX: include disused/abandoned — ferrovia Asti-Alba turistica è taggata disused in OSM
+  const q = `[out:json][timeout:15];(way["railway"~"rail|narrow_gauge|tram|light_rail|subway|preserved|monorail|disused|abandoned"](around:500,${lat},${lon}););out body tags;>;out skel qt;`;
   try {
     const res = await fetchWithTimeout('https://overpass-api.de/api/interpreter', {
       method: 'POST',
@@ -306,13 +307,14 @@ async function checkRailwayVicinity(lat, lon, regione = '') {
     const ways = elements.filter(e => e.type === 'way');
     if (!ways.length) return { presente: false };
 
-    let bestAttiva = null, bestStorica = null, bestMetro = null, bestTram = null;
+    let bestAttiva = null, bestStorica = null, bestMetro = null, bestTram = null, bestDismessa = null;
 
     for (const way of ways) {
       const tags = way.tags || {};
       const railType = tags.railway || '';
-      // Skip non-relevant
-      if (['disused', 'razed', 'platform', 'abandoned'].includes(railType)) continue;
+      // Ferrovie dismesse/abbandonate — NON saltare, gestire separatamente con nota legale
+      const isDismessa = ['disused', 'abandoned', 'razed'].includes(railType);
+      if (railType === 'platform') continue; // Solo piattaforme, queste sì da saltare
 
       let minDist = Infinity;
       for (const nid of (way.nodes || [])) {
@@ -335,6 +337,10 @@ async function checkRailwayVicinity(lat, lon, regione = '') {
       } else if (railType === 'tram' || railType === 'light_rail') {
         if (!bestTram || distM < bestTram.distanza_m)
           bestTram = { distanza_m: distM, nome: name, railType };
+      } else if (isDismessa) {
+        if (!bestDismessa || distM < bestDismessa.distanza_m)
+          bestDismessa = { distanza_m: distM, nome: name, operator, railType, dismessa: true,
+            nota_legale: 'Ferrovia dismessa/in conversione turistica — DPR 753/1980 (30m asse) può permanere. Verificare con Regione e RFI.' };
       } else if (railType === 'rail' || railType === 'narrow_gauge') {
         const isTouristicOrPreserved = usage === 'tourism' || preserved;
         if (isTouristicOrPreserved) {
@@ -393,15 +399,29 @@ async function checkRailwayVicinity(lat, lon, regione = '') {
       dettagli: `Linea ${bestTram.railType === 'light_rail' ? 'ferroviaria leggera' : 'tranviaria'} nelle vicinanze. Distanza: ${bestTram.distanza_m}m.`,
     } : null;
 
+    const ferrovia_dismessa = bestDismessa ? {
+      presente: true,
+      distanza_m: bestDismessa.distanza_m,
+      nome: bestDismessa.nome,
+      icon: '🚉',
+      label: 'Ferrovia dismessa / in conversione turistica',
+      impatto: 'medio',
+      dettagli: `Rilevata ferrovia dismessa (${bestDismessa.nome || 'linea'}) a ${bestDismessa.distanza_m}m. Le fasce di rispetto DPR 753/1980 (30m dall'asse del binario, art.49) possono permanere anche dopo la dismissione, fino a formale decreto di soppressione. Per linee in conversione a uso turistico (L.128/2017 — ferrovie turistiche), i vincoli rimangono in vigore e il corridoio ferroviario è protetto. Verificare obbligatoriamente con Regione Piemonte e RFI.`,
+      tipo: bestDismessa.distanza_m <= 30 ? 'assoluta' : bestDismessa.distanza_m <= 150 ? 'limitata_da_verificare' : 'oltre_fascia_da_verificare',
+      legge: 'DPR 753/1980 + L.128/2017',
+      nota_legale: bestDismessa.nota_legale,
+    } : null;
+
     return {
-      presente: !!(ferrovia_attiva || ferrovia_storica || metro || tram),
+      presente: !!(ferrovia_attiva || ferrovia_storica || ferrovia_dismessa || metro || tram),
       ferrovia_attiva,
       ferrovia_storica,
+      ferrovia_dismessa,
       metro,
       tram,
       // backward compat
-      distanza_m: ferrovia_attiva?.distanza_m ?? metro?.distanza_m ?? tram?.distanza_m ?? ferrovia_storica?.distanza_m ?? null,
-      tipo: ferrovia_attiva ? ferrovia_attiva.tipo : 'nessuna',
+      distanza_m: ferrovia_attiva?.distanza_m ?? ferrovia_dismessa?.distanza_m ?? metro?.distanza_m ?? tram?.distanza_m ?? ferrovia_storica?.distanza_m ?? null,
+      tipo: ferrovia_attiva ? ferrovia_attiva.tipo : ferrovia_dismessa ? 'dismessa_da_verificare' : 'nessuna',
     };
   } catch (e) {
     console.warn('Overpass railway error:', e.message);
