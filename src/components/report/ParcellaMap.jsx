@@ -111,43 +111,46 @@ export default function ParcellaMap({ record, query, item }) {
     const fetchWfs = async () => {
       setWfsStatus("🔍 Recupero geometria catastale...");
 
-      const delta  = 0.0015;
-      const minLon = (initLon - delta).toFixed(7);
-      const minLat = (initLat - delta).toFixed(7);
-      const maxLon = (initLon + delta).toFixed(7);
-      const maxLat = (initLat + delta).toFixed(7);
-      const wfsUrl = `${WFS_URL}?service=WFS&version=2.0.0&request=GetFeature` +
-        `&typeNames=CP:CadastralParcel&outputFormat=application%2Fjson` +
-        `&BBOX=${minLon},${minLat},${maxLon},${maxLat},EPSG:4326`;
-
+      // Cascading BBOX: parte piccolo, cresce se non trova la particella
+      // Serve perché il centroide catastale può essere lontano dalla particella reale
+      const deltas = [0.002, 0.01, 0.03];
       let data = null;
 
-      // Tentativo 1: chiamata diretta (bloccata da CORS, ma proviamo)
-      try {
-        const res = await fetch(wfsUrl, {
-          headers: { Accept: "application/json" },
-          signal: AbortSignal.timeout(8000),
-        });
-        if (res.ok) { data = await res.json(); }
-      } catch (_e) { /* CORS normale — si va al proxy */ }
+      for (const delta of deltas) {
+        if (data?.features?.length) break;
+        const minLon = (initLon - delta).toFixed(7);
+        const minLat = (initLat - delta).toFixed(7);
+        const maxLon = (initLon + delta).toFixed(7);
+        const maxLat = (initLat + delta).toFixed(7);
+        const wfsUrl = `${WFS_URL}?service=WFS&version=2.0.0&request=GetFeature` +
+          `&typeNames=CP:CadastralParcel&outputFormat=application%2Fjson` +
+          `&BBOX=${minLon},${minLat},${maxLon},${maxLat},EPSG:4326`;
 
-      if (cancelled) return;
+        if (cancelled) return;
+        setWfsStatus(delta > 0.005 ? `🔄 Allargo la ricerca (±${(delta*111).toFixed(0)}km)…` : "🔍 Recupero geometria catastale...");
 
-      // Tentativo 2: via corsproxy.io — aggira CORS, usa server del proxy
-      if (!data) {
-        setWfsStatus("🔄 Provo via proxy WFS...");
+        // Tentativo diretto
         try {
-          const proxyUrl = `https://corsproxy.io/?url=${encodeURIComponent(wfsUrl)}`;
-          const proxyRes = await fetch(proxyUrl, {
-            signal: AbortSignal.timeout(20000),
-          });
-          if (proxyRes.ok) {
-            const text = await proxyRes.text();
-            if (text.trim().startsWith("{")) {
-              data = JSON.parse(text);
+          const res = await fetch(wfsUrl, { headers: { Accept: "application/json" }, signal: AbortSignal.timeout(8000) });
+          if (res.ok) { const d = await res.json(); if (d?.features?.length) { data = d; break; } }
+        } catch (_e) {}
+
+        if (cancelled) return;
+
+        // Via proxy
+        if (!data?.features?.length) {
+          try {
+            const proxyUrl = `https://corsproxy.io/?url=${encodeURIComponent(wfsUrl)}`;
+            const proxyRes = await fetch(proxyUrl, { signal: AbortSignal.timeout(20000) });
+            if (proxyRes.ok) {
+              const text = await proxyRes.text();
+              if (text.trim().startsWith("{")) {
+                const d = JSON.parse(text);
+                if (d?.features?.length) { data = d; break; }
+              }
             }
-          }
-        } catch (_e) { /* proxy non raggiungibile */ }
+          } catch (_e) {}
+        }
       }
 
       if (cancelled) return;
@@ -159,7 +162,7 @@ export default function ParcellaMap({ record, query, item }) {
 
       const features = data.features || [];
       if (!features.length) {
-        setWfsStatus("⚠️ Nessuna particella nel BBOX");
+        setWfsStatus("🗺️ Confini catastali visibili nel layer WMS — zoom per vedere la particella");
         return;
       }
 
@@ -180,11 +183,19 @@ export default function ParcellaMap({ record, query, item }) {
         : "📐 Geometria approssimata (nearest centroid)");
 
       addPolygonToMap(matched);
-      // Salva in DB → cache permanente per i prossimi carichi
+      // Salva in DB: poligono + centroide REALE calcolato dal poligono WFS
+      // Questo corregge il centroide sbagliato da Catastomappe e fix Overpass/ferrovia
       try {
-        await base44.entities.CadastralQuery.update(entity.id, {
-          geometry_geojson: matched,
-        });
+        const ring = matched?.geometry?.coordinates?.[0];
+        const updateData = { geometry_geojson: matched };
+        if (ring?.length > 2) {
+          const cLat = ring.reduce((s, c) => s + c[1], 0) / ring.length;
+          const cLon = ring.reduce((s, c) => s + c[0], 0) / ring.length;
+          updateData.centroid_lat = cLat;
+          updateData.centroid_lng = cLon;
+          console.log('[ParcellaMap] centroide corretto salvato in DB:', cLat, cLon);
+        }
+        await base44.entities.CadastralQuery.update(entity.id, updateData);
       } catch (e) {
         console.warn("DB save geometry_geojson:", e);
       }

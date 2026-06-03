@@ -149,6 +149,14 @@ Deno.serve(async (req) => {
   if (!geometry) {
     geometry = await searchWfsByBbox(centroid_lat, centroid_lng, 0.003, codiceBelfiore, foglio, particella);
   }
+  if (!geometry) {
+    console.log("[fetchParcelGeometry] Provo BBOX ±0.01 (comune intero)");
+    geometry = await searchWfsByBbox(centroid_lat, centroid_lng, 0.01, codiceBelfiore, foglio, particella);
+  }
+  if (!geometry) {
+    console.log("[fetchParcelGeometry] Provo BBOX ±0.02 (area estesa)");
+    geometry = await searchWfsByBbox(centroid_lat, centroid_lng, 0.02, codiceBelfiore, foglio, particella);
+  }
 
   if (!geometry) {
     return Response.json({ success: false, reason: 'WFS AdE non ha restituito geometria per questa area' });
