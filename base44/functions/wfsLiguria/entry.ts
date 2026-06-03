@@ -470,9 +470,10 @@ async function queryOverpass(lat, lon, includeLakes = false) {
   way["natural"="water"]["water"~"^(lake|reservoir)$"](around:300,${lat},${lon});
   relation["natural"="water"]["water"~"^(lake|reservoir)$"](around:300,${lat},${lon});` : '';
 
+  // FIX: include disused/abandoned/preserved — la ferrovia Asti-Alba (turistica L.128/2017) è taggata disused
   const q = `[out:json][timeout:15];
 (
-  way["railway"~"^(rail|tram|light_rail|narrow_gauge|subway)$"](around:500,${lat},${lon});
+  way["railway"~"^(rail|tram|light_rail|narrow_gauge|subway|disused|abandoned|preserved|razed)$"](around:500,${lat},${lon});
   way["waterway"~"^(river|stream|canal)$"](around:250,${lat},${lon});
   relation["waterway"="river"](around:250,${lat},${lon});${lakesQuery}
 );
@@ -503,7 +504,22 @@ out skel qt;`;
         if (seen.has(key)) continue;
         seen.add(key);
         if (el.type === 'way' && el.tags.railway) {
-          railways.push({ tipo: el.tags.railway, nome: el.tags.name || el.tags.ref || 'Linea ferroviaria', operatore: el.tags.operator || null });
+          const railType = el.tags.railway;
+          const isDisused = ['disused','abandoned','razed'].includes(railType);
+          const isPreserved = railType === 'preserved';
+          railways.push({
+            tipo: railType,
+            nome: el.tags.name || el.tags.ref || 'Linea ferroviaria',
+            operatore: el.tags.operator || null,
+            dismessa: isDisused,
+            turistica: isPreserved,
+            // Ferrovia turistica (L.128/2017) e dismessa — vincoli DPR 753/1980 da verificare
+            nota_legale: isDisused
+              ? 'Ferrovia dismessa — le fasce di rispetto DPR 753/1980 (30m dall'asse) permangono fino a formale decreto di soppressione. Per ferrovie in conversione a uso turistico (L.128/2017), i vincoli possono permanere. Verificare con Regione/RFI.'
+              : isPreserved
+              ? 'Ferrovia turistica/storica — verificare applicabilità DPR 753/1980 e L.128/2017 con Regione competente.'
+              : null,
+          });
         }
         if (el.type === 'way' && el.tags.waterway) {
           waterways.push({ tipo: el.tags.waterway, nome: el.tags.name || "Corso d'acqua senza nome" });
@@ -624,7 +640,24 @@ async function runAnalisiLiguria({ comune, provincia, indirizzo, comuneLower, pr
   const riferimento_normativo_sismica = 'OPCM 3274/2003 — classificazione vigente Regione Liguria';
 
   const ferrovie = railways.length > 0
-    ? railways.map(r => ({ trovato: true, nome: r.nome, tipo_infrastruttura: r.tipo, operatore: r.operatore, livello: 'VERIFICA_NECESSARIA', riferimento_normativo: 'DPR 11 luglio 1980 n.753', fascia_rispetto: "30m dall'asse del binario (art.49)", fonte: 'OpenStreetMap / Overpass API', descrizione: `Rilevata ferrovia (${r.nome}) entro 500m. Il DPR 753/1980 vieta nuove costruzioni entro 30m dall'asse del binario.` }))
+    ? railways.map(r => ({
+        trovato: true,
+        nome: r.nome,
+        tipo_infrastruttura: r.tipo,
+        operatore: r.operatore,
+        dismessa: r.dismessa || false,
+        turistica: r.turistica || false,
+        livello: r.dismessa ? 'VERIFICA_NECESSARIA_DISMESSA' : 'VERIFICA_NECESSARIA',
+        riferimento_normativo: r.dismessa
+          ? 'DPR 11 luglio 1980 n.753 + L.128/2017 (ferrovie turistiche)'
+          : 'DPR 11 luglio 1980 n.753',
+        fascia_rispetto: "30m dall'asse del binario (art.49 DPR 753/1980)",
+        fonte: 'OpenStreetMap / Overpass API',
+        descrizione: r.dismessa
+          ? `Rilevata ferrovia dismessa/in conversione (${r.nome}) entro 500m. Le fasce di rispetto DPR 753/1980 (30m dall'asse) permangono fino a formale decreto di soppressione. Per ferrovie turistiche (L.128/2017) i vincoli possono permanere — verificare con Regione Piemonte e RFI.`
+          : `Rilevata ferrovia (${r.nome}) entro 500m. Il DPR 753/1980 vieta nuove costruzioni entro 30m dall'asse del binario.`,
+        ...(r.nota_legale && { nota_legale: r.nota_legale }),
+      }))
     : [{ trovato: false, nota: geocodingError ? 'Non verificabile (geocoding fallito).' : !overpass_ok ? 'Non verificabile (Overpass API non raggiungibile — verificare manualmente su openrailwaymap.org).' : 'Nessuna ferrovia rilevata entro 500m dal punto analizzato.' }];
 
   const corsi_acqua_vincolo = waterways.length > 0
@@ -740,7 +773,24 @@ async function runAnalisiPiemonte({ comune, provincia, indirizzo, comuneLower, p
 
   // Ferrovia
   const ferrovie = railways.length > 0
-    ? railways.map(r => ({ trovato: true, nome: r.nome, tipo_infrastruttura: r.tipo, operatore: r.operatore, livello: 'VERIFICA_NECESSARIA', riferimento_normativo: 'DPR 11 luglio 1980 n.753', fascia_rispetto: "30m dall'asse del binario (art.49)", fonte: 'OpenStreetMap / Overpass API', descrizione: `Rilevata ferrovia (${r.nome}) entro 500m. Il DPR 753/1980 vieta nuove costruzioni entro 30m dall'asse del binario.` }))
+    ? railways.map(r => ({
+        trovato: true,
+        nome: r.nome,
+        tipo_infrastruttura: r.tipo,
+        operatore: r.operatore,
+        dismessa: r.dismessa || false,
+        turistica: r.turistica || false,
+        livello: r.dismessa ? 'VERIFICA_NECESSARIA_DISMESSA' : 'VERIFICA_NECESSARIA',
+        riferimento_normativo: r.dismessa
+          ? 'DPR 11 luglio 1980 n.753 + L.128/2017 (ferrovie turistiche)'
+          : 'DPR 11 luglio 1980 n.753',
+        fascia_rispetto: "30m dall'asse del binario (art.49 DPR 753/1980)",
+        fonte: 'OpenStreetMap / Overpass API',
+        descrizione: r.dismessa
+          ? `Rilevata ferrovia dismessa/in conversione (${r.nome}) entro 500m. Le fasce di rispetto DPR 753/1980 (30m dall'asse) permangono fino a formale decreto di soppressione. Per ferrovie turistiche (L.128/2017) i vincoli possono permanere — verificare con Regione Piemonte e RFI.`
+          : `Rilevata ferrovia (${r.nome}) entro 500m. Il DPR 753/1980 vieta nuove costruzioni entro 30m dall'asse del binario.`,
+        ...(r.nota_legale && { nota_legale: r.nota_legale }),
+      }))
     : [{ trovato: false, nota: geocodingError ? 'Non verificabile (geocoding fallito).' : !overpass_ok ? 'Non verificabile (Overpass API non raggiungibile — verificare manualmente su openrailwaymap.org).' : 'Nessuna ferrovia rilevata entro 500m dal punto analizzato.' }];
 
   // Corsi d'acqua
