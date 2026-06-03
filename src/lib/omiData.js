@@ -30,6 +30,17 @@ const OMI_DB = {
     zona_centrale: { valore_min: 1000, valore_max: 1800, loc_min: 5.0, loc_max: 8.5 },
     anno_sem: "2024-II", is_costiero: false,
   },
+  "B376": { // Calamandrana (AT) — OMI AdE 2025-II Zona R1 Extraurbana/Rurale
+    residenziale:  { valore_min: 435, valore_max: 650, loc_min: 2.2, loc_max: 3.1 },
+    zona_centrale: { valore_min: 550, valore_max: 810, loc_min: 2.5, loc_max: 3.1 },
+    anno_sem: "2025-II", is_costiero: false,
+    zona_omi: "R1", fascia: "Extraurbana/ZONA RURALE",
+    tipologie: {
+      "Abitazioni civili": { valore_min: 435, valore_max: 650, loc_min: 2.2, loc_max: 3.1, stato: "NORMALE" },
+      "Ville e Villini":   { valore_min: 550, valore_max: 810, loc_min: 2.5, loc_max: 3.1, stato: "NORMALE" },
+    },
+    note: "Dati OMI ufficiali AdE 2025-II. Comune di Calamandrana, Provincia di Asti. Zona Extraurbana R1 — valori riferiti a Superficie Lorda (L). Fonte: www.agenziaentrate.gov.it/portale/schede/fabbricatiterreni/omi"
+  },
   "B990": { // Casale Monferrato
     residenziale:  { valore_min: 700,  valore_max: 1200, loc_min: 3.5, loc_max: 6.0 },
     zona_centrale: { valore_min: 900,  valore_max: 1500, loc_min: 4.5, loc_max: 7.5 },
