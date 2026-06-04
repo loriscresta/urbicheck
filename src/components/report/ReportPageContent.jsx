@@ -190,8 +190,8 @@ export default function ReportPageContent({ query, refetch = () => {}, isPublicV
   const isPiemonte = (query.regione || '').toLowerCase().includes('piemonte');
   const isLiguria = (query.regione || '').toLowerCase().includes('liguria');
   const isLombardia = (query.regione || '').toLowerCase().includes('lombardia');
-  const comuneLower = (query.comune || '').toLowerCase().trim();
   const wfsRis = r.wfs_liguria?.risultati;
+  const comuneLower = (query.comune || '').toLowerCase().trim();
 
   const staticZona = SEISMIC_ZONES[query.comune] ||
     SEISMIC_ZONES[Object.keys(SEISMIC_ZONES).find(k => k.toLowerCase() === query.comune?.toLowerCase?.())];
@@ -485,18 +485,48 @@ export default function ReportPageContent({ query, refetch = () => {}, isPublicV
         {isPiemonte && query.report_data?.wfs_liguria && <VincoliRischiPiemonte query={query} />}
 
         {/* Quadro Urbanistico */}
-        {r.quadro_urbanistico && (
-          <ReportSection icon={FileText} title="Quadro Urbanistico (PRG/PUC)" delay={0.1}>
-            <DataRow label="Strumento Vigente" value={resolvedNta?.strumento || r.quadro_urbanistico.strumento_vigente} />
-            <DataRow label="Zona Urbanistica" value={resolvedNta?.nomeZona || cleanVal(r.quadro_urbanistico.zona_urbanistica)} />
-            <DataRow label="Destinazione d'Uso" value={resolvedNta ? (resolvedNta.nomeZona?.toLowerCase().includes('resid') ? 'Residenziale' : cleanVal(r.quadro_urbanistico.destinazione_uso)) : cleanVal(r.quadro_urbanistico.destinazione_uso)} />
-            <DataRow label="Indice Edificabilità" value={resolvedNta?.IF || ntaLocal?.IF || cleanVal(r.quadro_urbanistico.indice_edificabilita)} />
-            <DataRow label="Altezza Massima" value={resolvedNta?.Hmax || ntaLocal?.Hmax || cleanVal(r.quadro_urbanistico.altezza_massima)} />
-            <DataRow label="Rapporto di Copertura" value={resolvedNta?.RC || cleanVal(r.quadro_urbanistico.rc_percentuale)} />
-            <DataRow label="Distanze Minime" value={resolvedNta?.Dc ? `Dc: ${resolvedNta.Dc} · Df: ${resolvedNta.Df} · Ds: ${resolvedNta.Ds}` : cleanVal(r.quadro_urbanistico.distanze_minime)} />
-            {r.quadro_urbanistico.note_urbanistiche && !resolvedNta && cleanVal(r.quadro_urbanistico.note_urbanistiche) && <div className="mt-3 p-3 bg-muted/50 rounded-lg"><p className="text-sm text-muted-foreground">{r.quadro_urbanistico.note_urbanistiche}</p></div>}
-          </ReportSection>
-        )}
+        {r.quadro_urbanistico && (() => {
+          // Zona WMS mosaicatura (fonte primaria) vs lookup NTA statico
+          const wmsZonaCodice = wfsRis?.zona_urbanistica?.zona_codice || null;
+          const wmsDescrizione = wfsRis?.zona_urbanistica?.destinazione_uso || wfsRis?.zona_urbanistica?.messaggio || null;
+          const wmsDisponibile = !!(wfsRis?.zona_urbanistica?.disponibile);
+          const ntaZona = resolvedNta?.nomeZona || cleanVal(r.quadro_urbanistico.zona_urbanistica);
+          const ntaDest = resolvedNta ? (resolvedNta.nomeZona?.toLowerCase().includes('resid') ? 'Residenziale' : cleanVal(r.quadro_urbanistico.destinazione_uso)) : cleanVal(r.quadro_urbanistico.destinazione_uso);
+
+          // Discordanza: WMS dice qualcosa di diverso dal NTA/AI
+          const hasDiscordanza = wmsDisponibile && wmsZonaCodice && ntaZona &&
+            !ntaZona.toLowerCase().includes(wmsZonaCodice.toLowerCase()) &&
+            !wmsZonaCodice.toLowerCase().includes(ntaZona.toLowerCase());
+
+          return (
+            <ReportSection icon={FileText} title="Quadro Urbanistico (PRG/PUC)" delay={0.1}>
+              {wmsDisponibile && wmsZonaCodice && (
+                <div className="mb-3 flex items-center gap-2 px-3 py-1.5 text-xs rounded bg-emerald-50 border border-emerald-200 text-emerald-800">
+                  <CheckCircle2 className="w-3 h-3 shrink-0" />
+                  Zona da Mosaicatura PRG Piemonte (WMS ufficiale): <strong className="ml-1">{wmsZonaCodice}{wmsDescrizione ? ` — ${wmsDescrizione}` : ''}</strong>
+                </div>
+              )}
+              {hasDiscordanza && (
+                <div className="mb-3 flex items-start gap-2 p-3 rounded-lg border border-amber-300 bg-amber-50">
+                  <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                  <p className="text-xs text-amber-900">
+                    <strong>⚠ Discordanza tra fonti:</strong> La Mosaicatura PRG regionale (WMS) indica codice <strong>{wmsZonaCodice}</strong>
+                    {wmsDescrizione ? ` (${wmsDescrizione})` : ''}, mentre il database NTA indica "<strong>{ntaZona}</strong>".
+                    {" "}Richiedere il CDU al Comune per chiarimento definitivo.
+                  </p>
+                </div>
+              )}
+              <DataRow label="Strumento Vigente" value={resolvedNta?.strumento || r.quadro_urbanistico.strumento_vigente} />
+              <DataRow label="Zona Urbanistica" value={wmsDisponibile && wmsZonaCodice ? `${wmsZonaCodice}${wmsDescrizione ? ` — ${wmsDescrizione}` : ''}` : ntaZona} />
+              <DataRow label="Destinazione d'Uso" value={wmsDisponibile && wmsDescrizione ? wmsDescrizione : ntaDest} />
+              <DataRow label="Indice Edificabilità" value={resolvedNta?.IF || ntaLocal?.IF || cleanVal(r.quadro_urbanistico.indice_edificabilita)} />
+              <DataRow label="Altezza Massima" value={resolvedNta?.Hmax || ntaLocal?.Hmax || cleanVal(r.quadro_urbanistico.altezza_massima)} />
+              <DataRow label="Rapporto di Copertura" value={resolvedNta?.RC || cleanVal(r.quadro_urbanistico.rc_percentuale)} />
+              <DataRow label="Distanze Minime" value={resolvedNta?.Dc ? `Dc: ${resolvedNta.Dc} · Df: ${resolvedNta.Df} · Ds: ${resolvedNta.Ds}` : cleanVal(r.quadro_urbanistico.distanze_minime)} />
+              {r.quadro_urbanistico.note_urbanistiche && !resolvedNta && cleanVal(r.quadro_urbanistico.note_urbanistiche) && <div className="mt-3 p-3 bg-muted/50 rounded-lg"><p className="text-sm text-muted-foreground">{r.quadro_urbanistico.note_urbanistiche}</p></div>}
+            </ReportSection>
+          );
+        })()}
 
         {/* Fattibilità interventi */}
         {r.fattibilita_interventi?.length > 0 && (

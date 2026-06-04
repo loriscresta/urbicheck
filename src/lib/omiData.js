@@ -252,15 +252,23 @@ const NOME_TO_BELFIORE = {
   "genova": "D969", "savona": "I480", "la spezia": "E463", "imperia": "D568",
   "sanremo": "H745", "bordighera": "B020", "santa margherita ligure": "H025",
   "sestri levante": "I693",
+  "calamandrana": "B376",
 };
 
 export function getOMIDataByNome(nomeComune, isZonaCentrale = false, sigla_provincia = null, indirizzo = null) {
   const key = (nomeComune || '').toLowerCase().trim();
   const belfiore = NOME_TO_BELFIORE[key];
   if (belfiore && OMI_DB[belfiore]) {
+    const entry = OMI_DB[belfiore];
     const rurale = isIndirizzoRurale(indirizzo);
     const result = getOMIData(belfiore, null, isZonaCentrale, rurale);
-    return { ...result, is_default: false };
+    // Sovrascrivi zona_omi e fonte con quelli specifici del record se disponibili
+    const zonaOmi = entry.zona_omi || result.zona_omi_codice;
+    const siglaProv = (sigla_provincia || '').toUpperCase().trim();
+    const fonteLabel = siglaProv && zonaOmi
+      ? `OMI AdE ${entry.anno_sem || '2025-II'} — dati diretti ${siglaProv}/${zonaOmi}`
+      : result.fonte;
+    return { ...result, is_default: false, zona_omi_codice: zonaOmi, fonte: fonteLabel };
   }
 
   // Fallback 1: media provinciale OMI
