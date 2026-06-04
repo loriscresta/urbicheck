@@ -23,7 +23,7 @@ import WfsLiguriaPanel from "@/components/report/WfsLiguriaPanel";
 import ParcellaMap from "@/components/report/ParcellaMap";
 import IndiciEdiliziSection from "@/components/report/IndiciEdiliziSection";
 import PlanimetriaSection from "@/components/report/PlanimetriaSection";
-import VincoliRischiPiemonte from "@/components/report/VincoliRischiPiemonte";
+import VincoliRischiPiemonte, { FerroviaCard } from "@/components/report/VincoliRischiPiemonte";
 
 // ── Utilities ──────────────────────────────────────────────────────────────
 
@@ -456,6 +456,9 @@ export default function ReportPageContent({ query, refetch = () => {}, isPublicV
                 return <div className="rounded-lg border border-emerald-300 bg-emerald-50 p-3 flex items-center gap-2"><span className="text-base">✅</span><p className="text-sm text-emerald-800">Nessuna ferrovia entro 500m</p></div>;
               })()}
               {!isNewStructure && vincoloFerroviarioEffettivo && <VincoloCard label="Vincolo Ferroviario" presente={vincoloFerroviarioEffettivo.presente} dettagli={vincoloFerroviarioEffettivo.dettagli} unverified={!hasVerifiedVincoli} />}
+              {!isNewStructure && !vincoloFerroviarioEffettivo && isLombardia && (
+                <FerroviaCard data={wfsFerroviario || null} comune={query.comune} regione={query.regione} />
+              )}
               {!isNewStructure && ferroviaStoricaCard && <div className="rounded-lg border border-amber-300 bg-amber-50 p-3"><div className="flex items-start gap-2"><span className="text-lg leading-none mt-0.5">{ferroviaStoricaCard.icon || '🚂'}</span><div><p className="text-sm font-bold text-amber-900">{ferroviaStoricaCard.label}</p>{ferroviaStoricaCard.nome && <p className="text-xs text-amber-800 font-semibold mt-0.5">{ferroviaStoricaCard.nome}</p>}<p className="text-xs text-amber-700 mt-1 leading-relaxed">{ferroviaStoricaCard.dettagli}</p><p className="text-[10px] text-amber-600 mt-1">Distanza: {ferroviaStoricaCard.distanza_m}m</p></div></div></div>}
               {!isNewStructure && metroCard && <div className="rounded-lg border border-blue-300 bg-blue-50 p-3"><div className="flex items-start gap-2"><span className="text-lg leading-none mt-0.5">{metroCard.icon || '🚇'}</span><div><p className="text-sm font-bold text-blue-900">{metroCard.label}</p>{metroCard.nome && <p className="text-xs text-blue-800 font-semibold mt-0.5">{metroCard.nome}</p>}<p className="text-xs text-blue-700 mt-1 leading-relaxed">{metroCard.dettagli}</p></div></div></div>}
               {!isNewStructure && tramCard && <div className="rounded-lg border border-yellow-300 bg-yellow-50 p-3"><div className="flex items-start gap-2"><span className="text-lg leading-none mt-0.5">{tramCard.icon || '🚊'}</span><div><p className="text-sm font-bold text-yellow-900">{tramCard.label}</p>{tramCard.nome && <p className="text-xs text-yellow-800 font-semibold mt-0.5">{tramCard.nome}</p>}<p className="text-xs text-yellow-700 mt-1 leading-relaxed">{tramCard.dettagli}</p></div></div></div>}

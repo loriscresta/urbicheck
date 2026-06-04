@@ -269,19 +269,31 @@ const FERROVIA_DISMESSA_COMUNI = {
   },
 };
 
+// Capoluoghi lombardi con linee RFI attive — avviso generico vincolo ferroviario
+const FERROVIA_LOMBARDIA_CAPOLUOGHI = new Set([
+  "milano","bergamo","brescia","como","cremona","lecco","lodi","mantova","monza","pavia","sondrio","varese",
+]);
+
 // ── Ferrovia ──
-function FerroviaCard({ data, comune }) {
-  if (!data) return null;
-  const dati = data.dati || [];
+export function FerroviaCard({ data, comune, regione }) {
+  const comuneLower = (comune || '').toLowerCase().trim();
+  const isLombardia = (regione || '').toLowerCase().includes('lombardia');
+  const isCapoluogoLombardia = isLombardia && FERROVIA_LOMBARDIA_CAPOLUOGHI.has(comuneLower);
+
+  const dati = data?.dati || [];
   const trovati = dati.filter(d => d.trovato);
   const hasFerr = trovati.length > 0;
-  // Fallback statico per ferrovie dismesse non rilevate da Overpass
-  const comuneLower = (comune || '').toLowerCase().trim();
   const notaDismessa = !hasFerr && FERROVIA_DISMESSA_COMUNI[comuneLower];
+  const showLombardiaWarning = !hasFerr && !notaDismessa && isCapoluogoLombardia;
+
+  // Se nessun dato WFS e nessuna nota statica e non è capoluogo lombardo, non mostrare
+  if (!data && !notaDismessa && !showLombardiaWarning) return null;
+
+  const isWarning = hasFerr || notaDismessa || showLombardiaWarning;
   return (
-    <div className={`rounded border p-4 flex items-start gap-3 ${hasFerr || notaDismessa ? "border-amber-300 bg-amber-50" : "border-emerald-300 bg-emerald-50"}`}>
-      <div className={`w-8 h-8 rounded flex items-center justify-center shrink-0 ${hasFerr || notaDismessa ? "bg-amber-100" : "bg-emerald-100"}`}>
-        <Train className={`w-4 h-4 ${hasFerr || notaDismessa ? "text-amber-600" : "text-emerald-600"}`} />
+    <div className={`rounded border p-4 flex items-start gap-3 ${isWarning ? "border-amber-300 bg-amber-50" : "border-emerald-300 bg-emerald-50"}`}>
+      <div className={`w-8 h-8 rounded flex items-center justify-center shrink-0 ${isWarning ? "bg-amber-100" : "bg-emerald-100"}`}>
+        <Train className={`w-4 h-4 ${isWarning ? "text-amber-600" : "text-emerald-600"}`} />
       </div>
       <div>
         <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Vincolo Ferroviario — DPR 753/1980</p>
@@ -300,15 +312,29 @@ function FerroviaCard({ data, comune }) {
             <p className="text-xs text-amber-700 mb-1">{notaDismessa.nota}</p>
             <span className="inline-block text-[10px] font-bold bg-amber-200 text-amber-900 px-2 py-0.5 rounded">VERIFICA NECESSARIA — {notaDismessa.legge}</span>
           </div>
+        ) : showLombardiaWarning ? (
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+              <span className="text-sm font-semibold text-amber-800">⚠ Linee ferroviarie RFI presenti nel comune</span>
+            </div>
+            <p className="text-xs text-amber-700 leading-relaxed">Comune capoluogo con infrastrutture ferroviarie RFI attive. Verificare la distanza dall'asse ferroviario (fascia 30m — DPR 753/1980 art.49) su mappa RFI prima di qualsiasi intervento edilizio.</p>
+            <a href="https://www.rfi.it/it/stazioni/stazioni-e-territorio/rete-ferroviaria.html" target="_blank" rel="noopener noreferrer"
+              className="text-[11px] text-primary flex items-center gap-1 mt-2 hover:underline">
+              <ExternalLink className="w-3 h-3" /> Mappa rete RFI →
+            </a>
+          </div>
         ) : (
           <div className="flex items-center gap-2">
             <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
             <span className="text-sm font-medium text-emerald-800">✅ Nessuna ferrovia entro 250m</span>
           </div>
         )}
-        <p className="text-[11px] text-muted-foreground italic mt-1">
-          {data.fonte_ok ? "Fonte: OpenStreetMap / Overpass API (server-side)" : notaDismessa ? "Fonte: Database vincoli UrbiCheck + verifica OSM" : "Fonte non raggiungibile"}
-        </p>
+        {data && (
+          <p className="text-[11px] text-muted-foreground italic mt-1">
+            {data.fonte_ok ? "Fonte: OpenStreetMap / Overpass API (server-side)" : notaDismessa ? "Fonte: Database vincoli UrbiCheck + verifica OSM" : "Fonte non raggiungibile"}
+          </p>
+        )}
       </div>
     </div>
   );
