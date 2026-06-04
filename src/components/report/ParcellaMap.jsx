@@ -450,36 +450,48 @@ export default function ParcellaMap({ record, query, item }) {
     }
   }, [addressCoords, hasPolygon]);
 
-  // Geocode municipality when no cadastral position available — use comune + provincia for accuracy
+  // Geocode address (preferred) or municipality when no cadastral position available
   useEffect(() => {
     if (hasPosition || !entity.comune) return;
-    const q = entity.provincia
+    // Prefer address geocoding over municipality centroid
+    const addressQuery = entity.indirizzo_immobile
+      ? `${entity.indirizzo_immobile}, ${entity.comune}, Italia`
+      : entity.provincia
       ? `${entity.comune}, ${entity.provincia}, Italia`
       : `${entity.comune}, Italia`;
-    fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=1&countrycodes=it`)
+    const isAddressQuery = !!entity.indirizzo_immobile;
+    fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(addressQuery)}&format=json&limit=1&countrycodes=it`)
       .then(r => r.json())
       .then(data => {
-        if (data[0]) setGeocodedMunPos({ lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) });
+        if (data[0]) setGeocodedMunPos({
+          lat: parseFloat(data[0].lat),
+          lon: parseFloat(data[0].lon),
+          isAddress: isAddressQuery,
+        });
       })
       .catch(() => {});
-  }, [hasPosition, entity.comune, entity.provincia]);
+  }, [hasPosition, entity.comune, entity.provincia, entity.indirizzo_immobile]);
 
-  // FIX 8 — Init municipality fallback map
+  // Init fallback map (address or municipality)
   useEffect(() => {
     if (!geocodedMunPos || !munMapDivRef.current) return;
     let munMap = null;
     const initMunMap = () => {
       const L = window.L;
       if (!L || !munMapDivRef.current) return;
-      munMap = L.map(munMapDivRef.current).setView([geocodedMunPos.lat, geocodedMunPos.lon], 14);
+      const zoom = geocodedMunPos.isAddress ? 16 : 14;
+      munMap = L.map(munMapDivRef.current).setView([geocodedMunPos.lat, geocodedMunPos.lon], zoom);
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 20, attribution: '© OpenStreetMap' }).addTo(munMap);
       L.tileLayer.wms('https://wms.cartografia.agenziaentrate.gov.it/inspire/wms/ows', {
         layers: 'CP.CadastralParcel', format: 'image/png', transparent: true, opacity: 0.85, attribution: '© AdE',
       }).addTo(munMap);
       const parsed = parseFoglio(foglio);
+      const popupLabel = geocodedMunPos.isAddress
+        ? `<b>📍 ${entity.indirizzo_immobile}</b><br/>Foglio ${parsed.sezione ? parsed.sezione + '/' + parsed.foglio : foglio}, Particella ${particella}<br/><small style="color:#666">Posizione indirizzo geocodificato</small>`
+        : `<b>📍 Comune di ${entity.comune}</b><br/>Foglio ${parsed.sezione ? parsed.sezione + '/' + parsed.foglio : foglio}, Particella ${particella}<br/><small>Posizione approssimata al centro comune</small>`;
       L.marker([geocodedMunPos.lat, geocodedMunPos.lon])
         .addTo(munMap)
-        .bindPopup(`<b>📍 Comune di ${entity.comune}</b><br/>Foglio ${parsed.sezione ? parsed.sezione + '/' + parsed.foglio : foglio}, Particella ${particella}<br/><small>Posizione approssimata al centro comune</small>`)
+        .bindPopup(popupLabel)
         .openPopup();
     };
     loadLeaflet(initMunMap);
@@ -495,7 +507,10 @@ export default function ParcellaMap({ record, query, item }) {
     return (
       <div className="space-y-2">
         <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-800">
-          📍 Posizione approssimata al Comune di <strong>{entity.comune || foglio}</strong> — sezione catastale {parsed.sezione || 'principale'}, foglio {parsed.foglio}, particella {particella}. Verificare la particella esatta su Geoportale AdE.
+          {entity.indirizzo_immobile
+            ? <>📍 Posizione indirizzo geocodificato — particella catastale non georeferenziata. <strong>{entity.indirizzo_immobile}</strong> (Foglio {parsed.foglio}, Part. {particella}). Verificare su Geoportale AdE.</>
+            : <>📍 Posizione approssimata al Comune di <strong>{entity.comune || foglio}</strong> — sezione catastale {parsed.sezione || 'principale'}, foglio {parsed.foglio}, particella {particella}. Verificare la particella esatta su Geoportale AdE.</>
+          }
         </div>
         {!geocodedMunPos && (
           <p className="text-sm text-gray-400 py-2">🔍 Ricerca posizione comune in corso…</p>
