@@ -190,6 +190,7 @@ export default function ReportPageContent({ query, refetch = () => {}, isPublicV
   const isPiemonte = (query.regione || '').toLowerCase().includes('piemonte');
   const isLiguria = (query.regione || '').toLowerCase().includes('liguria');
   const isLombardia = (query.regione || '').toLowerCase().includes('lombardia');
+  const comuneLower = (query.comune || '').toLowerCase().trim();
   const wfsRis = r.wfs_liguria?.risultati;
 
   const staticZona = SEISMIC_ZONES[query.comune] ||
@@ -235,8 +236,27 @@ export default function ReportPageContent({ query, refetch = () => {}, isPublicV
   let metroCard = null;
   let tramCard = null;
 
+  // Lookup statico ferrovie dismesse/turistiche (usato da VincoliRischiPiemonte)
+  const FERROVIE_DISMESSE_PIEMONTE = [
+    { comuni: ['calamandrana','nizza monferrato','canelli','castagnole delle lanze','costigliole d\'asti','isola d\'asti','asti','portacomaro','castello di annone','annone di brianza'], nome: 'Ferrovia Asti-Alba (Ferrovia Turistica delle Langhe e del Monferrato)', tipo: 'ferroviaria_dismessa_turistica' },
+    { comuni: ['alba','bra','cherasco','fossano','cuneo'], nome: 'Ferrovia Alba-Bra-Cuneo (dismessa)', tipo: 'ferroviaria_dismessa' },
+    { comuni: ['mondovì','villanova mondovì','niella tanaro','ceva','garessio','ormea'], nome: 'Ferrovia Ceva-Ormea (dismessa)', tipo: 'ferroviaria_dismessa' },
+    { comuni: ['casale monferrato','occimiano','rivarone','tortona'], nome: 'Ferrovia Casale-Mortara (tratto piemontese, dismessa)', tipo: 'ferroviaria_dismessa' },
+  ];
+  const staticFerroviaMatch = isPiemonte
+    ? FERROVIE_DISMESSE_PIEMONTE.find(f => f.comuni.includes(comuneLower?.trim()))
+    : null;
+
   if (wfsFerroviario) {
-    vincoloFerroviarioEffettivo = { presente: ferrorieTrovate.length > 0, dettagli: ferrorieTrovate.length > 0 ? ferrorieTrovate.map(d => `${d.nome} — fascia rispetto 30m (DPR 753/1980)`).join(' | ') : (wfsFerroviario.dati?.[0]?.nota || 'Nessuna ferrovia rilevata entro 500m.') };
+    // Se Overpass non trova ferrovie ma il lookup statico sì → usare quello
+    if (ferrorieTrovate.length === 0 && staticFerroviaMatch) {
+      vincoloFerroviarioEffettivo = {
+        presente: true,
+        dettagli: `${staticFerroviaMatch.nome} — verifica fasce DPR 753/1980 (30m dall'asse). Ferrovia dismessa/turistica: le fasce di rispetto possono permanere.`,
+      };
+    } else {
+      vincoloFerroviarioEffettivo = { presente: ferrorieTrovate.length > 0, dettagli: ferrorieTrovate.length > 0 ? ferrorieTrovate.map(d => `${d.nome} — fascia rispetto 30m (DPR 753/1980)`).join(' | ') : (wfsFerroviario.dati?.[0]?.nota || 'Nessuna ferrovia rilevata entro 500m.') };
+    }
   } else if (!isNewStructure && vfNew) {
     const vf = vfNew;
     if (vf.ferrovia_attiva?.presente) {
