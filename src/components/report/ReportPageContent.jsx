@@ -57,25 +57,59 @@ function cleanVal(val) {
   return val;
 }
 
+// Filtra testi "stima orientativa" restituendo un fallback invece di null
+function cleanOrFallback(val, fallback) {
+  if (!val || typeof val !== 'string') return fallback || null;
+  if (/stima orientativa|verificare su (visura|nta|prg)|disponibile su visura|richiedi visura/i.test(val)) return fallback || null;
+  return val;
+}
+
 function normalizeComplessita(val) {
   if (!val || typeof val !== 'string') return null;
   if (val.length > 25 || val.toLowerCase().includes('stima') || val.toLowerCase().includes('verificare')) return null;
   return val;
 }
 
+// Tempi e costi standard per tipo pratica — usati come fallback quando l'AI genera "stima orientativa"
+const PRATICHE_FALLBACK = {
+  'permesso di costruire':   { tempistica: '60–90 giorni (prorogabile a 150 gg)', costi: 'Oneri urbanizzazione primaria/secondaria + diritti segreteria' },
+  'scia':                    { tempistica: '30 giorni (silenzio-assenso)', costi: 'Diritti di segreteria comunali + oneri di urbanizzazione' },
+  'cila':                    { tempistica: '5 giorni (comunicazione)', costi: 'Diritti di segreteria (€30–150 ca.)' },
+  'cila-s':                  { tempistica: '5 giorni (comunicazione asseverata)', costi: 'Diritti di segreteria (€50–200 ca.)' },
+  'comunicazione':           { tempistica: '5 giorni', costi: 'Diritti di segreteria (€30–150 ca.)' },
+  'variante urbanistica':    { tempistica: '6–18 mesi', costi: 'Oneri di urbanizzazione + spese tecniche' },
+  'autorizzazione paesagg':  { tempistica: '60–120 giorni', costi: 'Diritti istruttoria + spese tecniche' },
+  'ristrutturazione':        { tempistica: '30–90 giorni (CILA/SCIA/PDC)', costi: 'Diritti di segreteria + oneri comunali' },
+  'manutenzione':            { tempistica: '5–30 giorni', costi: 'Diritti di segreteria (€30–100 ca.)' },
+  'nuova costruzione':       { tempistica: '60–90 giorni (PDC)', costi: 'Oneri di urbanizzazione + costo costruzione' },
+};
+
+function getPraticaFallback(tipo) {
+  const t = (tipo || '').toLowerCase();
+  for (const [key, val] of Object.entries(PRATICHE_FALLBACK)) {
+    if (t.includes(key)) return val;
+  }
+  return { tempistica: '30–90 giorni (variabile per tipo pratica)', costi: 'Diritti di segreteria + eventuali oneri comunali' };
+}
+
 function enrichFattibilita(interventi, ntaData, comune) {
   if (!interventi) return [];
   return interventi.map(fi => {
-    const noteOk = fi.note && !/stima orientativa/i.test(fi.note);
-    if (noteOk) return fi;
     const tipo = (fi.tipo_intervento || '').toLowerCase();
-    if (ntaData && (tipo.includes('nuova edificazione') || tipo.includes('nuova costruzione'))) {
-      return { ...fi, note: `Ammessa secondo indici NTA: IF ${ntaData.IF}, RC ${ntaData.RC}, H max ${ntaData.Hmax}. Permesso di costruire obbligatorio.`, ente_competente: fi.ente_competente || `Comune di ${comune} — Ufficio Urbanistica`, tempistica_stimata: fi.tempistica_stimata || '60-90 giorni per permesso di costruire', costi_stimati: fi.costi_stimati || 'Oneri di urbanizzazione primaria/secondaria + costo costruzione' };
-    }
-    if (ntaData && (tipo.includes('recupero') || tipo.includes('ristrutturazione') || tipo.includes('manutenzione'))) {
-      return { ...fi, note: `Interventi ammessi nella zona ${ntaData.nomeZona || 'residenziale'} (${ntaData.strumento}). Max H: ${ntaData.Hmax}, RC: ${ntaData.RC}.`, ente_competente: fi.ente_competente || `Comune di ${comune} — Ufficio Edilizia Privata`, tempistica_stimata: fi.tempistica_stimata || '30-90 giorni (CILA/SCIA/permesso costruire)', costi_stimati: fi.costi_stimati || 'Diritti di segreteria + oneri di urbanizzazione comunali' };
-    }
-    return { ...fi, note: noteOk ? fi.note : null };
+    const fb = getPraticaFallback(fi.pratica_richiesta || fi.tipo_intervento);
+
+    // Pulisci nota, tempistica e costi da "stima orientativa"
+    const note = cleanOrFallback(fi.note,
+      ntaData && tipo.includes('nuova') ? `Permesso di costruire obbligatorio. IF ${ntaData.IF}, H max ${ntaData.Hmax}.` :
+      ntaData ? `Intervento ammesso nella zona ${ntaData.nomeZona || 'residenziale'} (${ntaData.strumento}).` : null
+    );
+    const tempistica = cleanOrFallback(fi.tempistica_stimata, fb.tempistica);
+    const costi = cleanOrFallback(fi.costi_stimati, fb.costi);
+    const ente = cleanOrFallback(fi.ente_competente,
+      tipo.includes('nuova') ? `Comune di ${comune} — Ufficio Urbanistica` : `Comune di ${comune} — Ufficio Edilizia Privata`
+    );
+
+    return { ...fi, note, tempistica_stimata: tempistica, costi_stimati: costi, ente_competente: ente };
   });
 }
 
@@ -211,15 +245,19 @@ export default function ReportPageContent({ query, refetch = () => {}, isPublicV
 
   const wfsPai = wfsRis?.pai_rischio_idrogeologico;
   const paiFranePresenti = wfsPai && (wfsPai.features_totali > 0 || wfsPai.dati?.some(d => d.trovato));
+  const _idraulicoAI = r.vincoli?.vincolo_idraulico;
+  const idraulicoDettagliAI = cleanOrFallback(_idraulicoAI?.dettagli, 'Verifica PAI consigliata — richiedere CDU al Comune o consultare IdroGEO ISPRA');
   const vincoloIdraulicoEffettivo = wfsPai
     ? { presente: paiFranePresenti, dettagli: wfsPai.nota || (paiFranePresenti ? 'Rilevate geometrie PAI — consultare fonte ufficiale.' : 'Nessuna frana censita entro area di ricerca.'), classe_rischio: paiFranePresenti ? 'Da verificare su fonte ufficiale' : null }
-    : (r.vincoli?.vincolo_idraulico || { presente: false });
+    : (_idraulicoAI ? { ..._idraulicoAI, dettagli: idraulicoDettagliAI } : { presente: false });
 
   const wfsVincoliPaesaggistici = wfsRis?.vincoli_paesaggistici_ope_legis;
   const wfsPaesaggisticoVincoli = wfsVincoliPaesaggistici?.vincoli?.filter(v => v.livello === 'APPLICABILE') || [];
+  const _paesaggisticoAI = r.vincoli?.vincolo_paesaggistico;
+  const paesaggisticoDettagliAI = cleanOrFallback(_paesaggisticoAI?.dettagli, 'Verifica puntuale consigliata — richiedere CDU al Comune');
   const vincoloPaesaggisticoEffettivo = wfsVincoliPaesaggistici
     ? { presente: wfsPaesaggisticoVincoli.length > 0, dettagli: wfsPaesaggisticoVincoli.length > 0 ? wfsPaesaggisticoVincoli.map(v => v.descrizione || v.tipo).join(' | ') : (wfsVincoliPaesaggistici.vincoli?.[0]?.nota || 'Nessun vincolo paesaggistico ope legis rilevato.'), tipo: wfsPaesaggisticoVincoli.length > 0 ? wfsPaesaggisticoVincoli.map(v => v.tipo).join(', ') : null }
-    : (r.vincoli?.vincolo_paesaggistico || { presente: false });
+    : (_paesaggisticoAI ? { ..._paesaggisticoAI, dettagli: paesaggisticoDettagliAI } : { presente: false, dettagli: 'Non verificato via WFS — richiedere CDU al Comune' });
 
   const wfsCorsiAcqua = wfsRis?.vincolo_corsi_acqua;
   const corsiAcquaTrovati = wfsCorsiAcqua?.dati?.filter(d => d.trovato) || [];
@@ -283,6 +321,8 @@ export default function ReportPageContent({ query, refetch = () => {}, isPublicV
   const showPrgMismatchNote = isResiCategory && isPrgServizi;
 
   const complessitaNorm = normalizeComplessita(r.valutazione_sintetica?.livello_complessita);
+  // hasVerifiedVincoli = true quando abbiamo dati sismici certi (staticZona) o WFS ufficiale
+  // Questo evita di mostrare "⚠ Non verificato" per vincoli che abbiamo dalla classificazione OPCM
   const hasVerifiedVincoli = !!(wfsRis) || isPiemonte || isLiguria || !!staticZona;
 
   const complexityColor = {
@@ -555,17 +595,24 @@ export default function ReportPageContent({ query, refetch = () => {}, isPublicV
         {r.pratiche_necessarie?.length > 0 && (
           <ReportSection icon={ClipboardList} title="Pratiche Necessarie" delay={0.14}>
             <div className="space-y-4">
-              {r.pratiche_necessarie.map((p, i) => (
-                <div key={i} className="p-4 rounded-lg border border-border bg-muted/20">
-                  <div className="flex items-start justify-between mb-2"><div><p className="font-medium text-sm">{p.tipo_intervento}</p><Badge variant="outline" className="mt-1 text-xs">{p.pratica_richiesta}</Badge></div></div>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-3 text-sm">
-                    <div><span className="text-muted-foreground">Ente: </span><span className="font-medium">{p.ente_competente}</span></div>
-                    <div><span className="text-muted-foreground">Tempi: </span><span className="font-medium">{p.tempistica_stimata}</span></div>
-                    <div><span className="text-muted-foreground">Costi: </span><span className="font-medium">{p.costi_stimati}</span></div>
+              {r.pratiche_necessarie.map((p, i) => {
+                const fb = getPraticaFallback(p.pratica_richiesta || p.tipo_intervento);
+                const tempistica = cleanOrFallback(p.tempistica_stimata, fb.tempistica);
+                const costi = cleanOrFallback(p.costi_stimati, fb.costi);
+                const ente = cleanOrFallback(p.ente_competente, `Comune di ${query.comune} — Ufficio Tecnico`);
+                const note = cleanOrFallback(p.note, null);
+                return (
+                  <div key={i} className="p-4 rounded-lg border border-border bg-muted/20">
+                    <div className="flex items-start justify-between mb-2"><div><p className="font-medium text-sm">{p.tipo_intervento}</p><Badge variant="outline" className="mt-1 text-xs">{p.pratica_richiesta}</Badge></div></div>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-3 text-sm">
+                      <div><span className="text-muted-foreground">Ente: </span><span className="font-medium">{ente}</span></div>
+                      <div><span className="text-muted-foreground">Tempi: </span><span className="font-medium">{tempistica}</span></div>
+                      <div><span className="text-muted-foreground">Costi: </span><span className="font-medium">{costi}</span></div>
+                    </div>
+                    {note && <p className="text-xs text-muted-foreground mt-2">{note}</p>}
                   </div>
-                  {p.note && <p className="text-xs text-muted-foreground mt-2">{p.note}</p>}
-                </div>
-              ))}
+                );
+              })}
             </div>
           </ReportSection>
         )}
@@ -620,15 +667,22 @@ export default function ReportPageContent({ query, refetch = () => {}, isPublicV
         })()}
 
         {/* Valutazione Sintetica */}
-        {r.valutazione_sintetica && (
-          <ReportSection icon={Lightbulb} title="Valutazione Sintetica" delay={0.2}>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {r.valutazione_sintetica.criticita_principali?.length > 0 && <div><p className="text-sm font-semibold mb-2 flex items-center gap-1"><AlertTriangle className="w-3 h-3 text-amber-500" /> Criticità</p><ul className="space-y-1">{r.valutazione_sintetica.criticita_principali.map((c, i) => <li key={i} className="text-sm text-muted-foreground">• {c}</li>)}</ul></div>}
-              {r.valutazione_sintetica.opportunita?.length > 0 && <div><p className="text-sm font-semibold mb-2 text-emerald-600">✦ Opportunità</p><ul className="space-y-1">{r.valutazione_sintetica.opportunita.map((o, i) => <li key={i} className="text-sm text-muted-foreground">• {o}</li>)}</ul></div>}
-              {r.valutazione_sintetica.raccomandazioni?.length > 0 && <div><p className="text-sm font-semibold mb-2 text-blue-600">→ Raccomandazioni</p><ul className="space-y-1">{r.valutazione_sintetica.raccomandazioni.map((ra, i) => <li key={i} className="text-sm text-muted-foreground">• {ra}</li>)}</ul></div>}
-            </div>
-          </ReportSection>
-        )}
+        {r.valutazione_sintetica && (() => {
+          const isStima = (s) => /stima orientativa|verificare su (nta|prg|visura)|disponibile su visura/i.test(s || '');
+          const criticita = (r.valutazione_sintetica.criticita_principali || []).filter(c => !isStima(c));
+          const opportunita = (r.valutazione_sintetica.opportunita || []).filter(o => !isStima(o));
+          const raccomandazioni = (r.valutazione_sintetica.raccomandazioni || []).filter(ra => !isStima(ra));
+          if (!criticita.length && !opportunita.length && !raccomandazioni.length) return null;
+          return (
+            <ReportSection icon={Lightbulb} title="Valutazione Sintetica" delay={0.2}>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {criticita.length > 0 && <div><p className="text-sm font-semibold mb-2 flex items-center gap-1"><AlertTriangle className="w-3 h-3 text-amber-500" /> Criticità</p><ul className="space-y-1">{criticita.map((c, i) => <li key={i} className="text-sm text-muted-foreground">• {c}</li>)}</ul></div>}
+                {opportunita.length > 0 && <div><p className="text-sm font-semibold mb-2 text-emerald-600">✦ Opportunità</p><ul className="space-y-1">{opportunita.map((o, i) => <li key={i} className="text-sm text-muted-foreground">• {o}</li>)}</ul></div>}
+                {raccomandazioni.length > 0 && <div><p className="text-sm font-semibold mb-2 text-blue-600">→ Raccomandazioni</p><ul className="space-y-1">{raccomandazioni.map((ra, i) => <li key={i} className="text-sm text-muted-foreground">• {ra}</li>)}</ul></div>}
+              </div>
+            </ReportSection>
+          );
+        })()}
       </div>
 
       {/* WFS — Lombardia */}
