@@ -26,34 +26,22 @@ import LegalPrivacy from '@/pages/LegalPrivacy';
 import LegalTermini from '@/pages/LegalTermini';
 import LegalCookie from '@/pages/LegalCookie';
 import CookiePolicyPage from '@/pages/CookiePolicyPage';
-import CookieBanner from '@/components/CookieBanner';
-
-const META_PIXEL_ID = "1962386827973256";
+import CookieBanner, { loadMetaPixel, getConsentStatus } from '@/components/CookieBanner';
 
 function MetaPixel() {
   const location = useLocation();
   const initialized = useRef(false);
 
-  // STEP 1 — carica fbevents.js + init + primo PageView
+  // STEP 1 — carica il pixel SOLO se l'utente ha già dato consenso (localStorage)
   useEffect(() => {
     if (initialized.current) return;
     initialized.current = true;
-
-    !(function (f, b, e, v, n, t, s) {
-      if (f.fbq) return;
-      n = f.fbq = function () { n.callMethod ? n.callMethod.apply(n, arguments) : n.queue.push(arguments); };
-      if (!f._fbq) f._fbq = n;
-      n.push = n; n.loaded = !0; n.version = "2.0"; n.queue = [];
-      t = b.createElement(e); t.async = !0; t.src = v;
-      s = b.getElementsByTagName(e)[0];
-      s.parentNode.insertBefore(t, s);
-    })(window, document, "script", "https://connect.facebook.net/en_US/fbevents.js");
-
-    window.fbq("init", META_PIXEL_ID);
-    window.fbq("track", "PageView");
+    if (getConsentStatus() === "granted") {
+      loadMetaPixel();
+    }
   }, []);
 
-  // STEP 2 — PageView su ogni cambio di route (salta il mount iniziale già gestito sopra)
+  // STEP 2 — PageView su ogni cambio di route SPA (solo se fbq è presente = consenso dato)
   const isFirstRoute = useRef(true);
   useEffect(() => {
     if (isFirstRoute.current) { isFirstRoute.current = false; return; }
