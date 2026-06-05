@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
+import { trackEvent } from "@/lib/metaPixel";
 import { base44 } from "@/api/base44Client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -45,7 +46,7 @@ export default function Register() {
       if (result?.access_token) {
         base44.auth.setToken(result.access_token);
       }
-      if (typeof window.fbq !== 'undefined') window.fbq('track', 'CompleteRegistration');
+      trackEvent('CompleteRegistration', { email });
       window.location.href = "/";
     } catch (err) {
       setError(err.message || "Invalid verification code");

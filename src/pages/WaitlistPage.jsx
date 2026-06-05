@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { base44 } from "@/api/base44Client";
+import { trackEvent } from "@/lib/metaPixel";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { CheckCircle2 } from "lucide-react";
@@ -77,8 +78,7 @@ export default function WaitlistPage() {
       ruolo: ruolo || "altro",
       regione_interesse: regioneInteresse || undefined,
     });
-    const eventID = crypto.randomUUID();
-    if (typeof window.fbq !== 'undefined') window.fbq("track", "Lead", { content_name: "waitlist", eventID });
+    trackEvent("Lead", { customData: { content_name: "waitlist" }, email });
     setSubmitted(true);
     setLoading(false);
   };

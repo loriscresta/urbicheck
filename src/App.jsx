@@ -27,6 +27,7 @@ import LegalTermini from '@/pages/LegalTermini';
 import LegalCookie from '@/pages/LegalCookie';
 import CookiePolicyPage from '@/pages/CookiePolicyPage';
 import CookieBanner, { loadMetaPixel, getConsentStatus } from '@/components/CookieBanner';
+import { trackEvent } from '@/lib/metaPixel';
 import Login from '@/pages/Login';
 import Register from '@/pages/Register';
 import ForgotPassword from '@/pages/ForgotPassword';
@@ -50,7 +51,7 @@ function MetaPixel() {
   const isFirstRoute = useRef(true);
   useEffect(() => {
     if (isFirstRoute.current) { isFirstRoute.current = false; return; }
-    if (typeof window.fbq !== 'undefined') window.fbq("track", "PageView");
+    trackEvent("PageView");
   }, [location.pathname]);
 
   return null;

@@ -34,6 +34,7 @@ import { catasto_resolver } from "@/functions/catasto_resolver";
 import CadastralSearchForm from "@/components/search/CadastralSearchForm.jsx";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import { Shield, Info, Search, Loader2, CheckCircle2, XCircle } from "lucide-react";
+import { trackEvent } from "@/lib/metaPixel";
 import { motion } from "framer-motion";
 import { useQuery } from "@tanstack/react-query";
 import { calculatePlanimetriaArea } from '@/functions/calculatePlanimetriaArea';
@@ -65,7 +66,7 @@ export default function SearchPage() {
       return;
     }
     setIsLoading(true);
-    if (typeof window.fbq !== 'undefined') window.fbq('track', 'Search');
+    trackEvent('Search');
     if (formData._batch) {
       await handleBatchSearch(formData);
     } else {

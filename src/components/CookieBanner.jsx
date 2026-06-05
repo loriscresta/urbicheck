@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
+import { trackEvent } from "@/lib/metaPixel";
 
 const CONSENT_KEY = "cookie_consent";
 
@@ -34,6 +35,8 @@ export default function CookieBanner() {
   const handleAccept = () => {
     localStorage.setItem(CONSENT_KEY, "granted");
     loadMetaPixel();
+    // Invia PageView via CAPI subito dopo il consenso
+    setTimeout(() => trackEvent("PageView"), 500);
     setVisible(false);
   };
 
