@@ -1,11 +1,40 @@
 /**
- * fetchParcelGeometry — recupera la geometria GeoJSON di una particella catastale
- * dal WFS dell'Agenzia delle Entrate e la salva su CadastralQuery.
+ * fetchParcelGeometry — recupera la geometria GeoJSON di una particella catastale.
+ * Prima tenta l'API interna UrbiCheck (http://80.211.24.114:8001/parcel),
+ * poi fallback al WFS dell'Agenzia delle Entrate.
  *
  * INPUT: { queryId, foglio, particella, sezione, comune, centroid_lat, centroid_lng }
  * OUTPUT: { success: true, geometry } | { success: false }
  */
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
+
+const INTERNAL_API_BASE = 'http://80.211.24.114:8001';
+
+async function fetchFromInternalApi(lat, lon) {
+  try {
+    const url = `${INTERNAL_API_BASE}/parcel?lat=${lat}&lon=${lon}`;
+    const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (!data.found || !data.parcels?.length) return null;
+    const p = data.parcels[0];
+    if (!p.geometry) return null;
+    return {
+      geometry: p.geometry,
+      foglio: String(p.foglio),
+      particella: p.particella,
+      sezione_catastale: (p.sezione || '').trim(),
+      codice_comune_catasto: p.comune_code,
+      regione: p.regione,
+      provincia: p.provincia,
+      centroid_lat: p.centroid_lat,
+      centroid_lon: p.centroid_lon,
+    };
+  } catch (e) {
+    console.warn('Internal API error:', e.message);
+    return null;
+  }
+}
 
 const WFS_ADE_BASE = 'https://wfs.cartografia.agenziaentrate.gov.it/inspire/wfs/owfs01.php';
 
@@ -136,49 +165,67 @@ Deno.serve(async (req) => {
   const inspireId = qr.report_data?.catasto_data?.inspire_id;
 
   let geometry = null;
+  let extraFields = {};
 
-  if (inspireId) {
-    geometry = await searchWfsByInspireId(inspireId);
-    if (geometry) console.log(`WFS AdE: trovato per INSPIRE ID ${inspireId}`);
-  }
-
-  // Fallback: bbox con filtro particella esatta
-  if (!geometry) {
-    geometry = await searchWfsByBbox(centroid_lat, centroid_lng, 0.001, codiceBelfiore, foglio, particella);
-  }
-  if (!geometry) {
-    geometry = await searchWfsByBbox(centroid_lat, centroid_lng, 0.003, codiceBelfiore, foglio, particella);
-  }
-  if (!geometry) {
-    console.log("[fetchParcelGeometry] Provo BBOX ±0.01 (comune intero)");
-    geometry = await searchWfsByBbox(centroid_lat, centroid_lng, 0.01, codiceBelfiore, foglio, particella);
-  }
-  if (!geometry) {
-    console.log("[fetchParcelGeometry] Provo BBOX ±0.02 (area estesa)");
-    geometry = await searchWfsByBbox(centroid_lat, centroid_lng, 0.02, codiceBelfiore, foglio, particella);
-  }
-
-  if (!geometry) {
-    return Response.json({ success: false, reason: 'WFS AdE non ha restituito geometria per questa area' });
+  // ── STEP 1: API interna UrbiCheck (più veloce e precisa) ──
+  const internalResult = await fetchFromInternalApi(centroid_lat, centroid_lng);
+  if (internalResult) {
+    console.log('[fetchParcelGeometry] Trovato via API interna UrbiCheck');
+    geometry = internalResult.geometry;
+    extraFields = {
+      foglio: internalResult.foglio,
+      particella: internalResult.particella,
+      sezione_catastale: internalResult.sezione_catastale,
+      codice_comune_catasto: internalResult.codice_comune_catasto,
+      regione: internalResult.regione,
+      provincia: internalResult.provincia,
+      fonte_dati_catastali: 'catastomappe',
+    };
+    // Aggiorna centroid con quello dell'API interna se disponibile
+    if (internalResult.centroid_lat && internalResult.centroid_lon) {
+      extraFields.centroid_lat = internalResult.centroid_lat;
+      extraFields.centroid_lng = internalResult.centroid_lon;
+    }
   }
 
-  // ── FIX 1: Calcola baricentro dal poligono WFS AdE ──
-  const centroid = calcPolygonCentroid(geometry);
+  // ── STEP 2: Fallback WFS AdE ──
+  if (!geometry) {
+    if (inspireId) {
+      geometry = await searchWfsByInspireId(inspireId);
+      if (geometry) console.log(`WFS AdE: trovato per INSPIRE ID ${inspireId}`);
+    }
+    if (!geometry) geometry = await searchWfsByBbox(centroid_lat, centroid_lng, 0.001, codiceBelfiore, foglio, particella);
+    if (!geometry) geometry = await searchWfsByBbox(centroid_lat, centroid_lng, 0.003, codiceBelfiore, foglio, particella);
+    if (!geometry) {
+      console.log("[fetchParcelGeometry] Provo BBOX ±0.01 (comune intero)");
+      geometry = await searchWfsByBbox(centroid_lat, centroid_lng, 0.01, codiceBelfiore, foglio, particella);
+    }
+    if (!geometry) {
+      console.log("[fetchParcelGeometry] Provo BBOX ±0.02 (area estesa)");
+      geometry = await searchWfsByBbox(centroid_lat, centroid_lng, 0.02, codiceBelfiore, foglio, particella);
+    }
+  }
 
-  // Salva sulla query: geometry_geojson + centroid_lat/lng aggiornati al baricentro WFS AdE
+  if (!geometry) {
+    return Response.json({ success: false, reason: 'Nessuna geometria trovata (API interna + WFS AdE)' });
+  }
+
+  // ── Calcola baricentro dal poligono se non già fornito ──
+  const centroid = extraFields.centroid_lat
+    ? { lat: extraFields.centroid_lat, lon: extraFields.centroid_lng }
+    : calcPolygonCentroid(geometry);
+
   if (queryId) {
     try {
       await base44.asServiceRole.entities.CadastralQuery.update(queryId, {
         geometry_geojson: geometry,
-        ...(centroid ? {
-          centroid_lat: centroid.lat,
-          centroid_lng: centroid.lon,
-        } : {}),
+        ...(centroid ? { centroid_lat: centroid.lat, centroid_lng: centroid.lon } : {}),
+        ...extraFields,
       });
     } catch (e) {
       console.warn('Save geometry error:', e.message);
     }
   }
 
-  return Response.json({ success: true, geometry, centroid });
+  return Response.json({ success: true, geometry, centroid, source: extraFields.fonte_dati_catastali || 'ade_wfs' });
 });

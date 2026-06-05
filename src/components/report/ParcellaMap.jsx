@@ -47,9 +47,10 @@ export default function ParcellaMap({ record, query, item }) {
   const hasPosition = !!(initLat && initLon && !isNaN(initLat) && !isNaN(initLon));
   const hasPolygon  = !!(geomJson?.geometry?.coordinates);
 
-  const mapDivRef     = useRef(null);
-  const leafletMapRef = useRef(null);
-  const munMapDivRef  = useRef(null);
+  const mapDivRef       = useRef(null);
+  const leafletMapRef   = useRef(null);
+  const munMapDivRef    = useRef(null);
+  const geojsonLayerRef = useRef(null);
   const [polygonLoaded, setPolygonLoaded] = useState(false);
   const [wfsStatus,     setWfsStatus]     = useState("");
   const [geocodedMunPos, setGeocodedMunPos] = useState(null);
@@ -57,14 +58,20 @@ export default function ParcellaMap({ record, query, item }) {
   const [addressCoords, setAddressCoords] = useState(null);
   const addressMarkerRef = useRef(null);
 
+  const PARCEL_STYLE = { color: "#FF6600", weight: 2, fillColor: "#FF6600", fillOpacity: 0.25 };
+
   const addPolygonToMap = useCallback((feature) => {
     const L   = window.L;
     const map = leafletMapRef.current;
     if (!L || !map) return;
     try {
-      const layer = L.geoJSON(feature, {
-        style: { color: "#c0392b", weight: 3, fillColor: "#e74c3c", fillOpacity: 0.35 },
-      }).addTo(map);
+      // Rimuovi layer precedente se presente
+      if (geojsonLayerRef.current) {
+        map.removeLayer(geojsonLayerRef.current);
+        geojsonLayerRef.current = null;
+      }
+      const layer = L.geoJSON(feature, { style: PARCEL_STYLE }).addTo(map);
+      geojsonLayerRef.current = layer;
       map.fitBounds(layer.getBounds(), { maxZoom: 18, padding: [40, 40] });
       setPolygonLoaded(true);
     } catch (err) {
@@ -273,9 +280,8 @@ export default function ParcellaMap({ record, query, item }) {
       ).addTo(map);
 
       if (hasPolygon) {
-        const layer = L.geoJSON(geomJson, {
-          style: { color: "#c0392b", weight: 3, fillColor: "#e74c3c", fillOpacity: 0.35 },
-        }).addTo(map);
+        const layer = L.geoJSON(geomJson, { style: PARCEL_STYLE }).addTo(map);
+        geojsonLayerRef.current = layer;
         map.fitBounds(layer.getBounds(), { maxZoom: 18, padding: [40, 40] });
         setPolygonLoaded(true);
       } else {
@@ -313,6 +319,25 @@ export default function ParcellaMap({ record, query, item }) {
   }, [initLat, initLon, hasPolygon]);
 
 
+
+  // ── Aggiorna layer GeoJSON quando geometry_geojson cambia (es. dopo fetch API interna) ──
+  useEffect(() => {
+    const L = window.L;
+    const map = leafletMapRef.current;
+    if (!L || !map || !geomJson) return;
+    if (geojsonLayerRef.current) {
+      map.removeLayer(geojsonLayerRef.current);
+      geojsonLayerRef.current = null;
+    }
+    try {
+      const layer = L.geoJSON(geomJson, { style: PARCEL_STYLE }).addTo(map);
+      geojsonLayerRef.current = layer;
+      map.fitBounds(layer.getBounds(), { maxZoom: 18, padding: [40, 40] });
+      setPolygonLoaded(true);
+    } catch (err) {
+      console.error("geomJson update layer error", err);
+    }
+  }, [geomJson]);
 
   // ── Geocoding indirizzo immobile (priorità su centroid GIS per frazioni/rurali) ──
   useEffect(() => {

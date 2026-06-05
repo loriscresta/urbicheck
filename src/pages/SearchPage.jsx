@@ -1,5 +1,33 @@
 import { ENRICHMENT_API_URL } from '@/lib/config';
 import React, { useState } from "react";
+
+const INTERNAL_PARCEL_API = 'http://80.211.24.114:8001';
+
+async function fetchInternalParcelData(lat, lon) {
+  try {
+    const res = await fetch(`${INTERNAL_PARCEL_API}/parcel?lat=${lat}&lon=${lon}`, {
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (!data.found || !data.parcels?.length) return null;
+    const p = data.parcels[0];
+    return {
+      geometry_geojson: p.geometry,
+      foglio: String(p.foglio),
+      particella: p.particella,
+      sezione_catastale: (p.sezione || '').trim(),
+      codice_comune_catasto: p.comune_code,
+      regione: p.regione,
+      provincia: p.provincia,
+      centroid_lat: p.centroid_lat,
+      centroid_lng: p.centroid_lon,
+      fonte_dati_catastali: 'catastomappe',
+    };
+  } catch (_e) {
+    return null;
+  }
+}
 import { useNavigate } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import { catasto_resolver } from "@/functions/catasto_resolver";
@@ -109,6 +137,12 @@ export default function SearchPage() {
         centroid_lat: _geoLat,
         centroid_lng: _geoLon,
       });
+
+      // Tenta API interna per geometria e dati catastali
+      const parcelData = await fetchInternalParcelData(_geoLat, _geoLon);
+      if (parcelData) {
+        await base44.entities.CadastralQuery.update(query.id, parcelData);
+      }
     }
 
     catasto_resolver({
