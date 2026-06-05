@@ -1,7 +1,8 @@
+import React, { useEffect, useRef } from 'react';
 import { Toaster } from "@/components/ui/toaster"
 import { QueryClientProvider } from '@tanstack/react-query'
 import { queryClientInstance } from '@/lib/query-client'
-import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
+import { BrowserRouter as Router, Route, Routes, useLocation } from 'react-router-dom';
 import PageNotFound from './lib/PageNotFound';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import ErrorBoundary from '@/components/ErrorBoundary';
@@ -26,6 +27,42 @@ import LegalTermini from '@/pages/LegalTermini';
 import LegalCookie from '@/pages/LegalCookie';
 import CookiePolicyPage from '@/pages/CookiePolicyPage';
 import CookieBanner from '@/components/CookieBanner';
+
+const META_PIXEL_ID = "1962386827973256";
+
+function MetaPixel() {
+  const location = useLocation();
+  const initialized = useRef(false);
+
+  // STEP 1 — carica fbevents.js + init + primo PageView
+  useEffect(() => {
+    if (initialized.current) return;
+    initialized.current = true;
+
+    !(function (f, b, e, v, n, t, s) {
+      if (f.fbq) return;
+      n = f.fbq = function () { n.callMethod ? n.callMethod.apply(n, arguments) : n.queue.push(arguments); };
+      if (!f._fbq) f._fbq = n;
+      n.push = n; n.loaded = !0; n.version = "2.0"; n.queue = [];
+      t = b.createElement(e); t.async = !0; t.src = v;
+      s = b.getElementsByTagName(e)[0];
+      s.parentNode.insertBefore(t, s);
+    })(window, document, "script", "https://connect.facebook.net/en_US/fbevents.js");
+
+    window.fbq("init", META_PIXEL_ID);
+    window.fbq("track", "PageView");
+  }, []);
+
+  // STEP 2 — PageView su ogni cambio di route (salta il mount iniziale già gestito sopra)
+  const isFirstRoute = useRef(true);
+  useEffect(() => {
+    if (isFirstRoute.current) { isFirstRoute.current = false; return; }
+    if (!window.fbq) return;
+    window.fbq("track", "PageView");
+  }, [location.pathname]);
+
+  return null;
+}
 
 const LegalRoutes = (
   <>
@@ -112,6 +149,7 @@ const AuthenticatedApp = () => {
 function App() {
   return (
     <Router>
+      <MetaPixel />
       <AuthProvider>
         <QueryClientProvider client={queryClientInstance}>
           <AuthenticatedApp />

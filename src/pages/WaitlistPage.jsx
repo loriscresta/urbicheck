@@ -77,6 +77,8 @@ export default function WaitlistPage() {
       ruolo: ruolo || "altro",
       regione_interesse: regioneInteresse || undefined,
     });
+    const eventID = crypto.randomUUID();
+    window.fbq && window.fbq("track", "Lead", { content_name: "waitlist", eventID });
     setSubmitted(true);
     setLoading(false);
   };
