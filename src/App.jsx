@@ -2,7 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import { Toaster } from "@/components/ui/toaster"
 import { QueryClientProvider } from '@tanstack/react-query'
 import { queryClientInstance } from '@/lib/query-client'
-import { BrowserRouter as Router, Route, Routes, useLocation } from 'react-router-dom';
+import { BrowserRouter as Router, Route, Routes, Navigate, useLocation } from 'react-router-dom';
 import PageNotFound from './lib/PageNotFound';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import ErrorBoundary from '@/components/ErrorBoundary';
@@ -27,6 +27,11 @@ import LegalTermini from '@/pages/LegalTermini';
 import LegalCookie from '@/pages/LegalCookie';
 import CookiePolicyPage from '@/pages/CookiePolicyPage';
 import CookieBanner, { loadMetaPixel, getConsentStatus } from '@/components/CookieBanner';
+import Login from '@/pages/Login';
+import Register from '@/pages/Register';
+import ForgotPassword from '@/pages/ForgotPassword';
+import ResetPassword from '@/pages/ResetPassword';
+import ProtectedRoute from '@/components/ProtectedRoute';
 
 function MetaPixel() {
   const location = useLocation();
@@ -77,57 +82,39 @@ const AuthenticatedApp = () => {
     );
   }
 
-  if (authError) {
-    if (authError.type === 'user_not_registered') {
-      return <UserNotRegisteredError />;
-    } else if (authError.type === 'auth_required') {
-      return (
-        <>
-          <CookieBanner />
-          <Routes>
-            <Route path="/" element={<LandingPage />} />
-            <Route path="/waitlist" element={<WaitlistPage />} />
-            {LegalRoutes}
-            <Route path="*" element={<LandingPage />} />
-          </Routes>
-        </>
-      );
-    }
-  }
-
-  if (!isAuthenticated) {
-    return (
-      <>
-        <CookieBanner />
-        <Routes>
-          <Route path="/" element={<LandingPage />} />
-          <Route path="/waitlist" element={<WaitlistPage />} />
-          {LegalRoutes}
-          <Route path="*" element={<LandingPage />} />
-        </Routes>
-      </>
-    );
+  if (authError?.type === 'user_not_registered') {
+    return <UserNotRegisteredError />;
   }
 
   return (
     <>
       <CookieBanner />
       <Routes>
+        {/* Public routes */}
         <Route path="/" element={<LandingPage />} />
         <Route path="/waitlist" element={<WaitlistPage />} />
-        {LegalRoutes}
-        <Route element={<AppLayout />}>
-          <Route path="/dashboard" element={<ErrorBoundary><Dashboard /></ErrorBoundary>} />
-          <Route path="/search" element={<ErrorBoundary><SearchPage /></ErrorBoundary>} />
-          <Route path="/report/:id" element={<ErrorBoundary><ReportPage /></ErrorBoundary>} />
-          <Route path="/history" element={<ErrorBoundary><HistoryPage /></ErrorBoundary>} />
-          <Route path="/credits" element={<ErrorBoundary><CreditsPage /></ErrorBoundary>} />
-          <Route path="/dev" element={<ErrorBoundary><DevPanel /></ErrorBoundary>} />
-          <Route path="/batch/:id" element={<ErrorBoundary><BatchResultsPage /></ErrorBoundary>} />
-          <Route path="/perizia" element={<ErrorBoundary><PeriziaPage /></ErrorBoundary>} />
-          <Route path="/admin" element={<ErrorBoundary><AdminPage /></ErrorBoundary>} />
-        </Route>
+        <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<Register />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/report/public/:reportId" element={<PublicReportPage />} />
+        {LegalRoutes}
+
+        {/* Protected app routes */}
+        <Route element={<ProtectedRoute unauthenticatedElement={<Navigate to="/login" replace />} />}>
+          <Route element={<AppLayout />}>
+            <Route path="/dashboard" element={<ErrorBoundary><Dashboard /></ErrorBoundary>} />
+            <Route path="/search" element={<ErrorBoundary><SearchPage /></ErrorBoundary>} />
+            <Route path="/report/:id" element={<ErrorBoundary><ReportPage /></ErrorBoundary>} />
+            <Route path="/history" element={<ErrorBoundary><HistoryPage /></ErrorBoundary>} />
+            <Route path="/credits" element={<ErrorBoundary><CreditsPage /></ErrorBoundary>} />
+            <Route path="/dev" element={<ErrorBoundary><DevPanel /></ErrorBoundary>} />
+            <Route path="/batch/:id" element={<ErrorBoundary><BatchResultsPage /></ErrorBoundary>} />
+            <Route path="/perizia" element={<ErrorBoundary><PeriziaPage /></ErrorBoundary>} />
+            <Route path="/admin" element={<ErrorBoundary><AdminPage /></ErrorBoundary>} />
+          </Route>
+        </Route>
+
         <Route path="*" element={<PageNotFound />} />
       </Routes>
     </>
