@@ -1,4 +1,4 @@
-import { metaConversionsApi } from "@/functions/metaConversionsApi";
+import { metaCapi } from "@/functions/metaCapi";
 
 const CONSENT_KEY = "cookie_consent";
 
@@ -6,15 +6,15 @@ export function hasMarketingConsent() {
   return localStorage.getItem(CONSENT_KEY) === "granted";
 }
 
-// Recupera cookie _fbp e _fbc dal browser
 function getCookieValue(name) {
   const match = document.cookie.match(new RegExp("(^|;\\s*)" + name + "=([^;]+)"));
   return match ? match[2] : undefined;
 }
 
 /**
- * Traccia un evento sia sul pixel browser che sulla CAPI server-side.
- * Solo se il consenso è stato dato.
+ * Traccia un evento sia sul pixel browser (fbq) che via CAPI server-side (metaCapi).
+ * Usa lo stesso event_id per la deduplicazione.
+ * Invoca solo se cookie_consent = "granted".
  *
  * @param {string} eventName  es. "PageView", "Search", "Lead", "CompleteRegistration"
  * @param {object} options    { customData, email }
@@ -25,22 +25,20 @@ export function trackEvent(eventName, options = {}) {
   const { customData = {}, email } = options;
   const event_id = crypto.randomUUID();
   const event_source_url = window.location.href;
-  const event_time = Math.floor(Date.now() / 1000);
 
-  // 1. Browser pixel
+  // 1. Pixel browser — stesso event_id per deduplicazione
   if (typeof window.fbq !== "undefined") {
     window.fbq("track", eventName, customData, { eventID: event_id });
   }
 
-  // 2. CAPI server-side (fire-and-forget)
-  metaConversionsApi({
+  // 2. CAPI server-side — stesso event_id
+  metaCapi({
     event_name: eventName,
     event_id,
     event_source_url,
-    event_time,
     email: email || undefined,
     custom_data: Object.keys(customData).length > 0 ? customData : undefined,
     fbp: getCookieValue("_fbp"),
     fbc: getCookieValue("_fbc"),
-  }).catch((err) => console.warn("[MetaCAPI] fire-and-forget error:", err));
+  }).catch((err) => console.warn("[metaCapi] error:", err));
 }
