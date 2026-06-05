@@ -45,6 +45,7 @@ export default function Register() {
       if (result?.access_token) {
         base44.auth.setToken(result.access_token);
       }
+      if (typeof window.fbq !== 'undefined') window.fbq('track', 'CompleteRegistration');
       window.location.href = "/";
     } catch (err) {
       setError(err.message || "Invalid verification code");

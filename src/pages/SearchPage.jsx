@@ -65,6 +65,7 @@ export default function SearchPage() {
       return;
     }
     setIsLoading(true);
+    if (typeof window.fbq !== 'undefined') window.fbq('track', 'Search');
     if (formData._batch) {
       await handleBatchSearch(formData);
     } else {

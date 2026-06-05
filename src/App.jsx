@@ -46,12 +46,11 @@ function MetaPixel() {
     }
   }, []);
 
-  // STEP 2 — PageView su ogni cambio di route SPA (solo se fbq è presente = consenso dato)
+  // STEP 2 — PageView su ogni cambio di route SPA
   const isFirstRoute = useRef(true);
   useEffect(() => {
     if (isFirstRoute.current) { isFirstRoute.current = false; return; }
-    if (!window.fbq) return;
-    window.fbq("track", "PageView");
+    if (typeof window.fbq !== 'undefined') window.fbq("track", "PageView");
   }, [location.pathname]);
 
   return null;
