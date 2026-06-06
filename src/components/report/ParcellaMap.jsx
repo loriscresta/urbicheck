@@ -565,16 +565,10 @@ export default function ParcellaMap({ record, query, item }) {
   return (
     <div className="space-y-2">
       <p className="text-sm text-gray-500">
-        📍 WGS84: {displayLat?.toFixed(5)}, {displayLon?.toFixed(5)}{" "}
-        <span className="italic text-xs text-gray-400">
-          {hasPolygon
-            ? '— poligono catastale AdE'
-            : addressCoords?.source === 'rooftop'
-            ? '— indirizzo geocodificato (' + (addressCoords?.location_type || 'ok') + ')'
-            : (initLat && initLon)
-            ? '— centroide particella catastale'
-            : '— posizione approssimata — verificare'}
-        </span>
+        {hasPolygon
+          ? <>📐 Poligono catastale ufficiale AdE INSPIRE — confini catastali reali.</>
+          : <>📍 Posizione approssimativa da geocodifica indirizzo — i confini catastali ufficiali sono visibili nel layer WMS dell'Agenzia delle Entrate zoomando sulla mappa.</>
+        }
       </p>
 
       {wfsStatus && (

@@ -80,6 +80,18 @@
     display: none !important;
   }
 
+  /* Nascondi: cookie banner, saldo crediti nella sidebar/header, barra navigazione app,
+     widget planimetria upload, footer con URL */
+  [class*="cookie"], [class*="CookieBanner"],
+  [data-testid="cookie-banner"],
+  [class*="credits-badge"], [class*="balance"],
+  [class*="PlanimetriaSection"], [class*="planimetria-section"],
+  [class*="WfsLiguriaPanel"], [class*="wfs-panel"],
+  footer[class*="app"], [class*="AppSidebar"],
+  [class*="sidebar"], [class*="Sidebar"] {
+    display: none !important;
+  }
+
   /* Forza position static su tutto — evita sovrapposizioni fixed/sticky */
   *, *::before, *::after {
     position: static !important;

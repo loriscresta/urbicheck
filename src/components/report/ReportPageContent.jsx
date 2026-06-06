@@ -238,7 +238,7 @@ export default function ReportPageContent({ query, refetch = () => {}, isPublicV
   } else if (staticZona) {
     vincoloSismicoEffettivo = { presente: true, zona: `Zona ${staticZona} — ${SEISMIC_DESC[staticZona]}`, dettagli: `Zona sismica ${staticZona} — ${SEISMIC_DESC[staticZona]}. Fonte: Classificazione sismica ufficiale OPCM 3274/2003 — Dipartimento Protezione Civile.`, verified: true };
   } else if (isPiemonte) {
-    vincoloSismicoEffettivo = { presente: true, zona: 'Zona 3 — Media sismicità — DGR n.6-887/2019', dettagli: 'Zona 3 — Media sismicità — DGR n.6-887/2019. Applicare NTC 2018.' };
+    vincoloSismicoEffettivo = { presente: true, zona: 'Zona 3 — Media sismicità — DGR n.6-887/2019', dettagli: 'Zona 3 — Media sismicità — DGR n.6-887/2019. Applicare NTC 2018.' };  // già corretto
   } else {
     vincoloSismicoEffettivo = r.vincoli?.vincolo_sismico || { presente: false };
   }
@@ -369,7 +369,7 @@ export default function ReportPageContent({ query, refetch = () => {}, isPublicV
         <div className="rounded-xl p-5 mb-4" style={{ background: '#1e3a5f' }}>
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
             <div>
-              <p className="text-white/60 text-xs uppercase tracking-widest mb-1">Scheda Certificata · {reportNum}</p>
+              <p className="text-white/60 text-xs uppercase tracking-widest mb-1">Scheda di Analisi · {reportNum}</p>
               <h1 className="text-xl lg:text-2xl font-bold text-white tracking-tight">{query.comune} ({query.regione})</h1>
               <p className="text-white/70 text-sm mt-1">
                 Foglio {query.foglio} · Particella {query.particella}
@@ -386,7 +386,7 @@ export default function ReportPageContent({ query, refetch = () => {}, isPublicV
                 </Badge>
               )}
               <Badge className="bg-emerald-500 text-white border-0 text-xs flex items-center gap-1">
-                <CheckCircle2 className="w-3 h-3" /> Scheda certificata · N. {reportNum}
+                <CheckCircle2 className="w-3 h-3" /> Scheda di analisi · N. {reportNum}
               </Badge>
             </div>
           </div>

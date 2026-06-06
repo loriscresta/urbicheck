@@ -80,9 +80,9 @@ const PIEMONTE_ZONA_3S = new Set([
 
 function getZonaSismicaPiemonte(comuneLower) {
   if (PIEMONTE_ZONA_3S.has(comuneLower)) {
-    return { zona: '3S', descrizione: "Alta sismicita' — DGR n.6-887 del 30.12.2019", riferimento_normativo: 'DGR 6-887/2019 + NTC 2018', nota: 'Applicare NTC 2018 con spettri sito-dipendenti.' };
+    return { zona: '3S', descrizione: "Alta sismicità — DGR n.6-887 del 30.12.2019", riferimento_normativo: 'DGR 6-887/2019 + NTC 2018', nota: 'Applicare NTC 2018 con spettri sito-dipendenti.' };
   }
-  return { zona: '3', descrizione: "Media sismicita' — DGR n.6-887 del 30.12.2019", riferimento_normativo: 'DGR 6-887/2019 + NTC 2018', nota: 'Per verifiche strutturali consultare microzonazione sismica comunale.' };
+  return { zona: '3', descrizione: "Media sismicità — DGR n.6-887 del 30.12.2019", riferimento_normativo: 'DGR 6-887/2019 + NTC 2018', nota: 'Per verifiche strutturali consultare microzonazione sismica comunale.' };
 }
 
 // ============================================================
@@ -645,11 +645,11 @@ async function runAnalisiLiguria({ comune, provincia, indirizzo, comuneLower, pr
 
   let zona_sismica, descrizione_sismica;
   if (SISMICA_LIGURIA_ZONA2.has(comuneLower)) {
-    zona_sismica = 2; descrizione_sismica = 'Alta sismicita — applicazione integrale NTC 2018';
+    zona_sismica = 2; descrizione_sismica = 'Alta sismicità — applicazione integrale NTC 2018';
   } else if (SISMICA_LIGURIA_ZONA4.has(comuneLower)) {
     zona_sismica = 4; descrizione_sismica = 'Bassa sismicita';
   } else {
-    zona_sismica = 3; descrizione_sismica = 'Media sismicita — NTC 2018';
+    zona_sismica = 3; descrizione_sismica = 'Media sismicità — NTC 2018';
   }
   const riferimento_normativo_sismica = 'OPCM 3274/2003 — classificazione vigente Regione Liguria';
 
