@@ -8,9 +8,13 @@
  */
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 
-const INTERNAL_API_BASE = Deno.env.get('CATASTO_API_URL') || 'http://80.211.24.114:8001';
+const INTERNAL_API_BASE = Deno.env.get('CATASTO_API_URL');
+if (!INTERNAL_API_BASE) {
+  console.error('[fetchParcelGeometry] CATASTO_API_URL env var is not set');
+}
 
 async function fetchFromInternalApi(lat, lon) {
+  if (!INTERNAL_API_BASE) return null;
   try {
     const url = `${INTERNAL_API_BASE}/parcel?lat=${lat}&lon=${lon}`;
     const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
@@ -141,7 +145,7 @@ Deno.serve(async (req) => {
     try {
       const results = await base44.entities.CadastralQuery.filter({ id: queryId });
       qr = results[0] || null;
-      if (qr && qr.created_by !== user.email && user.role !== 'admin') {
+      if (qr && qr.created_by_id !== user.id && user.role !== 'admin') {
         return Response.json({ error: 'Forbidden' }, { status: 403 });
       }
       // Se già ha geometry, restituisci subito

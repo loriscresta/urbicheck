@@ -30,7 +30,7 @@ Deno.serve(async (req) => {
     const queries = await base44.asServiceRole.entities.CadastralQuery.filter({ id: query_id });
     const query = queries[0];
     if (!query) return Response.json({ error: 'Query not found' }, { status: 404 });
-    if (query.created_by !== user.email) return Response.json({ error: 'Forbidden' }, { status: 403 });
+    if (query.created_by_id !== user.id) return Response.json({ error: 'Forbidden' }, { status: 403 });
 
     // Idempotent: already paid
     if (query.paid) {

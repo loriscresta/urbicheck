@@ -955,7 +955,7 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'Errore lettura query' }, { status: 500 });
     }
     if (!q) return Response.json({ error: 'Query non trovata' }, { status: 404 });
-    if (user && user.email && q.created_by !== user.email && user.role !== 'admin') {
+    if (user && q.created_by_id !== user.id && user.role !== 'admin') {
       return Response.json({ error: 'Forbidden' }, { status: 403 });
     }
     prefill_lat = (q.centroid_lat !== null && q.centroid_lat !== undefined && !isNaN(Number(q.centroid_lat))) ? Number(q.centroid_lat) : null;

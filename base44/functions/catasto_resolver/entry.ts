@@ -578,7 +578,7 @@ Deno.serve(async (req) => {
     try {
       const results = await base44.entities.CadastralQuery.filter({ id: query_id });
       queryRecord = results[0] || null;
-      if (queryRecord && queryRecord.created_by !== user.email && user.role !== 'admin') {
+      if (queryRecord && queryRecord.created_by_id !== user.id && user.role !== 'admin') {
         return Response.json({ error: 'Forbidden' }, { status: 403 });
       }
     } catch (_e) {}
