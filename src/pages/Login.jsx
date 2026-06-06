@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import { Button } from "@/components/ui/button";
@@ -8,11 +8,33 @@ import { LogIn, Mail, Lock, Loader2 } from "lucide-react";
 import AuthLayout from "@/components/AuthLayout";
 import GoogleIcon from "@/components/GoogleIcon";
 
+function getSafeRedirect() {
+  const params = new URLSearchParams(window.location.search);
+  const from = params.get("base44_from_url") || "";
+  // Never redirect back to /login to avoid loops
+  if (!from || from === "/login" || from.includes("/login")) return "/dashboard";
+  return from;
+}
+
 export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [checkingAuth, setCheckingAuth] = useState(true);
+
+  // Guard: if already authenticated, redirect immediately
+  useEffect(() => {
+    base44.auth.isAuthenticated().then((authed) => {
+      if (authed) {
+        window.location.href = getSafeRedirect();
+      } else {
+        setCheckingAuth(false);
+      }
+    });
+  }, []);
+
+  const destination = getSafeRedirect();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -20,18 +42,26 @@ export default function Login() {
     setLoading(true);
     try {
       await base44.auth.loginViaEmailPassword(email, password);
-      window.location.href = "/";
+      window.location.href = destination;
     } catch (err) {
-      setError(err.message || "Invalid email or password");
+      setError(err.message || "Email o password non validi");
     } finally {
       setLoading(false);
     }
   };
 
-  const handleGoogle = () => base44.auth.loginWithProvider("google", "/");
-  const handleMicrosoft = () => base44.auth.loginWithProvider("microsoft", "/");
-  const handleFacebook = () => base44.auth.loginWithProvider("facebook", "/");
-  const handleApple = () => base44.auth.loginWithProvider("apple", "/");
+  const handleGoogle = () => base44.auth.loginWithProvider("google", destination);
+  const handleMicrosoft = () => base44.auth.loginWithProvider("microsoft", destination);
+  const handleFacebook = () => base44.auth.loginWithProvider("facebook", destination);
+  const handleApple = () => base44.auth.loginWithProvider("apple", destination);
+
+  if (checkingAuth) {
+    return (
+      <div className="fixed inset-0 flex items-center justify-center bg-background">
+        <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
 
   return (
     <AuthLayout
