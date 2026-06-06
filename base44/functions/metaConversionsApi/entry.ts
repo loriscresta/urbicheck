@@ -2,6 +2,16 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 
 const PIXEL_ID = "1405555848052349";
 
+// Auth check helper
+async function getAuthenticatedUser(req) {
+  try {
+    const base44 = createClientFromRequest(req);
+    return await base44.auth.me();
+  } catch (_e) {
+    return null;
+  }
+}
+
 async function sha256hex(text) {
   const encoder = new TextEncoder();
   const data = encoder.encode(text);
@@ -14,6 +24,9 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 204, headers: { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "POST, OPTIONS", "Access-Control-Allow-Headers": "Content-Type, Authorization" } });
   }
+
+  const user = await getAuthenticatedUser(req);
+  if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
   try {
     const accessToken = Deno.env.get("META_CAPI_ACCESS_TOKEN");

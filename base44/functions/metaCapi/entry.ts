@@ -1,3 +1,5 @@
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
+
 const PIXEL_ID = "1405555848052349";
 
 async function sha256hex(text) {
@@ -19,6 +21,9 @@ Deno.serve(async (req) => {
       },
     });
   }
+
+  const user = await getAuthenticatedUser(req);
+  if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
   const accessToken = Deno.env.get("META_CAPI_ACCESS_TOKEN");
   if (!accessToken) {

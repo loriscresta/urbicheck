@@ -8,7 +8,7 @@
  */
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 
-const INTERNAL_API_BASE = 'http://80.211.24.114:8001';
+const INTERNAL_API_BASE = Deno.env.get('CATASTO_API_URL') || 'http://80.211.24.114:8001';
 
 async function fetchFromInternalApi(lat, lon) {
   try {
