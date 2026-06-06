@@ -78,6 +78,13 @@ export default function WaitlistPage() {
       ruolo: ruolo || "altro",
       regione_interesse: regioneInteresse || undefined,
     });
+    try {
+      await fetch("https://hook.eu1.make.com/9y4ovjnzlf75udlawp6q2c5co3vaxt7o", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, ruolo: ruolo || "altro", regione_interesse: regioneInteresse || "" }),
+      });
+    } catch (err) { console.error("Make webhook error", err); }
     trackEvent("Lead", { customData: { content_name: "waitlist" }, email });
     setSubmitted(true);
     setLoading(false);
