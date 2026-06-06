@@ -2,6 +2,17 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 
 const PIXEL_ID = "1405555848052349";
 
+const ALLOWED_ORIGINS = [
+  "https://urbicheck.it",
+  "https://www.urbicheck.it",
+  "https://app--urbicheck--bfe5a741.base44.app",
+];
+
+function getAllowedOrigin(req) {
+  const origin = req.headers.get("origin") || "";
+  return ALLOWED_ORIGINS.includes(origin) ? origin : null;
+}
+
 // Auth check helper
 async function getAuthenticatedUser(req) {
   try {
@@ -21,12 +32,20 @@ async function sha256hex(text) {
 }
 
 Deno.serve(async (req) => {
+  const allowedOrigin = getAllowedOrigin(req);
+  const corsHeaders = allowedOrigin ? {
+    "Access-Control-Allow-Origin": allowedOrigin,
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization",
+    "Vary": "Origin",
+  } : {};
+
   if (req.method === "OPTIONS") {
-    return new Response(null, { status: 204, headers: { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "POST, OPTIONS", "Access-Control-Allow-Headers": "Content-Type, Authorization" } });
+    return new Response(null, { status: allowedOrigin ? 204 : 403, headers: corsHeaders });
   }
 
   const user = await getAuthenticatedUser(req);
-  if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401, headers: corsHeaders });
 
   try {
     const accessToken = Deno.env.get("META_CAPI_ACCESS_TOKEN");
@@ -87,12 +106,12 @@ Deno.serve(async (req) => {
 
     if (!response.ok) {
       console.error("[MetaCAPI] Error from Meta API:", JSON.stringify(result));
-      return Response.json({ success: false, error: result?.error?.message || "Meta API error" }, { status: 200 });
+      return Response.json({ success: false, error: result?.error?.message || "Meta API error" }, { status: 200, headers: corsHeaders });
     }
 
-    return Response.json({ success: true, events_received: result.events_received });
+    return Response.json({ success: true, events_received: result.events_received }, { headers: corsHeaders });
   } catch (error) {
     console.error("[MetaCAPI] Exception:", error.message);
-    return Response.json({ error: error.message }, { status: 500 });
+    return Response.json({ error: error.message }, { status: 500, headers: corsHeaders });
   }
 });
