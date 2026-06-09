@@ -1,9 +1,20 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 
-const FREE_REPORTS = 3;
+const FREE_REPORTS = 3;       // report gratuiti per email
+const FREE_REPORTS_IP = 5;    // report gratuiti per indirizzo IP — modifica qui per cambiare soglia
 const BETA_PAID_REPORTS = 3;
 const BETA_PRICE = 2.99;
 const STANDARD_PRICE = 9.90; // post-launch fallback
+
+// Estrae l'IP reale del client dagli header della request
+function getClientIp(req) {
+  const forwarded = req.headers.get('x-forwarded-for');
+  if (forwarded) {
+    // x-forwarded-for può contenere una lista: "client, proxy1, proxy2"
+    return forwarded.split(',')[0].trim();
+  }
+  return req.headers.get('x-real-ip') || req.headers.get('cf-connecting-ip') || 'unknown';
+}
 
 Deno.serve(async (req) => {
   try {
@@ -56,15 +67,49 @@ Deno.serve(async (req) => {
     const freeUsed = credits.free_reports_used || 0;
     const betaPaidUsed = credits.beta_paid_reports_used || 0;
 
-    // ── Beta pricing tiers ──────────────────────────────────────────────────
-    if (freeUsed < FREE_REPORTS) {
-      // FREE tier: first 3 reports are completely free
-      console.log(`chargeReport: FREE tier — free_reports_used=${freeUsed}`);
+    // ── Controllo limite IP ────────────────────────────────────────────────
+    const clientIp = getClientIp(req);
+    let ipRecord = null;
+    let ipFreeUsed = 0;
 
+    if (clientIp && clientIp !== 'unknown') {
+      const ipList = await base44.asServiceRole.entities.FreeUsageIP.filter({ ip_address: clientIp });
+      ipRecord = ipList[0] || null;
+      ipFreeUsed = ipRecord?.free_count || 0;
+    }
+
+    console.log(`chargeReport: user=${user.email} ip=${clientIp} freeUsed=${freeUsed} ipFreeUsed=${ipFreeUsed}`);
+
+    // ── Beta pricing tiers ──────────────────────────────────────────────────
+    // Un report è gratuito SOLO SE sia l'email che l'IP sono sotto soglia
+    const emailUnderLimit = freeUsed < FREE_REPORTS;
+    const ipUnderLimit = clientIp === 'unknown' || ipFreeUsed < FREE_REPORTS_IP;
+
+    if (emailUnderLimit && ipUnderLimit) {
+      // FREE tier: entrambe le condizioni soddisfatte
+      console.log(`chargeReport: FREE tier — free_reports_used=${freeUsed} ip_free_used=${ipFreeUsed}`);
+
+      // Incrementa contatore email
       await base44.asServiceRole.entities.UserCredits.update(credits.id, {
         free_reports_used: freeUsed + 1,
         total_queries: (credits.total_queries || 0) + 1,
       });
+
+      // Incrementa contatore IP
+      if (clientIp && clientIp !== 'unknown') {
+        if (ipRecord) {
+          await base44.asServiceRole.entities.FreeUsageIP.update(ipRecord.id, {
+            free_count: ipFreeUsed + 1,
+            last_used: new Date().toISOString(),
+          });
+        } else {
+          await base44.asServiceRole.entities.FreeUsageIP.create({
+            ip_address: clientIp,
+            free_count: 1,
+            last_used: new Date().toISOString(),
+          });
+        }
+      }
 
       await base44.asServiceRole.entities.CadastralQuery.update(query_id, {
         paid: true,
@@ -83,8 +128,8 @@ Deno.serve(async (req) => {
       return Response.json({ ok: true, deducted: 0, tier: 'free_beta' });
 
     } else if (betaPaidUsed < BETA_PAID_REPORTS) {
-      // BETA PAID tier: €2,99 per report (reports 4–6)
-      console.log(`chargeReport: BETA_PAID tier — beta_paid_reports_used=${betaPaidUsed}`);
+      // BETA PAID tier: €2,99 per report — email esaurita O IP saturo
+      console.log(`chargeReport: BETA_PAID tier — beta_paid_reports_used=${betaPaidUsed} emailUnderLimit=${emailUnderLimit} ipUnderLimit=${ipUnderLimit}`);
 
       if ((credits.balance || 0) < BETA_PRICE) {
         return Response.json({

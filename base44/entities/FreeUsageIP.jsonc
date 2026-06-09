@@ -1,0 +1,45 @@
+{
+  "name": "FreeUsageIP",
+  "type": "object",
+  "properties": {
+    "ip_address": {
+      "type": "string",
+      "description": "Indirizzo IP del client (pu\u00f2 essere IPv4 o IPv6)"
+    },
+    "free_count": {
+      "type": "number",
+      "default": 0,
+      "description": "Numero di report gratuiti gi\u00e0 erogati per questo IP"
+    },
+    "last_used": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Timestamp dell'ultimo report gratuito erogato"
+    }
+  },
+  "required": [
+    "ip_address"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "read": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}
