@@ -27,7 +27,7 @@ export default function TerminiCondizioni() {
             <p className="text-sm text-foreground leading-relaxed">
               UrbiCheck è un servizio di informazione urbanistica che fornisce estratti di dati edilizi, catastali
               e urbanistici a scopo puramente informativo. Il servizio è erogato da{" "}
-              <strong>Fenice Management</strong> (P.IVA 02655840060).
+              <strong>Dell'Aria Claudia Giuseppina</strong> (P.IVA 02655840060).
             </p>
           </section>
 
@@ -71,7 +71,7 @@ export default function TerminiCondizioni() {
             </h2>
             <p className="text-sm text-foreground leading-relaxed">
               I report generati, la piattaforma, il brand UrbiCheck e tutti i contenuti sono di proprietà di
-              Fenice Management. È vietata la riproduzione, ridistribuzione o rivendita dei report
+              Dell'Aria Claudia Giuseppina. È vietata la riproduzione, ridistribuzione o rivendita dei report
               senza autorizzazione scritta.
             </p>
           </section>

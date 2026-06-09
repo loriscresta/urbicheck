@@ -26,7 +26,7 @@ export default function LegalPrivacy() {
           <section>
             <h2 className="text-base font-bold text-gray-900 mb-3 border-b border-gray-200 pb-2">1. Titolare del Trattamento</h2>
             <p className="leading-relaxed">
-              <strong>Fenice Management</strong><br />
+              <strong>Dell'Aria Claudia Giuseppina</strong> (impresa individuale)<br />
               Via Costa 44, 15026 Carentino (AL)<br />
               P.IVA: 02655840060 | C.F.: DLLCDG89C58G580S | REA: AL-301497<br />
               Email: <a href="mailto:info@urbicheck.it" className="text-blue-600 hover:underline">info@urbicheck.it</a><br />
