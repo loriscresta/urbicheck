@@ -1,13 +1,15 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useNavigate } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { it } from "date-fns/locale";
 import {
   ArrowLeft, Building2, ExternalLink, Loader2, Download, AlertCircle,
-  ChevronDown, ChevronUp, TrendingUp, MapPin, Shield, AlertTriangle, CheckCircle2
+  ChevronDown, ChevronUp, TrendingUp, MapPin, Shield, AlertTriangle, CheckCircle2,
+  Unlock, CreditCard
 } from "lucide-react";
+import { chargeBatch } from "@/functions/chargeBatch";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { motion } from "framer-motion";
@@ -58,19 +60,27 @@ function getCatConfig(cat) {
   return CAT_CONFIG[key] || CAT_CONFIG["A/3"];
 }
 
-// ── Leaflet Map for batch (uses centroid) ────────────────────────────────────
-function BatchMap({ lat, lng, address, totalUnits, foglio, particella }) {
+const BATCH_FLAT_PRICE = 19.90;
+
+// ── Leaflet Map for batch — disegna poligono se disponibile ─────────────────
+function BatchMap({ lat, lng, geomJson, address, totalUnits, foglio, particella }) {
   const mapDivRef = useRef(null);
   const leafletMapRef = useRef(null);
+  const PARCEL_STYLE = { color: '#ff7a00', weight: 3, fillColor: '#ff7a00', fillOpacity: 0.35 };
 
   useEffect(() => {
-    if (!lat || !lng || !mapDivRef.current) return;
+    if (!mapDivRef.current) return;
+    if (!lat && !lng && !geomJson) return;
     if (leafletMapRef.current) { leafletMapRef.current.remove(); leafletMapRef.current = null; }
 
     const initMap = () => {
       const L = window.L;
       if (!L || !mapDivRef.current) return;
-      const map = L.map(mapDivRef.current).setView([lat, lng], 17);
+
+      // Centra sulla particella o fallback sulle coordinate
+      const centerLat = lat || 45.0;
+      const centerLng = lng || 9.0;
+      const map = L.map(mapDivRef.current).setView([centerLat, centerLng], 17);
       leafletMapRef.current = map;
 
       L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
@@ -80,11 +90,24 @@ function BatchMap({ lat, lng, address, totalUnits, foglio, particella }) {
         layers: "CP.CadastralParcel", format: "image/png", transparent: true, opacity: 0.85, attribution: "© AdE",
       }).addTo(map);
 
-      L.circleMarker([lat, lng], {
-        radius: 10, color: "#c0392b", fillColor: "#e74c3c", fillOpacity: 0.9, weight: 2,
-      }).addTo(map).bindPopup(
-        `<strong>📍 ${address || 'Edificio'}</strong><br/>Foglio ${foglio} · Particella ${particella}<br/><small>${totalUnits} unità catastali</small>`
-      ).openPopup();
+      if (geomJson) {
+        // Disegna poligono e zooma su di esso
+        const feature = geomJson.type === "Feature" ? geomJson : { type: "Feature", geometry: geomJson, properties: {} };
+        try {
+          const layer = L.geoJSON(feature, { style: PARCEL_STYLE }).addTo(map);
+          layer.bindPopup(`<strong>📐 ${address || 'Edificio'}</strong><br/>Foglio ${foglio} · Particella ${particella}<br/><small>${totalUnits} unità catastali</small>`);
+          map.fitBounds(layer.getBounds(), { padding: [20, 20], maxZoom: 19 });
+        } catch (_) {
+          // fallback pin se poligono non valido
+          if (lat && lng) L.circleMarker([lat, lng], { radius: 10, color: "#c0392b", fillColor: "#e74c3c", fillOpacity: 0.9, weight: 2 }).addTo(map);
+        }
+      } else if (lat && lng) {
+        L.circleMarker([lat, lng], {
+          radius: 10, color: "#c0392b", fillColor: "#e74c3c", fillOpacity: 0.9, weight: 2,
+        }).addTo(map).bindPopup(
+          `<strong>📍 ${address || 'Edificio'}</strong><br/>Foglio ${foglio} · Particella ${particella}<br/><small>${totalUnits} unità catastali</small>`
+        ).openPopup();
+      }
     };
 
     if (window.L) { initMap(); }
@@ -101,9 +124,9 @@ function BatchMap({ lat, lng, address, totalUnits, foglio, particella }) {
     }
 
     return () => { if (leafletMapRef.current) { leafletMapRef.current.remove(); leafletMapRef.current = null; } };
-  }, [lat, lng, address]);
+  }, [lat, lng, geomJson]);
 
-  if (!lat || !lng) return (
+  if (!lat && !lng && !geomJson) return (
     <div className="h-40 flex items-center justify-center bg-muted/30 rounded-lg border border-border text-sm text-muted-foreground">
       <MapPin className="w-4 h-4 mr-2" /> Coordinate non disponibili
     </div>
@@ -353,10 +376,13 @@ function AnalisiFinanziaria({ batch, queries }) {
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function BatchResultsPage() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [showUnits, setShowUnits] = useState(false);
   const [editPrice, setEditPrice] = useState("");
   const [savingPrice, setSavingPrice] = useState(false);
+  const [isPayingBatch, setIsPayingBatch] = useState(false);
+  const [payError, setPayError] = useState("");
 
   const { data: batch, isLoading: batchLoading } = useQuery({
     queryKey: ["batch", id],
@@ -382,6 +408,25 @@ export default function BatchResultsPage() {
       queryClient.invalidateQueries({ queryKey: ["batch", id] });
     }).catch(() => {});
   }, [batch, queries, id]);
+
+  const handlePayBatch = async () => {
+    setPayError("");
+    setIsPayingBatch(true);
+    try {
+      await chargeBatch({ batch_id: id });
+      queryClient.invalidateQueries({ queryKey: ["batch", id] });
+      queryClient.invalidateQueries({ queryKey: ["batchQueries", id] });
+      queryClient.invalidateQueries({ queryKey: ["userCredits"] });
+    } catch (err) {
+      const data = err?.response?.data;
+      if (data?.error === 'insufficient_credits') {
+        setPayError(`Credito insufficiente (€${(data.balance || 0).toFixed(2)} disponibili). Necessari €${BATCH_FLAT_PRICE.toFixed(2)}.`);
+      } else {
+        setPayError(data?.error || err.message || "Errore durante il pagamento");
+      }
+    }
+    setIsPayingBatch(false);
+  };
 
   const handleSaveTotalPrice = async (price) => {
     setSavingPrice(true);
@@ -411,6 +456,10 @@ export default function BatchResultsPage() {
     : firstWithCoords?.centroid_lat ? parseFloat(firstWithCoords.centroid_lat) : null;
   const centLng = batch?.centroid_lng ? parseFloat(batch.centroid_lng)
     : firstWithCoords?.centroid_lng ? parseFloat(firstWithCoords.centroid_lng) : null;
+  // Prendi il poligono dalla prima query con geometry_geojson valida
+  const firstWithGeom = queries.find(q => q.geometry_geojson);
+  const batchGeom = firstWithGeom?.geometry_geojson || null;
+  const isBatchPaid = !!batch.paid;
   const addressLabel = firstQuery?.indirizzo_immobile || `${batch.comune}`;
   const totSup = batch.total_superficie_mq || queries.reduce((s, q) => s + (q.superficie_mq || 0), 0);
   const totRendita = queries.reduce((s, q) => s + (q.rendita_catastale || 0), 0);
@@ -471,6 +520,40 @@ export default function BatchResultsPage() {
           </div>
         </div>
 
+        {/* [PAYMENT GATE] — tariffa flat palazzina */}
+        {!isBatchPaid && (
+          <div className="mb-5 rounded-xl border-2 border-emerald-400 bg-emerald-50 p-5">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-full bg-emerald-100 flex items-center justify-center shrink-0">
+                  <Unlock className="w-4 h-4 text-emerald-700" />
+                </div>
+                <div>
+                  <p className="font-bold text-emerald-900 text-base" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
+                    Sblocca tutta la palazzina ({batch.total_units} subalterni) — €{BATCH_FLAT_PRICE.toFixed(2)}
+                  </p>
+                  <p className="text-xs text-emerald-700 mt-0.5">Tariffa flat unica · mappa edificio · composizione · vincoli · analisi investimento</p>
+                </div>
+              </div>
+              <span className="text-2xl font-black text-emerald-800 shrink-0">€{BATCH_FLAT_PRICE.toFixed(2)}</span>
+            </div>
+            {payError && (
+              <div className="flex items-start gap-2 p-3 rounded-lg bg-red-50 border border-red-200 text-xs text-red-700 mb-3">
+                <AlertTriangle className="w-3 h-3 shrink-0 mt-0.5" />{payError}
+              </div>
+            )}
+            <div className="flex flex-col sm:flex-row gap-2">
+              <Button className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold" onClick={handlePayBatch} disabled={isPayingBatch}>
+                {isPayingBatch ? <><Loader2 className="w-4 h-4 animate-spin mr-2" />Elaborazione…</> : <><Unlock className="w-4 h-4 mr-2" />Sblocca palazzina completa — €{BATCH_FLAT_PRICE.toFixed(2)}</>}
+              </Button>
+              <Button variant="outline" className="sm:w-auto" onClick={() => navigate("/credits")}>
+                <CreditCard className="w-4 h-4 mr-2" />Ricarica crediti
+              </Button>
+            </div>
+            <p className="text-[10px] text-muted-foreground mt-2">Addebito immediato dal saldo crediti. Nessun abbonamento.</p>
+          </div>
+        )}
+
         {/* Actions */}
         <div className="flex gap-2 mb-5 no-print flex-wrap">
           <Button variant="outline" className="gap-2 border-emerald-500 text-emerald-700 hover:bg-emerald-50" onClick={() => exportCSV(queries, batch)}>
@@ -489,7 +572,7 @@ export default function BatchResultsPage() {
             </p>
           </div>
           <div className="p-3">
-            <BatchMap lat={centLat} lng={centLng} address={addressLabel} totalUnits={batch.total_units} foglio={foglio} particella={particella} />
+            <BatchMap lat={centLat} lng={centLng} geomJson={batchGeom} address={addressLabel} totalUnits={batch.total_units} foglio={foglio} particella={particella} />
             {centLat && (
               <p className="text-[10px] text-muted-foreground mt-1.5" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
                 {batch?.geocoding_source?.includes('google')
