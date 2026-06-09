@@ -89,7 +89,7 @@ export default function PrivacyPolicy() {
           </section>
 
           <div className="pt-4 border-t border-border text-xs text-muted-foreground" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
-            UrbiCheck © 2026 — Dell'Aria Claudia Giuseppina | P.IVA 02655840060
+            UrbiCheck © 2026 — Fenice Management | P.IVA 02655840060
           </div>
         </div>
       </div>

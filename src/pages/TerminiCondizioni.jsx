@@ -27,7 +27,7 @@ export default function TerminiCondizioni() {
             <p className="text-sm text-foreground leading-relaxed">
               UrbiCheck è un servizio di informazione urbanistica che fornisce estratti di dati edilizi, catastali
               e urbanistici a scopo puramente informativo. Il servizio è erogato da{" "}
-              <strong>Dell'Aria Claudia Giuseppina</strong> (P.IVA 02655840060).
+              <strong>Fenice Management</strong> (P.IVA 02655840060).
             </p>
           </section>
 
@@ -43,7 +43,7 @@ export default function TerminiCondizioni() {
                   parere professionale, perizia tecnica, certificazione urbanistica o documento ufficiale. I dati sono
                   elaborati sulla base di fonti pubbliche aggiornate; l'utente è tenuto a verificare le informazioni
                   presso gli enti competenti (Comune, Agenzia delle Entrate, Regione) prima di assumere qualsiasi
-                  decisione tecnica, legale o economica. Dell'Aria Claudia Giuseppina non assume responsabilità
+                  decisione tecnica, legale o economica. Fenice Management non assume responsabilità
                   per decisioni adottate sulla base delle informazioni fornite dal servizio.
                 </p>
               </div>
@@ -71,7 +71,7 @@ export default function TerminiCondizioni() {
             </h2>
             <p className="text-sm text-foreground leading-relaxed">
               I report generati, la piattaforma, il brand UrbiCheck e tutti i contenuti sono di proprietà di
-              Dell'Aria Claudia Giuseppina. È vietata la riproduzione, ridistribuzione o rivendita dei report
+              Fenice Management. È vietata la riproduzione, ridistribuzione o rivendita dei report
               senza autorizzazione scritta.
             </p>
           </section>
@@ -97,7 +97,7 @@ export default function TerminiCondizioni() {
           </section>
 
           <div className="pt-4 border-t border-border text-xs text-muted-foreground" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
-            UrbiCheck © 2026 — Dell'Aria Claudia Giuseppina | P.IVA 02655840060
+            UrbiCheck © 2026 — Fenice Management | P.IVA 02655840060
           </div>
         </div>
       </div>

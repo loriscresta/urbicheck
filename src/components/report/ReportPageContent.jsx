@@ -233,12 +233,15 @@ export default function ReportPageContent({ query, refetch = () => {}, isPublicV
   const wfsSismica = wfsRis?.sismica;
   let vincoloSismicoEffettivo;
   if (wfsSismica) {
+    // DGR regionale da WFS — fonte ufficiale prioritaria
     const zonaLabel = `Zona ${wfsSismica.zona}`;
-    vincoloSismicoEffettivo = { presente: true, zona: `${zonaLabel} — ${wfsSismica.descrizione || ''}`, dettagli: `${zonaLabel} — ${wfsSismica.descrizione || ''}. ${wfsSismica.nota || ''} Rif: ${wfsSismica.riferimento_normativo || ''}` };
+    const dgrRef = wfsSismica.riferimento_normativo || (isPiemonte ? 'DGR n.6-887/2019' : '');
+    vincoloSismicoEffettivo = { presente: true, zona: `${zonaLabel} — ${wfsSismica.descrizione || ''}${dgrRef ? ` — ${dgrRef}` : ''}`, dettagli: `${zonaLabel} — ${wfsSismica.descrizione || ''}. ${wfsSismica.nota || ''} Rif: ${dgrRef || wfsSismica.riferimento_normativo || 'DGR regionale'}` };
+  } else if (isPiemonte) {
+    // Piemonte: sempre Zona 3 da DGR n.6-887/2019 — ignora lookup statico
+    vincoloSismicoEffettivo = { presente: true, zona: 'Zona 3 — Pericolosità sismica bassa — DGR n.6-887/2019', dettagli: 'Zona 3 — Pericolosità sismica bassa — DGR n.6-887/2019. Applicare NTC 2018.' };
   } else if (staticZona) {
     vincoloSismicoEffettivo = { presente: true, zona: `Zona ${staticZona} — ${SEISMIC_DESC[staticZona]}`, dettagli: `Zona sismica ${staticZona} — ${SEISMIC_DESC[staticZona]}. Fonte: Classificazione sismica ufficiale OPCM 3274/2003 — Dipartimento Protezione Civile.`, verified: true };
-  } else if (isPiemonte) {
-    vincoloSismicoEffettivo = { presente: true, zona: 'Zona 3 — Media sismicità — DGR n.6-887/2019', dettagli: 'Zona 3 — Media sismicità — DGR n.6-887/2019. Applicare NTC 2018.' };  // già corretto
   } else {
     vincoloSismicoEffettivo = r.vincoli?.vincolo_sismico || { presente: false };
   }
@@ -286,14 +289,16 @@ export default function ReportPageContent({ query, refetch = () => {}, isPublicV
     : null;
 
   if (wfsFerroviario) {
-    // Se Overpass non trova ferrovie ma il lookup statico sì → usare quello
-    if (ferrorieTrovate.length === 0 && staticFerroviaMatch) {
+    // Regola unificata: se lookup statico trova una ferrovia, prevale sempre — anche se Overpass non la vede
+    if (staticFerroviaMatch) {
       vincoloFerroviarioEffettivo = {
         presente: true,
-        dettagli: `${staticFerroviaMatch.nome} — verifica fasce DPR 753/1980 (30m dall'asse). Ferrovia dismessa/turistica: le fasce di rispetto possono permanere.`,
+        dettagli: `${staticFerroviaMatch.nome} — verifica fasce DPR 753/1980 (30m dall'asse) + L.128/2017. Ferrovia dismessa/turistica: le fasce di rispetto possono permanere. Verificare con Regione Piemonte e RFI prima di qualsiasi intervento edilizio.`,
       };
+    } else if (ferrorieTrovate.length > 0) {
+      vincoloFerroviarioEffettivo = { presente: true, dettagli: ferrorieTrovate.map(d => `${d.nome} — fascia rispetto 30m (DPR 753/1980)`).join(' | ') };
     } else {
-      vincoloFerroviarioEffettivo = { presente: ferrorieTrovate.length > 0, dettagli: ferrorieTrovate.length > 0 ? ferrorieTrovate.map(d => `${d.nome} — fascia rispetto 30m (DPR 753/1980)`).join(' | ') : (wfsFerroviario.dati?.[0]?.nota || 'Nessuna ferrovia rilevata entro 500m.') };
+      vincoloFerroviarioEffettivo = { presente: false, dettagli: 'Nessuna ferrovia rilevata entro 500m.' };
     }
   } else if (!isNewStructure && vfNew) {
     const vf = vfNew;
@@ -553,15 +558,14 @@ export default function ReportPageContent({ query, refetch = () => {}, isPublicV
                 <div className="mb-3 flex items-start gap-2 p-3 rounded-lg border border-amber-300 bg-amber-50">
                   <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                   <p className="text-xs text-amber-900">
-                    <strong>⚠ Discordanza tra fonti:</strong> La Mosaicatura PRG regionale (WMS) indica codice <strong>{wmsZonaCodice}</strong>
-                    {wmsDescrizione ? ` (${wmsDescrizione})` : ''}, mentre il database NTA indica "<strong>{ntaZona}</strong>".
-                    {" "}Richiedere il CDU al Comune per chiarimento definitivo.
+                    <strong>⚠ Nota:</strong> Il database NTA UrbiCheck indica "<strong>{ntaZona}</strong>" come destinazione d'uso principale.
+                    {" "}Mosaicatura PRG regionale (WMS) indica codice <strong>{wmsZonaCodice}</strong>{wmsDescrizione ? ` (${wmsDescrizione})` : ''} — da verificare con CDU al Comune.
                   </p>
                 </div>
               )}
               <DataRow label="Strumento Vigente" value={resolvedNta?.strumento || r.quadro_urbanistico.strumento_vigente} />
-              <DataRow label="Zona Urbanistica" value={wmsDisponibile && wmsZonaCodice ? `${wmsZonaCodice}${wmsDescrizione ? ` — ${wmsDescrizione}` : ''}` : ntaZona} />
-              <DataRow label="Destinazione d'Uso" value={wmsDisponibile && wmsDescrizione ? wmsDescrizione : ntaDest} />
+              <DataRow label="Zona Urbanistica" value={ntaZona || (wmsDisponibile && wmsZonaCodice ? `${wmsZonaCodice}${wmsDescrizione ? ` — ${wmsDescrizione}` : ''}` : null)} />
+              <DataRow label="Destinazione d'Uso" value={ntaDest || (wmsDisponibile && wmsDescrizione ? wmsDescrizione : null)} />
               <DataRow label="Indice Edificabilità" value={resolvedNta?.IF || ntaLocal?.IF || cleanVal(r.quadro_urbanistico.indice_edificabilita)} />
               <DataRow label="Altezza Massima" value={resolvedNta?.Hmax || ntaLocal?.Hmax || cleanVal(r.quadro_urbanistico.altezza_massima)} />
               <DataRow label="Rapporto di Copertura" value={resolvedNta?.RC || cleanVal(r.quadro_urbanistico.rc_percentuale)} />

@@ -28,7 +28,7 @@ export default function LegalTermini() {
             <ul className="space-y-1">
               {[
                 ["Servizio", "La piattaforma web UrbiCheck e tutte le sue funzionalità"],
-                ["Titolare", "Dell'Aria Claudia Giuseppina (impresa individuale) — Via Costa 44, 15026 Carentino (AL) — P.IVA 02655840060"],
+                ["Titolare", "Fenice Management — Via Costa 44, 15026 Carentino (AL) — P.IVA 02655840060"],
                 ["Utente", "Persona fisica o giuridica registrata che accede al Servizio"],
                 ["Report", "L'analisi urbanistica e catastale generata per una singola particella"],
                 ["Crediti", "Unità di pagamento prepagato per l'acquisto di analisi. Pacchetti da €2,99 a €99,00."],
