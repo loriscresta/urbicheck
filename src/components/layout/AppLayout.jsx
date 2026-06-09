@@ -1,8 +1,8 @@
-import React, { useState } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { Outlet, Link, useLocation } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import { useQuery } from "@tanstack/react-query";
-import { Search, History, CreditCard, LayoutDashboard, Menu, X, LogOut, ShieldCheck, FileText } from "lucide-react";
+import { Search, History, CreditCard, LayoutDashboard, Menu, X, LogOut, ShieldCheck, FileText, ChevronDown, User } from "lucide-react";
 import BetaBanner from "@/components/BetaBanner";
 import RegionOnboarding from "@/components/onboarding/RegionOnboarding";
 
@@ -44,7 +44,20 @@ const UrbiCheckWordmark = ({ dark = false }) => (
 
 export default function AppLayout() {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const userMenuRef = useRef(null);
   const location = useLocation();
+
+  // Chiudi il menu utente se si clicca fuori
+  useEffect(() => {
+    const handleClick = (e) => {
+      if (userMenuRef.current && !userMenuRef.current.contains(e.target)) {
+        setUserMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
 
   const { data: currentUser } = useQuery({
     queryKey: ["currentUser"],
@@ -122,13 +135,19 @@ export default function AppLayout() {
               €{(credits?.balance || 0).toFixed(2)}
             </p>
           </div>
+          {currentUser && (
+            <div className="mb-2 px-3 py-2" style={{ background: 'rgba(0,0,0,0.15)', border: '1px solid rgba(255,255,255,0.06)' }}>
+              <p className="text-[9px] uppercase tracking-widest truncate" style={{ color: 'rgba(244,239,230,0.35)', fontFamily: "'IBM Plex Mono', monospace" }}>Connesso come</p>
+              <p className="text-[11px] truncate mt-0.5" style={{ color: 'rgba(244,239,230,0.7)', fontFamily: "'IBM Plex Mono', monospace" }}>{currentUser.email}</p>
+            </div>
+          )}
           <button
             onClick={handleLogout}
-            className="w-full flex items-center gap-2 px-3 py-2 text-xs uppercase tracking-widest transition-colors hover:text-white"
-            style={{ color: 'rgba(244,239,230,0.4)', fontFamily: "'IBM Plex Mono', monospace" }}
+            className="w-full flex items-center gap-2 px-3 py-2.5 text-xs uppercase tracking-widest transition-colors hover:bg-red-900/20 hover:text-white"
+            style={{ color: 'rgba(244,239,230,0.5)', fontFamily: "'IBM Plex Mono', monospace", border: '1px solid rgba(179,58,42,0.3)' }}
           >
             <LogOut className="w-4 h-4" />
-            Esci
+            Esci / Logout
           </button>
         </div>
       </aside>
@@ -140,10 +159,40 @@ export default function AppLayout() {
             <LogoIcon size={32} />
             <UrbiCheckWordmark />
           </Link>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
             <span className="text-sm font-bold" style={{ color: '#B33A2A', fontFamily: "'IBM Plex Mono', monospace" }}>
               €{(credits?.balance || 0).toFixed(2)}
             </span>
+            {/* User menu dropdown (mobile) */}
+            {currentUser && (
+              <div className="relative" ref={userMenuRef}>
+                <button
+                  onClick={() => setUserMenuOpen(!userMenuOpen)}
+                  className="flex items-center gap-1.5 px-2 py-1.5 rounded"
+                  style={{ background: 'rgba(255,255,255,0.1)', color: '#F4EFE6' }}
+                >
+                  <User className="w-4 h-4" />
+                  <ChevronDown className="w-3 h-3" />
+                </button>
+                {userMenuOpen && (
+                  <div className="absolute right-0 top-full mt-1 w-56 z-50 shadow-xl"
+                    style={{ background: '#1A3A6B', border: '1px solid rgba(255,255,255,0.15)' }}>
+                    <div className="px-4 py-3" style={{ borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+                      <p className="text-[9px] uppercase tracking-widest" style={{ color: 'rgba(244,239,230,0.4)', fontFamily: "'IBM Plex Mono', monospace" }}>Connesso come</p>
+                      <p className="text-[11px] truncate mt-0.5" style={{ color: '#F4EFE6', fontFamily: "'IBM Plex Mono', monospace" }}>{currentUser.email}</p>
+                    </div>
+                    <button
+                      onClick={handleLogout}
+                      className="w-full flex items-center gap-2 px-4 py-3 text-xs uppercase tracking-widest hover:bg-red-900/30 transition-colors"
+                      style={{ color: 'rgba(244,239,230,0.7)', fontFamily: "'IBM Plex Mono', monospace" }}
+                    >
+                      <LogOut className="w-4 h-4" />
+                      Esci / Logout
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
             <button onClick={() => setMobileOpen(!mobileOpen)} style={{ color: '#F4EFE6' }}>
               {mobileOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
             </button>
