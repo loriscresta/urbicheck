@@ -58,7 +58,7 @@ export default function ParcellaMap({ record, query, item }) {
   const [addressCoords, setAddressCoords] = useState(null);
   const addressMarkerRef = useRef(null);
 
-  const PARCEL_STYLE = { color: "#FF6600", weight: 2, fillColor: "#FF6600", fillOpacity: 0.25 };
+  const PARCEL_STYLE = { color: "#FF6600", weight: 2.5, fillColor: "#FF6600", fillOpacity: 0.35 };
 
   const addPolygonToMap = useCallback((feature) => {
     const L   = window.L;
@@ -280,21 +280,24 @@ export default function ParcellaMap({ record, query, item }) {
       ).addTo(map);
 
       if (hasPolygon) {
+        // Poligono ufficiale: arancione pieno 35% — fitBounds sul poligono reale
         const layer = L.geoJSON(geomJson, { style: PARCEL_STYLE }).addTo(map);
         geojsonLayerRef.current = layer;
+        layer.bindPopup(
+          `<strong>📐 Mappale catastale</strong><br/>Foglio ${foglio}, Particella ${particella}${entity.subalterno ? `, Sub. ${entity.subalterno}` : ''}<br/><small style="color:#666">Confine catastale ufficiale</small>`
+        );
         map.fitBounds(layer.getBounds(), { maxZoom: 18, padding: [40, 40] });
         setPolygonLoaded(true);
       } else {
-        // Cerchio grande semitrasparente per indicare l'area approssimativa della particella
+        // Nessun poligono: cerchio rosso tratteggiato come posizione approssimativa
         L.circle([initLat, initLon], {
-          radius: 25,             // ~25 metri, tipica particella urbana
+          radius: 25,
           color: "#c0392b",
           fillColor: "#e74c3c",
           fillOpacity: 0.20,
           weight: 2,
           dashArray: "6 4",
         }).addTo(map);
-        // Punto centrale preciso
         const addrLabel = entity.indirizzo_immobile || entity.comune || '';
         L.circleMarker([initLat, initLon], {
           radius: 7,
@@ -566,7 +569,7 @@ export default function ParcellaMap({ record, query, item }) {
     <div className="space-y-2">
       <p className="text-sm text-gray-500">
         {hasPolygon
-          ? <>📐 Poligono catastale ufficiale AdE INSPIRE — confini catastali reali.</>
+          ? <>📐 Confine catastale ufficiale della particella (fonte: catasto)</>
           : <>📍 Posizione approssimativa da geocodifica indirizzo — i confini catastali ufficiali sono visibili nel layer WMS dell'Agenzia delle Entrate zoomando sulla mappa.</>
         }
       </p>
