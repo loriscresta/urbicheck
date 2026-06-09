@@ -1,10 +1,14 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 
-const FREE_REPORTS = 3;       // report gratuiti per email
-const FREE_REPORTS_IP = 25;   // report gratuiti per indirizzo IP — modifica qui per cambiare soglia
-const BETA_PAID_REPORTS = 3;
-const BETA_PRICE = 2.99;
-const STANDARD_PRICE = 9.90; // post-launch fallback
+// ── Funnel di lancio ──────────────────────────────────────────────────────────
+// Report 1–3:  GRATIS
+// Report 4–6:  €2,99 (offerta lancio, max 3)
+// Report 7+:   €9,90 (prezzo standard)
+const FREE_REPORTS = 3;        // report gratuiti per email
+const FREE_REPORTS_IP = 25;    // report gratuiti per indirizzo IP — modifica qui per cambiare soglia
+const LAUNCH_PAID_REPORTS = 3; // report a prezzo lancio (dopo i gratuiti)
+const LAUNCH_PRICE = 2.99;     // prezzo offerta lancio
+const STANDARD_PRICE = 9.90;   // prezzo standard (report 7+)
 
 // Estrae l'IP reale del client dagli header della request
 function getClientIp(req) {
@@ -65,7 +69,7 @@ Deno.serve(async (req) => {
     }
 
     const freeUsed = credits.free_reports_used || 0;
-    const betaPaidUsed = credits.beta_paid_reports_used || 0;
+    const launchPaidUsed = credits.beta_paid_reports_used || 0; // riuso campo esistente per i report lancio €2,99
 
     // ── Controllo limite IP ────────────────────────────────────────────────
     const clientIp = getClientIp(req);
@@ -80,22 +84,20 @@ Deno.serve(async (req) => {
 
     console.log(`chargeReport: user=${user.email} ip=${clientIp} freeUsed=${freeUsed} ipFreeUsed=${ipFreeUsed}`);
 
-    // ── Beta pricing tiers ──────────────────────────────────────────────────
+    // ── Funnel pricing ────────────────────────────────────────────────────────
     // Un report è gratuito SOLO SE sia l'email che l'IP sono sotto soglia
     const emailUnderLimit = freeUsed < FREE_REPORTS;
     const ipUnderLimit = clientIp === 'unknown' || ipFreeUsed < FREE_REPORTS_IP;
 
     if (emailUnderLimit && ipUnderLimit) {
-      // FREE tier: entrambe le condizioni soddisfatte
+      // TIER 1 — GRATIS (report 1–3, entrambe le condizioni soddisfatte)
       console.log(`chargeReport: FREE tier — free_reports_used=${freeUsed} ip_free_used=${ipFreeUsed}`);
 
-      // Incrementa contatore email
       await base44.asServiceRole.entities.UserCredits.update(credits.id, {
         free_reports_used: freeUsed + 1,
         total_queries: (credits.total_queries || 0) + 1,
       });
 
-      // Incrementa contatore IP
       if (clientIp && clientIp !== 'unknown') {
         if (ipRecord) {
           await base44.asServiceRole.entities.FreeUsageIP.update(ipRecord.id, {
@@ -111,66 +113,66 @@ Deno.serve(async (req) => {
         }
       }
 
-      await base44.asServiceRole.entities.CadastralQuery.update(query_id, {
-        paid: true,
-        status: 'completed',
-        cost: 0,
-      });
-
+      await base44.asServiceRole.entities.CadastralQuery.update(query_id, { paid: true, status: 'completed', cost: 0 });
       await base44.asServiceRole.entities.CreditTransaction.create({
-        user_email: user.email,
-        type: 'query_charge',
-        amount: 0,
-        description: `Report gratuito beta #${freeUsed + 1}/3 — ${query.comune || ''} F.${query.foglio} P.${query.particella}`,
+        user_email: user.email, type: 'query_charge', amount: 0,
+        description: `Report gratuito #${freeUsed + 1}/3 — ${query.comune || ''} F.${query.foglio} P.${query.particella}`,
         query_id,
       });
+      return Response.json({ ok: true, deducted: 0, tier: 'free' });
 
-      return Response.json({ ok: true, deducted: 0, tier: 'free_beta' });
+    } else if (launchPaidUsed < LAUNCH_PAID_REPORTS) {
+      // TIER 2 — €2,99 offerta lancio (report 4–6)
+      console.log(`chargeReport: LAUNCH_PAID tier — launch_paid_used=${launchPaidUsed}`);
 
-    } else if (betaPaidUsed < BETA_PAID_REPORTS) {
-      // BETA PAID tier: €2,99 per report — email esaurita O IP saturo
-      console.log(`chargeReport: BETA_PAID tier — beta_paid_reports_used=${betaPaidUsed} emailUnderLimit=${emailUnderLimit} ipUnderLimit=${ipUnderLimit}`);
-
-      if ((credits.balance || 0) < BETA_PRICE) {
+      if ((credits.balance || 0) < LAUNCH_PRICE) {
         return Response.json({
           error: 'insufficient_credits',
           balance: credits.balance || 0,
-          required: BETA_PRICE,
+          required: LAUNCH_PRICE,
+          tier: 'launch_paid',
         }, { status: 402 });
       }
 
       await base44.asServiceRole.entities.UserCredits.update(credits.id, {
-        balance: parseFloat((credits.balance - BETA_PRICE).toFixed(2)),
-        total_spent: parseFloat(((credits.total_spent || 0) + BETA_PRICE).toFixed(2)),
+        balance: parseFloat((credits.balance - LAUNCH_PRICE).toFixed(2)),
+        total_spent: parseFloat(((credits.total_spent || 0) + LAUNCH_PRICE).toFixed(2)),
         total_queries: (credits.total_queries || 0) + 1,
-        beta_paid_reports_used: betaPaidUsed + 1,
+        beta_paid_reports_used: launchPaidUsed + 1,
       });
-
-      await base44.asServiceRole.entities.CadastralQuery.update(query_id, {
-        paid: true,
-        status: 'completed',
-        cost: BETA_PRICE,
-      });
-
+      await base44.asServiceRole.entities.CadastralQuery.update(query_id, { paid: true, status: 'completed', cost: LAUNCH_PRICE });
       await base44.asServiceRole.entities.CreditTransaction.create({
-        user_email: user.email,
-        type: 'query_charge',
-        amount: -BETA_PRICE,
-        description: `Report beta €2,99 #${betaPaidUsed + 1}/3 — ${query.comune || ''} F.${query.foglio} P.${query.particella}`,
+        user_email: user.email, type: 'query_charge', amount: -LAUNCH_PRICE,
+        description: `Report lancio €2,99 #${launchPaidUsed + 1}/3 — ${query.comune || ''} F.${query.foglio} P.${query.particella}`,
         query_id,
       });
-
-      return Response.json({ ok: true, deducted: BETA_PRICE, tier: 'beta_paid' });
+      return Response.json({ ok: true, deducted: LAUNCH_PRICE, tier: 'launch_paid' });
 
     } else {
-      // LIMIT REACHED: 6 beta reports used up
-      console.log(`chargeReport: BETA LIMIT REACHED — free=${freeUsed}, paid=${betaPaidUsed}`);
-      return Response.json({
-        error: 'beta_limit_reached',
-        message: 'Hai raggiunto il limite di 6 report nella fase beta.',
-        free_used: freeUsed,
-        paid_used: betaPaidUsed,
-      }, { status: 403 });
+      // TIER 3 — €9,90 prezzo standard (report 7+)
+      console.log(`chargeReport: STANDARD tier — free=${freeUsed}, launch_paid=${launchPaidUsed}`);
+
+      if ((credits.balance || 0) < STANDARD_PRICE) {
+        return Response.json({
+          error: 'insufficient_credits',
+          balance: credits.balance || 0,
+          required: STANDARD_PRICE,
+          tier: 'standard',
+        }, { status: 402 });
+      }
+
+      await base44.asServiceRole.entities.UserCredits.update(credits.id, {
+        balance: parseFloat((credits.balance - STANDARD_PRICE).toFixed(2)),
+        total_spent: parseFloat(((credits.total_spent || 0) + STANDARD_PRICE).toFixed(2)),
+        total_queries: (credits.total_queries || 0) + 1,
+      });
+      await base44.asServiceRole.entities.CadastralQuery.update(query_id, { paid: true, status: 'completed', cost: STANDARD_PRICE });
+      await base44.asServiceRole.entities.CreditTransaction.create({
+        user_email: user.email, type: 'query_charge', amount: -STANDARD_PRICE,
+        description: `Report standard €9,90 — ${query.comune || ''} F.${query.foglio} P.${query.particella}`,
+        query_id,
+      });
+      return Response.json({ ok: true, deducted: STANDARD_PRICE, tier: 'standard' });
     }
 
   } catch (error) {

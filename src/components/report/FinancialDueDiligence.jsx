@@ -98,13 +98,17 @@ export default function FinancialDueDiligence({ query, finData, onSnapshotReady 
   const usandoProxyPrezzo = prezzoAcquisto === 0 && prezzoEffettivo > 0;
 
   // Flipping
+  // valoreFlip = valore stimato di rivendita post-ristrutturazione (scenario massimo OMI)
   const valoreFlip        = valorePostRistrMax || 0;
-  const margineLordo      = totMid ? valoreFlip - totMid : null;
-  const tassePlusvalenza  = margineLordo > 0 ? margineLordo * 0.26 : 0;
+  // MARGINE LORDO = valore vendita − investimento totale (mai può superare il valore stesso)
+  const margineLordo      = (totMid != null && valoreFlip > 0) ? valoreFlip - totMid : null;
+  const tassePlusvalenza  = (margineLordo != null && margineLordo > 0) ? margineLordo * 0.26 : 0;
   const margineNetto      = margineLordo != null ? margineLordo - tassePlusvalenza : null;
   const creditoImposta    = ristrMid ? ristrMid * 0.50 : null; // Bonus Ristrutturazione 50%
-  const roiFlip           = totMid > 0 && margineLordo != null ? (margineLordo / totMid) * 100 : null;
-  const breakEvenMq       = totMid > 0 && mq > 0 ? totMid / mq : null;
+  // ROI = (margine lordo / investimento totale) × 100 — base corretta
+  const roiFlip           = (totMid != null && totMid > 0 && margineLordo != null) ? (margineLordo / totMid) * 100 : null;
+  // Break-even = prezzo minimo di vendita/mq per rientrare dall'investimento totale
+  const breakEvenMq       = (totMid != null && totMid > 0 && mq > 0) ? totMid / mq : null;
 
   // Affitto lungo
   const canoneAnnuo       = mq

@@ -8,7 +8,8 @@ import { Button } from "@/components/ui/button";
 import { motion } from "framer-motion";
 import ParcellaMap from "@/components/report/ParcellaMap";
 
-const BETA_PRICE = 2.99;
+const LAUNCH_PRICE = 2.99;
+const STANDARD_PRICE = 9.90;
 
 function PreviewPanel({ query }) {
   const r = query.report_data || {};
@@ -110,7 +111,7 @@ function PreviewPanel({ query }) {
           <div className="absolute inset-0 flex items-center justify-center bg-background/70 backdrop-blur-[2px]">
             <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-white border border-border shadow text-sm font-semibold text-foreground">
               <Lock className="w-4 h-4 text-muted-foreground" />
-              {`Sblocca il report completo — prezzo beta €${BETA_PRICE.toFixed(2)}`}
+              {`Sblocca il report completo — a partire da €${LAUNCH_PRICE.toFixed(2)}`}
             </div>
           </div>
         </div>
@@ -150,7 +151,7 @@ export default function PaymentGate({ query, onPaid }) {
         return;
       }
       if (data?.error === 'insufficient_credits') {
-        setError(`Saldo insufficiente (€${(data.balance || 0).toFixed(2)} disponibili). Servono €${BETA_PRICE.toFixed(2)}.`);
+        setError(`Saldo insufficiente (€${(data.balance || 0).toFixed(2)} disponibili). Servono €${(data.required || effectivePrice).toFixed(2)}.`);
         setIsProcessing(false);
         return;
       }
@@ -161,10 +162,22 @@ export default function PaymentGate({ query, onPaid }) {
 
   const balance = credits?.balance || 0;
   const freeUsed = credits?.free_reports_used || 0;
-  const betaPaidUsed = credits?.beta_paid_reports_used || 0;
-  const isFreeReport = freeUsed < 3;
-  const effectivePrice = isFreeReport ? 0 : BETA_PRICE;
-  const hasFunds = isFreeReport || balance >= BETA_PRICE;
+  const launchPaidUsed = credits?.beta_paid_reports_used || 0;
+
+  // Determina il tier del prossimo report
+  const isFreeReport   = freeUsed < 3;
+  const isLaunchReport = !isFreeReport && launchPaidUsed < 3;
+  const isStandardReport = !isFreeReport && !isLaunchReport;
+
+  const effectivePrice = isFreeReport ? 0 : isLaunchReport ? LAUNCH_PRICE : STANDARD_PRICE;
+  const hasFunds = isFreeReport || balance >= effectivePrice;
+
+  // Messaggio stato funnel
+  const funnelStatus = isFreeReport
+    ? `Report gratuito ${freeUsed + 1}/3 — offerta lancio`
+    : isLaunchReport
+    ? `Offerta lancio: €${LAUNCH_PRICE.toFixed(2)} — report ${4 + launchPaidUsed}/6 (ne restano ${3 - launchPaidUsed} a questo prezzo)`
+    : `Prezzo standard: €${STANDARD_PRICE.toFixed(2)} per report`;
 
   return (
     <div className="p-6 lg:p-10 max-w-2xl mx-auto">
@@ -188,23 +201,17 @@ export default function PaymentGate({ query, onPaid }) {
         {/* Preview gratuita */}
         <PreviewPanel query={query} />
 
-        {betaLimitReached && (
-          <div className="rounded-xl border-2 border-amber-400 bg-amber-50 p-6 mb-6 text-center">
-            <p className="text-lg font-bold text-amber-900 mb-2">Limite beta raggiunto</p>
-            <p className="text-sm text-amber-800 mb-4">
-              Hai raggiunto il limite di 6 report nella fase beta (3 gratuiti + 3 a €2,99).<br />
-              Il servizio completo sarà disponibile al lancio ufficiale.
-            </p>
-            <a href="/waitlist"
-              className="inline-block px-6 py-3 text-xs font-bold uppercase tracking-widest text-white"
-              style={{ background: '#1A3A6B', fontFamily: "'IBM Plex Mono', monospace" }}>
-              Notificami al lancio →
-            </a>
-          </div>
-        )}
+        {/* Stato funnel — sempre visibile */}
+        <div className="mb-4 px-4 py-3 rounded-lg flex items-center gap-3"
+          style={{ background: isFreeReport ? '#f0fdf4' : isLaunchReport ? '#fefce8' : '#f8fafc',
+                   border: `1px solid ${isFreeReport ? '#86efac' : isLaunchReport ? '#fde68a' : '#cbd5e1'}` }}>
+          <span className="text-lg shrink-0">{isFreeReport ? '🎁' : isLaunchReport ? '🏷️' : '📋'}</span>
+          <p className="text-sm font-semibold" style={{ color: isFreeReport ? '#15803d' : isLaunchReport ? '#92400e' : '#334155', fontFamily: "'IBM Plex Mono', monospace" }}>
+            {funnelStatus}
+          </p>
+        </div>
 
         {/* Payment card */}
-        {!betaLimitReached && (
         <div className="rounded-xl border-2 border-emerald-400 bg-emerald-50 p-6">
           <div className="flex items-center gap-3 mb-4">
             <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center">
@@ -217,9 +224,13 @@ export default function PaymentGate({ query, onPaid }) {
             <div className="ml-auto text-right">
               {isFreeReport
                 ? <span className="text-2xl font-black text-emerald-700">GRATIS</span>
-                : <span className="text-2xl font-black text-emerald-800">€{BETA_PRICE.toFixed(2)}</span>}
+                : <span className="text-2xl font-black text-emerald-800">€{effectivePrice.toFixed(2)}</span>}
               <p className="text-xs text-emerald-600 mt-0.5">
-                {isFreeReport ? `Report gratuito #${freeUsed + 1}/3` : `Prezzo beta (${betaPaidUsed + 1}/3)`}
+                {isFreeReport
+                  ? `${3 - freeUsed} report gratuiti rimasti`
+                  : isLaunchReport
+                  ? `Offerta lancio — ancora ${3 - launchPaidUsed} a €${LAUNCH_PRICE.toFixed(2)}`
+                  : `Prezzo standard`}
               </p>
             </div>
           </div>
@@ -231,17 +242,18 @@ export default function PaymentGate({ query, onPaid }) {
             <li>✓ Pratiche necessarie (SCIA, PdC…)</li>
             <li>✓ Analisi finanziaria & OMI</li>
             <li>✓ Download PDF certificato</li>
-            {isFreeReport && <li className="text-emerald-600 font-semibold">🎁 Analisi gratuita — fase beta</li>}
+            {isFreeReport && <li className="text-emerald-600 font-semibold">🎁 Analisi gratuita — nessun addebito</li>}
+            {isLaunchReport && <li className="text-amber-700 font-semibold">🏷️ Prezzo lancio — offerta limitata</li>}
           </ul>
 
           {!isFreeReport && (
             <div className="flex items-center justify-between text-sm text-emerald-700 mb-4 p-3 bg-white/60 rounded-lg">
               <span className="flex items-center gap-2">
                 <CreditCard className="w-4 h-4" />
-                Saldo disponibile
+                Credito disponibile
               </span>
               <span className={`font-bold ${hasFunds ? 'text-emerald-700' : 'text-red-600'}`}>
-                €{balance.toFixed(2)}{!hasFunds ? ' — ricarica per sbloccare' : ''}
+                €{balance.toFixed(2)}{!hasFunds ? ' — saldo insufficiente' : ''}
               </span>
             </div>
           )}
@@ -263,15 +275,15 @@ export default function PaymentGate({ query, onPaid }) {
               {isProcessing
                 ? <><Loader2 className="w-4 h-4 animate-spin mr-2" /> Elaborazione…</>
                 : isFreeReport
-                  ? <><Unlock className="w-4 h-4 mr-2" /> Sblocca gratis — Report beta #{freeUsed + 1}/3</>
-                  : <><Unlock className="w-4 h-4 mr-2" /> Sblocca scheda — €{BETA_PRICE.toFixed(2)}</>
+                  ? <><Unlock className="w-4 h-4 mr-2" /> Sblocca gratis — report #{freeUsed + 1}/3</>
+                  : <><Unlock className="w-4 h-4 mr-2" /> Sblocca scheda — €{effectivePrice.toFixed(2)}</>
               }
             </Button>
           ) : (
             <div className="space-y-3">
               <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 text-sm text-amber-800 flex items-start gap-2">
                 <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-                Saldo insufficiente — ricarica €{BETA_PRICE.toFixed(2)} per sbloccare
+                Credito insufficiente — ricarica €{effectivePrice.toFixed(2)} per sbloccare
               </div>
               <Button size="lg" className="w-full" style={{ background: '#1e3a5f' }} onClick={() => navigate("/credits")}>
                 Ricarica crediti →
@@ -279,10 +291,9 @@ export default function PaymentGate({ query, onPaid }) {
             </div>
           )}
         </div>
-        )}
 
         <p className="text-[11px] text-muted-foreground text-center mt-4">
-          {isFreeReport ? 'Analisi gratuita — fase beta attiva.' : 'Addebito immediato dal saldo crediti. Nessun abbonamento.'}
+          {isFreeReport ? 'Analisi gratuita — nessun addebito.' : 'Addebito immediato dal saldo crediti. Nessun abbonamento.'}
         </p>
       </motion.div>
     </div>

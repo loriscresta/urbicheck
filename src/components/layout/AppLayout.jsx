@@ -129,7 +129,7 @@ export default function AppLayout() {
         <div className="p-4" style={{ borderTop: '1px solid rgba(255,255,255,0.1)' }}>
           <div className="p-4 mb-3" style={{ background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.08)' }}>
             <p className="text-[10px] uppercase tracking-[2px] mb-1" style={{ color: 'rgba(244,239,230,0.45)', fontFamily: "'IBM Plex Mono', monospace" }}>
-              SALDO CREDITI
+              CREDITO DISPONIBILE
             </p>
             <p className="text-2xl font-bold" style={{ color: '#B33A2A', fontFamily: "'IBM Plex Mono', monospace" }}>
               €{(credits?.balance || 0).toFixed(2)}
@@ -160,8 +160,8 @@ export default function AppLayout() {
             <UrbiCheckWordmark />
           </Link>
           <div className="flex items-center gap-3">
-            <span className="text-sm font-bold" style={{ color: '#B33A2A', fontFamily: "'IBM Plex Mono', monospace" }}>
-              €{(credits?.balance || 0).toFixed(2)}
+            <span className="text-xs" style={{ color: 'rgba(244,239,230,0.55)', fontFamily: "'IBM Plex Mono', monospace" }}>
+              Credito: <span className="font-bold" style={{ color: '#B33A2A' }}>€{(credits?.balance || 0).toFixed(2)}</span>
             </span>
             {/* User menu dropdown (mobile) */}
             {currentUser && (

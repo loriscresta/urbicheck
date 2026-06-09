@@ -362,7 +362,7 @@ export default function SearchPage() {
           Analisi Urbanistica
         </h1>
         <div className="mb-6 flex items-center gap-2 px-3 py-2 text-xs" style={{ background: '#f0fdf4', border: '1px solid #86efac', fontFamily: "'IBM Plex Mono', monospace", color: '#15803d' }}>
-          🚀 <strong>Beta attiva</strong> — Prime 3 analisi gratuite · poi €2,99/report · Solo Piemonte, Liguria, Lombardia
+          🚀 <strong>Beta attiva</strong> — Prime 3 analisi gratuite · poi €2,99/report (offerta lancio, max 3) · poi €9,90 · Solo Piemonte, Liguria, Lombardia
         </div>
         {geoBlockError && (
           <div className="mb-5 p-4 flex flex-col gap-2" style={{ background: '#fff8f0', border: '2px solid #f59e0b', fontFamily: "'IBM Plex Mono', monospace" }}>
