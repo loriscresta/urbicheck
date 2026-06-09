@@ -84,7 +84,7 @@ function VincoliCard({ data }) {
   );
 }
 
-// ── PAI Card ──
+// ── PAI Card (Liguria — Dataset M450) ──
 function PaiCard({ data }) {
   if (!data) return null;
   const dati = data.dati || [];
@@ -150,6 +150,67 @@ function PaiCard({ data }) {
             <ExternalLink className="w-3 h-3" /> pai.ambienteinliguria.it
           </a>
         )}
+      </div>
+    </div>
+  );
+}
+
+// ── PAI Card Lombardia — ISPRA IdroGEO ──
+function PaiIspraCard({ data }) {
+  if (!data) return null;
+  const dati = data.dati || [];
+  const hasError = dati.some(d => d.errore);
+  const trovati = dati.filter(d => d.trovato && !d.errore);
+  const hasRischio = trovati.length > 0;
+
+  const borderColor = hasError ? '#fde68a' : hasRischio ? '#fca5a5' : '#6ee7b7';
+  const bgColor = hasError ? '#fffbeb' : hasRischio ? '#fff7f7' : '#f0fdf4';
+  const iconColor = hasError ? '#d97706' : hasRischio ? '#dc2626' : '#059669';
+  const iconBg = hasError ? '#fef3c7' : hasRischio ? '#fee2e2' : '#d1fae5';
+
+  return (
+    <div style={{ border: `1px solid ${borderColor}`, background: bgColor }}>
+      <div className="flex items-start justify-between p-4 gap-3">
+        <div className="flex items-start gap-3">
+          <div style={{ width: 32, height: 32, background: iconBg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <Droplets className="w-4 h-4" style={{ color: iconColor }} />
+          </div>
+          <div>
+            <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.7rem', fontWeight: 700, color: '#1C1A17', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+              PAI — Rischio Idrogeologico
+            </p>
+            <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.58rem', color: '#7A7268', marginTop: 2 }}>
+              ISPRA IdroGEO — AIPo Bacino del Po
+            </p>
+          </div>
+        </div>
+        {hasError
+          ? <Badge className="text-[10px] bg-amber-100 text-amber-800 border-amber-200 whitespace-nowrap">⚠ Verifica manuale</Badge>
+          : hasRischio
+            ? <Badge className="text-[10px] bg-red-100 text-red-800 border-red-200 whitespace-nowrap">⚠ Rischio rilevato</Badge>
+            : <Badge className="text-[10px] bg-emerald-100 text-emerald-800 border-emerald-200 whitespace-nowrap">✓ Nessun rischio PAI</Badge>
+        }
+      </div>
+      <div style={{ borderTop: `1px solid ${borderColor}`, padding: '0.6rem 1rem' }}>
+        {hasError
+          ? <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.62rem', color: '#d97706' }}>{data.nota}</p>
+          : trovati.map((d, i) => (
+            <div key={i} className="mb-1 last:mb-0">
+              {d.pericolosita_frana && <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.62rem', color: '#dc2626' }}>🏔 Frana: {d.descrizione_frana || d.pericolosita_frana}</p>}
+              {d.pericolosita_alluvione && <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.62rem', color: '#d97706' }}>🌊 Alluvione: {d.descrizione_alluvione || d.pericolosita_alluvione}</p>}
+              {!d.pericolosita_frana && !d.pericolosita_alluvione && <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.62rem', color: '#059669' }}>Nessuna pericolosità rilevata da ISPRA.</p>}
+            </div>
+          ))
+        }
+        {!hasError && !hasRischio && (
+          <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.6rem', color: '#059669', fontStyle: 'italic' }}>{data.nota || 'Nessuna pericolosità frana o alluvione rilevata da ISPRA IdroGEO.'}</p>
+        )}
+      </div>
+      <div style={{ borderTop: `1px solid ${borderColor}`, padding: '0.5rem 1rem' }}>
+        <a href={data.link_pai || 'https://idrogeo.isprambiente.it/app/'} target="_blank" rel="noopener noreferrer"
+          style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.58rem', color: '#1A3A6B', display: 'flex', alignItems: 'center', gap: 4 }}>
+          <ExternalLink className="w-3 h-3" /> idrogeo.isprambiente.it
+        </a>
       </div>
     </div>
   );
@@ -893,9 +954,11 @@ export default function WfsLiguriaPanel({ query, onComplete }) {
             <VincoliCard data={risultati?.vincoli_paesaggistici_ope_legis} />
             {isPiemonte
               ? <PaiFraneCard data={risultati?.pai_rischio_idrogeologico} />
-              : <PaiCard data={risultati?.pai_rischio_idrogeologico} />
+              : isLombardia
+                ? <PaiIspraCard data={risultati?.pai_rischio_idrogeologico} />
+                : <PaiCard data={risultati?.pai_rischio_idrogeologico} />
             }
-            {isPiemonte && risultati?.vincoli_paesaggistici_ope_legis?.vincolo_lacustre && (
+            {(isPiemonte || isLombardia) && risultati?.vincoli_paesaggistici_ope_legis?.vincolo_lacustre && (
               <LagoCard vincolo_lacustre={risultati.vincoli_paesaggistici_ope_legis.vincolo_lacustre} comuneNome={query?.comune} />
             )}
             <CorsiAcquaCard data={risultati?.vincolo_corsi_acqua} />
@@ -939,6 +1002,15 @@ export default function WfsLiguriaPanel({ query, onComplete }) {
               — PAI Frane — WFS ARPA Piemonte (POLIGONALI + PIFF)<br />
               — Corsi d'acqua e ferrovie — Overpass API (raggio 250m)<br />
               — Classificazione sismica DGR n.6-887/2019
+            </p>
+          ) : isLombardia ? (
+            <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.7rem', color: '#7A7268', lineHeight: 1.8 }}>
+              Analisi urbanistica ibrida per la Lombardia:<br />
+              — Vincoli ope legis (art.142 D.Lgs 42/2004) — Overpass API<br />
+              — Vincolo lacustre (laghi Maggiore, Como, Garda, Iseo, Idro) — raggio 300m<br />
+              — PAI rischio idrogeologico — ISPRA IdroGEO (AIPo Bacino del Po)<br />
+              — Corsi d'acqua e ferrovie — Overpass API (raggio 250m)<br />
+              — Classificazione sismica OPCM 3274/2003
             </p>
           ) : (
             <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.7rem', color: '#7A7268', lineHeight: 1.8 }}>

@@ -267,13 +267,22 @@ export default function ParcellaMap({ record, query, item }) {
       const map = L.map(mapDivRef.current, {
         zoomControl: true,
         attributionControl: true,
-      }).setView([initLat, initLon], 15); // zoom 15: mostra contesto ampio (ferrovia, SP592, frazione)
+      }).setView([initLat, initLon], 15);
       leafletMapRef.current = map;
 
-      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      const osmLayer = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
         attribution: "© OpenStreetMap contributors",
         maxZoom: 20,
-      }).addTo(map);
+      });
+      const satelliteLayer = L.tileLayer(
+        "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+        {
+          attribution: "© Esri, Maxar, Earthstar Geographics",
+          maxZoom: 20,
+        }
+      );
+      osmLayer.addTo(map);
+      L.control.layers({ "Mappa": osmLayer, "Satellite": satelliteLayer }, {}, { position: 'topright' }).addTo(map);
 
       L.tileLayer.wms(
         "https://wms.cartografia.agenziaentrate.gov.it/inspire/wms/ows",
@@ -517,7 +526,10 @@ export default function ParcellaMap({ record, query, item }) {
       if (!L || !munMapDivRef.current) return;
       const zoom = geocodedMunPos.isAddress ? 16 : 14;
       munMap = L.map(munMapDivRef.current).setView([geocodedMunPos.lat, geocodedMunPos.lon], zoom);
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 20, attribution: '© OpenStreetMap' }).addTo(munMap);
+      const osmFallback = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 20, attribution: '© OpenStreetMap' });
+      const satFallback = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 20, attribution: '© Esri' });
+      osmFallback.addTo(munMap);
+      L.control.layers({ "Mappa": osmFallback, "Satellite": satFallback }, {}, { position: 'topright' }).addTo(munMap);
       L.tileLayer.wms('https://wms.cartografia.agenziaentrate.gov.it/inspire/wms/ows', {
         layers: 'CP.CadastralParcel', format: 'image/png', transparent: true, opacity: 0.85, attribution: '© AdE',
       }).addTo(munMap);

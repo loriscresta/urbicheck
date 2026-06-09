@@ -474,24 +474,47 @@ export default function ReportPageContent({ query, refetch = () => {}, isPublicV
         {(r.vincoli || wfsRis) && (
           <ReportSection icon={Shield} title="Vincoli Principali" delay={0.06}>
             {wfsRis && <p className="text-[10px] uppercase tracking-widest text-emerald-700 mb-3" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>✓ Dati da fonti ufficiali WFS — {isPiemonte ? 'ARPA Piemonte + Overpass' : isLiguria ? 'Regione Liguria + Overpass' : isLombardia ? 'ISPRA IdroGEO + Overpass + OPCM 3274/2003' : 'WFS ufficiale'}</p>}
+            {/* Banner "non verificato" solo per regioni senza lookup statico né WFS */}
             {!hasVerifiedVincoli && (
               <div className="mb-3 rounded-lg border border-amber-300 bg-amber-50 p-3 flex items-start gap-2">
                 <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                 <div>
                   <p className="text-xs font-bold text-amber-900">⚠ Vincoli non verificati tramite WFS ufficiale</p>
-                  <p className="text-xs text-amber-800 mt-0.5">I valori mostrati sono stime AI indicative e <strong>non sostituiscono una verifica ufficiale</strong>.{isLombardia && <> Verifica PAI su <a href="https://geoportale.regione.lombardia.it" target="_blank" rel="noopener noreferrer" className="underline">geoportale.regione.lombardia.it</a>.</>}</p>
+                  <p className="text-xs text-amber-800 mt-0.5">I valori mostrati sono stime AI indicative e <strong>non sostituiscono una verifica ufficiale</strong>.</p>
                   <p className="text-xs text-amber-800 mt-1 font-semibold">→ Richiedere CDU al Comune per verifica ufficiale di tutti i vincoli.</p>
                 </div>
               </div>
             )}
+            {/* Lombardia senza WFS ancora → nota compatta con link, non muro di alert */}
+            {isLombardia && !wfsRis && (
+              <div className="mb-3 rounded border border-blue-200 bg-blue-50 p-2.5 flex items-start gap-2">
+                <AlertTriangle className="w-3.5 h-3.5 text-blue-500 shrink-0 mt-0.5" />
+                <p className="text-xs text-blue-800">
+                  Analisi vincoli Overpass + ISPRA in avvio — dati dettagliati disponibili nel pannello "Analisi Urbanistica — Regione Lombardia" qui sotto.{" "}
+                  <a href="https://idrogeo.isprambiente.it/app/" target="_blank" rel="noopener noreferrer" className="underline font-semibold">Verifica PAI su IdroGEO ISPRA →</a>
+                </p>
+              </div>
+            )}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <VincoloCard label="Vincolo Sismico" presente={vincoloSismicoEffettivo.presente} dettagli={vincoloSismicoEffettivo.dettagli} extra={vincoloSismicoEffettivo.zona} unverified={!hasVerifiedVincoli} />
-              <VincoloCard label="Rischio Idrogeologico (PAI)" presente={vincoloIdraulicoEffettivo.presente} unverified={!hasVerifiedVincoli}
-                dettagli={isPiemonte && query.centroid_lat && query.centroid_lng ? <span>{vincoloIdraulicoEffettivo.dettagli}{vincoloIdraulicoEffettivo.dettagli && ' — '}<a href="https://webgis.arpa.piemonte.it/agportal/home" target="_blank" rel="noopener noreferrer" style={{ color: '#1A3A6B', textDecoration: 'underline' }}>Mappa ARPA interattiva →</a></span> : vincoloIdraulicoEffettivo.dettagli}
-                extra={vincoloIdraulicoEffettivo.classe_rischio} />
-              <VincoloCard label="Vincolo Paesaggistico" presente={vincoloPaesaggisticoEffettivo.presente} dettagli={vincoloPaesaggisticoEffettivo.dettagli} extra={vincoloPaesaggisticoEffettivo.tipo} unverified={!hasVerifiedVincoli} />
-              {r.vincoli?.vincolo_archeologico && <VincoloCard label="Vincolo Archeologico" presente={r.vincoli.vincolo_archeologico.presente} dettagli={r.vincoli.vincolo_archeologico.dettagli} unverified={!hasVerifiedVincoli} />}
-              {vincoloCorsiAcquaEffettivo && <VincoloCard label="Corsi d'Acqua (art.142)" presente={vincoloCorsiAcquaEffettivo.presente} dettagli={vincoloCorsiAcquaEffettivo.dettagli} unverified={!hasVerifiedVincoli} />}
+              <VincoloCard label="Vincolo Sismico" presente={vincoloSismicoEffettivo.presente} dettagli={vincoloSismicoEffettivo.dettagli} extra={vincoloSismicoEffettivo.zona} unverified={!hasVerifiedVincoli && !isLombardia} />
+              {/* Rischio idrogeologico: per Lombardia senza WFS mostra link compatto invece del placeholder AI */}
+              {isLombardia && !wfsRis
+                ? <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 flex items-start gap-2">
+                    <span className="text-base shrink-0">💧</span>
+                    <div>
+                      <p className="text-xs font-bold text-blue-900">Rischio Idrogeologico (PAI)</p>
+                      <p className="text-xs text-blue-700 mt-1">Verifica in corso tramite ISPRA IdroGEO — disponibile nel pannello WFS sottostante.</p>
+                      <a href="https://idrogeo.isprambiente.it/app/" target="_blank" rel="noopener noreferrer" className="text-[10px] text-blue-600 underline mt-1 inline-block">idrogeo.isprambiente.it →</a>
+                    </div>
+                  </div>
+                : <VincoloCard label="Rischio Idrogeologico (PAI)" presente={vincoloIdraulicoEffettivo.presente} unverified={!hasVerifiedVincoli && !isLombardia}
+                    dettagli={isPiemonte && query.centroid_lat && query.centroid_lng ? <span>{vincoloIdraulicoEffettivo.dettagli}{vincoloIdraulicoEffettivo.dettagli && ' — '}<a href="https://webgis.arpa.piemonte.it/agportal/home" target="_blank" rel="noopener noreferrer" style={{ color: '#1A3A6B', textDecoration: 'underline' }}>Mappa ARPA interattiva →</a></span> : vincoloIdraulicoEffettivo.dettagli}
+                    extra={vincoloIdraulicoEffettivo.classe_rischio} />
+              }
+              <VincoloCard label="Vincolo Paesaggistico" presente={vincoloPaesaggisticoEffettivo.presente} dettagli={vincoloPaesaggisticoEffettivo.dettagli} extra={vincoloPaesaggisticoEffettivo.tipo} unverified={!hasVerifiedVincoli && !isLombardia} />
+              {/* Vincolo archeologico: per Lombardia senza WFS non mostrare alert AI generico */}
+              {r.vincoli?.vincolo_archeologico && (!isLombardia || wfsRis) && <VincoloCard label="Vincolo Archeologico" presente={r.vincoli.vincolo_archeologico.presente} dettagli={r.vincoli.vincolo_archeologico.dettagli} unverified={!hasVerifiedVincoli && !isLombardia} />}
+              {vincoloCorsiAcquaEffettivo && <VincoloCard label="Corsi d'Acqua (art.142)" presente={vincoloCorsiAcquaEffettivo.presente} dettagli={vincoloCorsiAcquaEffettivo.dettagli} unverified={!hasVerifiedVincoli && !isLombardia} />}
               {isNewStructure && (() => {
                 const vf = vfNew;
                 const isStorica = /turist|storica?/i.test(vf.ferrovia || '') || vf.usage === 'tourism';
@@ -516,7 +539,7 @@ export default function ReportPageContent({ query, refetch = () => {}, isPublicV
               })}
               {r.vincolo_idrico?.presente && r.vincolo_idrico.footer && <div className="col-span-full text-[10px] text-muted-foreground italic border-t border-border pt-2 mt-1">ℹ️ {r.vincolo_idrico.footer}</div>}
             </div>
-            {r.vincoli?.altri_vincoli?.length > 0 && !wfsRis && (
+            {r.vincoli?.altri_vincoli?.length > 0 && !wfsRis && !isLombardia && (
               <div className="mt-4 space-y-2">
                 <p className="text-sm font-medium text-muted-foreground">Altri Vincoli (stima AI)</p>
                 {r.vincoli.altri_vincoli.map((v, i) => <VincoloCard key={i} label={v.nome} presente={v.presente} dettagli={v.dettagli} unverified={!hasVerifiedVincoli} />)}
