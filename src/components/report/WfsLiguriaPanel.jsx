@@ -778,6 +778,7 @@ export default function WfsLiguriaPanel({ query, onComplete }) {
   const risultati = wfsData?.risultati;
   const regioneLower = (query?.regione || '').toLowerCase();
   const isPiemonte = wfsData?.regione_logica === 'piemonte' || regioneLower.includes('piemonte');
+  const isLombardia = wfsData?.regione_logica === 'lombardia' || regioneLower.includes('lombardia');
 
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
@@ -789,11 +790,13 @@ export default function WfsLiguriaPanel({ query, onComplete }) {
           <Map className="w-4 h-4 text-white shrink-0" />
           <div>
             <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontWeight: 700, fontSize: '0.75rem', color: '#fff', textTransform: 'uppercase', letterSpacing: '1px' }}>
-              Analisi Urbanistica — {isPiemonte ? 'Regione Piemonte' : 'Regione Liguria'}
+              Analisi Urbanistica — {isPiemonte ? 'Regione Piemonte' : isLombardia ? 'Regione Lombardia' : 'Regione Liguria'}
             </p>
             <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.6rem', color: 'rgba(244,239,230,0.65)', marginTop: 2 }}>
               {isPiemonte
                 ? 'WFS PAI ARPA Piemonte + vincoli ope legis + Overpass API'
+                : isLombardia
+                ? 'ISPRA IdroGEO PAI + vincoli ope legis + Overpass API + Sismica OPCM 3274/2003'
                 : 'WFS PAI (M450) + vincoli ope legis + Overpass API (EPSG:3003)'}
             </p>
           </div>

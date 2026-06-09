@@ -326,9 +326,8 @@ export default function ReportPageContent({ query, refetch = () => {}, isPublicV
   const showPrgMismatchNote = isResiCategory && isPrgServizi;
 
   const complessitaNorm = normalizeComplessita(r.valutazione_sintetica?.livello_complessita);
-  // hasVerifiedVincoli = true quando abbiamo dati sismici certi (staticZona) o WFS ufficiale
-  // Questo evita di mostrare "⚠ Non verificato" per vincoli che abbiamo dalla classificazione OPCM
-  const hasVerifiedVincoli = !!(wfsRis) || isPiemonte || isLiguria || !!staticZona;
+  // hasVerifiedVincoli = true quando abbiamo dati sismici certi (staticZona/Lombardia) o WFS ufficiale
+  const hasVerifiedVincoli = !!(wfsRis) || isPiemonte || isLiguria || isLombardia || !!staticZona;
 
   const complexityColor = {
     "Bassa": "bg-emerald-50 text-emerald-700 border-emerald-200",
@@ -474,7 +473,7 @@ export default function ReportPageContent({ query, refetch = () => {}, isPublicV
         {/* Vincoli */}
         {(r.vincoli || wfsRis) && (
           <ReportSection icon={Shield} title="Vincoli Principali" delay={0.06}>
-            {wfsRis && <p className="text-[10px] uppercase tracking-widest text-emerald-700 mb-3" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>✓ Dati da fonti ufficiali WFS — {isPiemonte ? 'ARPA Piemonte + Overpass' : isLiguria ? 'Regione Liguria + Overpass' : 'WFS ufficiale'}</p>}
+            {wfsRis && <p className="text-[10px] uppercase tracking-widest text-emerald-700 mb-3" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>✓ Dati da fonti ufficiali WFS — {isPiemonte ? 'ARPA Piemonte + Overpass' : isLiguria ? 'Regione Liguria + Overpass' : isLombardia ? 'ISPRA IdroGEO + Overpass + OPCM 3274/2003' : 'WFS ufficiale'}</p>}
             {!hasVerifiedVincoli && (
               <div className="mb-3 rounded-lg border border-amber-300 bg-amber-50 p-3 flex items-start gap-2">
                 <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
@@ -689,23 +688,8 @@ export default function ReportPageContent({ query, refetch = () => {}, isPublicV
         })()}
       </div>
 
-      {/* WFS — Lombardia */}
-      {isLombardia && (
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mt-6 p-5 rounded-xl" style={{ border: '2px solid #1A3A6B', background: '#fff' }}>
-          <div className="flex items-center gap-2 mb-3" style={{ background: '#1A3A6B', margin: '-1.25rem -1.25rem 1rem', padding: '0.75rem 1.25rem' }}>
-            <Shield className="w-4 h-4 text-white" /><p className="text-xs font-bold text-white uppercase tracking-widest">Verifica Vincoli — Regione Lombardia</p>
-          </div>
-          <p className="text-xs text-muted-foreground mb-3">L'analisi WFS automatica non è disponibile per la Lombardia. Verificare manualmente sui portali ufficiali:</p>
-          <div className="space-y-2 text-xs">
-            <a href="https://geoportale.regione.lombardia.it" target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-primary hover:underline"><ExternalLink className="w-3 h-3" /> Geoportale Regione Lombardia (PAI, vincoli paesaggistici)</a>
-            <a href="https://idrogeo.isprambiente.it/app/" target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-primary hover:underline"><ExternalLink className="w-3 h-3" /> IdroGEO ISPRA — PAI frane e alluvioni Lombardia</a>
-            <a href="https://www.sit.regione.lombardia.it" target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-primary hover:underline"><ExternalLink className="w-3 h-3" /> SIT Regione Lombardia — Zonizzazione sismica</a>
-          </div>
-        </motion.div>
-      )}
-
-      {/* WFS Panel — Liguria/Piemonte (solo vista autenticata) */}
-      {!isPublicView && (['Liguria','Piemonte'].includes(query.regione) || (query.regione || '').toLowerCase().includes('piemonte') || (query.regione || '').toLowerCase().includes('liguria')) && (
+      {/* WFS Panel — Piemonte / Liguria / Lombardia (solo vista autenticata) */}
+      {!isPublicView && (isPiemonte || isLiguria || isLombardia) && (
         <WfsLiguriaPanel query={query} onComplete={() => { queryClient.invalidateQueries({ queryKey: ["query", query.id] }); refetch(); }} />
       )}
 

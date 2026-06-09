@@ -925,6 +925,144 @@ async function runAnalisiPiemonte({ comune, provincia, indirizzo, comuneLower, p
 }
 
 // ============================================================
+// CLASSIFICAZIONE SISMICA LOMBARDIA
+// Fonte: OPCM 3274/2003 aggiornata DGR Regione Lombardia
+// ============================================================
+const LOMBARDIA_SISMICA = {
+  zona2: new Set(['brescia','sondrio','lecco','como','bergamo','varese']),
+  // Zona 3 = tutto il resto (default per Lombardia)
+  // Zona 4 = pianura milanese
+  zona4: new Set(['milano','monza','lodi','cremona','mantova','pavia','vigevano','busto arsizio','gallarate','saronno','legnano','sesto san giovanni','cinisello balsamo','rho','seregno','desenzano del garda','treviglio']),
+};
+
+function getZonaSismicaLombardia(comuneLower) {
+  if (LOMBARDIA_SISMICA.zona2.has(comuneLower)) {
+    return { zona: '2', descrizione: 'Pericolosità sismica media — NTC 2018', riferimento_normativo: 'OPCM 3274/2003 — classificazione vigente Regione Lombardia', nota: 'Applicare NTC 2018.' };
+  }
+  if (LOMBARDIA_SISMICA.zona4.has(comuneLower)) {
+    return { zona: '4', descrizione: 'Pericolosità sismica molto bassa', riferimento_normativo: 'OPCM 3274/2003 — classificazione vigente Regione Lombardia', nota: 'Zona a bassa pericolosità sismica.' };
+  }
+  return { zona: '3', descrizione: 'Pericolosità sismica bassa', riferimento_normativo: 'OPCM 3274/2003 — classificazione vigente Regione Lombardia', nota: 'Per verifiche strutturali consultare microzonazione sismica comunale.' };
+}
+
+// ============================================================
+// ANALISI LOMBARDIA — Overpass + ISPRA + logica vincoli
+// ============================================================
+async function runAnalisiLombardia({ comune, provincia, indirizzo, comuneLower, prefill_lat, prefill_lon }) {
+  let lat = prefill_lat;
+  let lon = prefill_lon;
+  let geocodingError = null;
+
+  // Geocoding se non abbiamo coordinate
+  if (!lat || !lon) {
+    try {
+      const coords = await geocodeAddress(indirizzo, comune, provincia, 'Lombardia');
+      if (!coords.isFallbackCapoluogo) { lat = coords.lat; lon = coords.lon; }
+    } catch (err) { geocodingError = err.message; }
+  }
+
+  let overpassResult = { railways: [], waterways: [], lakes: [], overpass_ok: false };
+  let paiIspra = { source: 'ISPRA IdroGEO', error: true };
+
+  if (lat && lon) {
+    try {
+      [overpassResult, paiIspra] = await Promise.all([
+        queryOverpass(lat, lon, true),
+        queryPAIIspra(lat, lon),
+      ]);
+    } catch (_e) {}
+  }
+
+  const { railways, waterways, lakes, overpass_ok } = overpassResult;
+  const sismicaLombardia = getZonaSismicaLombardia(comuneLower);
+
+  // Vincoli paesaggistici ope legis: laghi (art.142 lett.b)
+  const vincoli_paesaggistici = [];
+  let vincolo_lacustre;
+  if (lakes.length > 0) {
+    vincolo_lacustre = { presente: true, lago: lakes[0].nome, tipo: lakes[0].tipo, fonte: 'OpenStreetMap / Overpass API', distanza_max: 300, riferimento_normativo: 'Art.142 c.1 lett. b) D.Lgs 42/2004', fascia_tutela: '300m dalla sponda del lago', descrizione: `Rilevato lago/bacino (${lakes[0].nome}) entro 300m.` };
+    vincoli_paesaggistici.push({ tipo: 'Vincolo lacustre', livello: 'APPLICABILE', riferimento_normativo: 'Art.142 c.1 lett. b) D.Lgs 42/2004', fascia_tutela: '300m dalla sponda', nome_lago: lakes[0].nome, fonte: 'OpenStreetMap / Overpass API', descrizione: `Lago (${lakes[0].nome}) rilevato entro 300m. Vincolo paesaggistico ex art.142 c.1 lett. b).` });
+  } else {
+    vincolo_lacustre = { presente: false, fonte: 'OpenStreetMap / Overpass API', distanza_max: 300, nota: overpass_ok ? 'Nessun lago/bacino rilevato entro 300m.' : 'Overpass API non disponibile — verificare per laghi (Maggiore, Como, Garda, Iseo, Idro, ecc.).' };
+  }
+
+  const ferrovie = railways.length > 0
+    ? railways.map(r => ({
+        trovato: true, nome: r.nome, tipo_infrastruttura: r.tipo, operatore: r.operatore,
+        dismessa: r.dismessa || false, turistica: r.turistica || false,
+        livello: r.dismessa ? 'VERIFICA_NECESSARIA_DISMESSA' : 'VERIFICA_NECESSARIA',
+        riferimento_normativo: r.dismessa ? 'DPR 11 luglio 1980 n.753 + L.128/2017' : 'DPR 11 luglio 1980 n.753',
+        fascia_rispetto: "30m dall'asse del binario (art.49 DPR 753/1980)", fonte: 'OpenStreetMap / Overpass API',
+        descrizione: r.dismessa
+          ? `Ferrovia dismessa (${r.nome}) entro 500m. Fasce di rispetto DPR 753/1980 permangono.`
+          : `Ferrovia (${r.nome}) entro 500m. DPR 753/1980 vieta edificazione entro 30m dall'asse.`,
+        ...(r.nota_legale && { nota_legale: r.nota_legale }),
+      }))
+    : [{ trovato: false, nota: geocodingError ? 'Non verificabile (geocoding fallito).' : !overpass_ok ? 'Non verificabile (Overpass API non raggiungibile).' : 'Nessuna ferrovia rilevata entro 500m.' }];
+
+  const corsi_acqua_vincolo = waterways.length > 0
+    ? waterways.map(w => ({ trovato: true, nome: w.nome, tipo: w.tipo, livello: w.tipo === 'river' ? 'POSSIBILE_VINCOLO_ALTO' : 'POSSIBILE_VINCOLO_DA_VERIFICARE', riferimento_normativo: 'Art.142 c.1 lett. c) D.Lgs 42/2004', fascia_tutela: '150m dal ciglio di sponda', fonte: 'OpenStreetMap / Overpass API', descrizione: w.tipo === 'river' ? `Rilevato fiume (${w.nome}) entro 250m.` : `Rilevato corso d'acqua (${w.nome}) entro 250m.` }))
+    : [{ trovato: false, nota: !overpass_ok ? "Non verificabile (Overpass API non raggiungibile)." : "Nessun corso d'acqua rilevato entro 250m." }];
+
+  // PAI da ISPRA per Lombardia
+  const paiPresente = !paiIspra.error && (paiIspra.pericolosita_frana || paiIspra.pericolosita_alluvione);
+  const paiNote = paiIspra.error
+    ? 'Verifica su IdroGEO ISPRA (idrogeo.isprambiente.it) e Geoportale Regione Lombardia.'
+    : `${paiIspra.pericolosita_frana ? `Frana: ${paiIspra.descrizione_frana || paiIspra.pericolosita_frana}` : 'Nessun rischio frana rilevato'}. ${paiIspra.pericolosita_alluvione ? `Alluvione: ${paiIspra.descrizione_alluvione || paiIspra.pericolosita_alluvione}` : 'Nessun rischio alluvione rilevato'}.`;
+
+  const zona_urbanistica = {
+    disponibile: false,
+    messaggio: `Piano di Governo del Territorio (PGT) ${comune} — richiedere Certificato di Destinazione Urbanistica (CDU) al Comune.`,
+    link_geoportale: 'https://www.cartografia.regione.lombardia.it/geoportale',
+    link_sit: `https://www.google.com/search?q=PGT+CDU+${encodeURIComponent(comune)}+${encodeURIComponent(provincia)}`,
+    azione_consigliata: 'Richiedere il CDU al Comune per indici NTA (IF, RC, Hmax) e destinazione d\'uso.',
+    nota: 'In Lombardia la pianificazione è gestita dal PGT comunale. I dati non sono disponibili su portale regionale unificato.',
+  };
+
+  return {
+    coordinate: lat ? { lat, lon } : null,
+    geocoding_error: geocodingError || null,
+    centroid_lat: lat,
+    centroid_lng: lon,
+    regione_logica: 'lombardia',
+    risultati: {
+      vincoli_paesaggistici_ope_legis: {
+        metodologia: 'Analisi logica ope legis art.142 D.Lgs 42/2004 + Overpass API.',
+        vincoli: vincoli_paesaggistici.length > 0 ? vincoli_paesaggistici : [{ livello: 'NESSUN_VINCOLO_RILEVATO', nota: 'Nessun vincolo paesaggistico ope legis rilevato tramite Overpass.' }],
+        nota_foreste_boschi: 'Il vincolo boschivo (art.142 lett.g) richiede verifica puntuale con il tecnico.',
+        link_verifica_ufficiale: 'https://www.cartografia.regione.lombardia.it/geoportale',
+        vincolo_lacustre,
+      },
+      vincolo_corsi_acqua: { metodologia: 'Rilevamento tramite OpenStreetMap (Overpass API).', dati: corsi_acqua_vincolo, fonte_ok: overpass_ok },
+      vincolo_ferroviario: { metodologia: 'Rilevamento tramite OpenStreetMap (Overpass API).', dati: ferrovie, fonte_ok: overpass_ok },
+      pai_rischio_idrogeologico: {
+        metodologia: 'ISPRA IdroGEO — Piano di Assetto Idrogeologico nazionale (AIPo - Bacino del Po).',
+        dati: paiIspra.error ? [{ layer: 'PAI ISPRA', trovato: false, errore: paiIspra.message }] : [{
+          layer: 'PAI ISPRA IdroGEO', trovato: paiPresente || false,
+          pericolosita_frana: paiIspra.pericolosita_frana, descrizione_frana: paiIspra.descrizione_frana,
+          pericolosita_alluvione: paiIspra.pericolosita_alluvione, descrizione_alluvione: paiIspra.descrizione_alluvione,
+          fonte: 'ISPRA IdroGEO',
+        }],
+        fonte_ok: !paiIspra.error,
+        features_totali: paiPresente ? 1 : 0,
+        link_pai: 'https://idrogeo.isprambiente.it/app/',
+        nota: paiNote,
+        ispra_raw: paiIspra.error ? null : { n_frane: paiIspra.n_frane, pericolosita_frana: paiIspra.pericolosita_frana, pericolosita_alluvione: paiIspra.pericolosita_alluvione },
+      },
+      sismica: sismicaLombardia,
+      zona_urbanistica,
+    },
+    link_utili: {
+      geoportale_lombardia: 'https://www.cartografia.regione.lombardia.it/geoportale',
+      idrogeo_ispra: 'https://idrogeo.isprambiente.it/app/',
+      sit_lombardia: 'https://www.sit.regione.lombardia.it',
+    },
+    disclaimer: `Analisi Lombardia: vincoli da Overpass API (OSM), PAI da ISPRA IdroGEO, sismica da classificazione OPCM 3274/2003. Gli indici NTA (IF, RC, Hmax) sono gestiti dal PGT comunale — richiedere CDU al Comune per i valori ufficiali. Elaborato il ${new Date().toLocaleDateString('it-IT')}.`,
+    note_salvataggio: `WFS Lombardia completato il ${new Date().toLocaleDateString('it-IT')}. Overpass ok: ${overpass_ok}, ISPRA ok: ${!paiIspra.error}, Laghi: ${lakes.length}, Ferrovie: ${railways.length}.`,
+  };
+}
+
+// ============================================================
 // MAIN HANDLER
 // ============================================================
 Deno.serve(async (req) => {
@@ -983,9 +1121,10 @@ Deno.serve(async (req) => {
   const regioneLowerFinal = (regione || '').toLowerCase();
   const isPiemonte = regioneLowerFinal.includes('piemonte');
   const isLiguria = regioneLowerFinal.includes('liguria');
-  const isAltreRegioni = !isPiemonte && !isLiguria;
+  const isLombardia = regioneLowerFinal.includes('lombardia');
+  const isAltreRegioni = !isPiemonte && !isLiguria && !isLombardia;
 
-  // Per le altre regioni italiane (Lombardia, Toscana, Veneto, ecc.) usa ISPRA IdroGEO REST API
+  // Per le regioni non supportate usa solo ISPRA (risposta rapida)
   if (isAltreRegioni) {
     const lat = prefill_lat;
     const lon = prefill_lon;
@@ -1007,6 +1146,8 @@ Deno.serve(async (req) => {
   try {
     if (isPiemonte) {
       risultato = await runAnalisiPiemonte({ comune, provincia, indirizzo, comuneLower, prefill_lat, prefill_lon });
+    } else if (isLombardia) {
+      risultato = await runAnalisiLombardia({ comune, provincia, indirizzo, comuneLower, prefill_lat, prefill_lon });
     } else {
       risultato = await runAnalisiLiguria({ comune, provincia, indirizzo, comuneLower, prefill_lat, prefill_lon });
     }
@@ -1089,7 +1230,7 @@ Deno.serve(async (req) => {
     distanza_strada: ntaData.Ds,
     zona_riferimento: zonaEffettiva,
     fonte: ntaData.fonte,
-    nota: NTA_LOOKUP[comuneKey] ? 'Dati da NTA comunali' : 'Stima tipica per zona residenziale — verificare su NTA/PRG per zona specifica',
+    nota: NTA_LOOKUP[comuneKey] ? 'Dati da NTA comunali' : 'Da verificare con CDU al Comune — indici non disponibili nel database NTA UrbiCheck.',
   };
 
   if (query_id) {
@@ -1117,7 +1258,7 @@ Deno.serve(async (req) => {
 
   return Response.json({
     success: true,
-    regione: isPiemonte ? 'Piemonte' : 'Liguria',
+    regione: isPiemonte ? 'Piemonte' : isLombardia ? 'Lombardia' : 'Liguria',
     comune,
     centroid_lat: finalCentroidLat,
     centroid_lng: finalCentroidLon,
