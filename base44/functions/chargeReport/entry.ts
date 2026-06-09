@@ -1,7 +1,7 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 
 const FREE_REPORTS = 3;       // report gratuiti per email
-const FREE_REPORTS_IP = 5;    // report gratuiti per indirizzo IP — modifica qui per cambiare soglia
+const FREE_REPORTS_IP = 25;   // report gratuiti per indirizzo IP — modifica qui per cambiare soglia
 const BETA_PAID_REPORTS = 3;
 const BETA_PRICE = 2.99;
 const STANDARD_PRICE = 9.90; // post-launch fallback
