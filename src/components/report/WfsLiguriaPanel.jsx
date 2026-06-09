@@ -212,12 +212,26 @@ function CorsiAcquaCard({ data }) {
   );
 }
 
+// Lookup statico ferrovie dismesse/turistiche Piemonte
+const FERROVIA_DISMESSA_PANEL = {
+  "calamandrana": {
+    nome: "Ferrovia Asti-Alba (Ferrovia Turistica delle Langhe e del Monferrato)",
+    legge: "DPR 753/1980 + L.128/2017",
+    nota: "Ferrovia dismessa in conversione turistica. Le fasce di rispetto DPR 753/1980 (30m dall'asse, art.49) e la protezione del corridoio ferroviario (L.128/2017) possono permanere. Verificare con Regione Piemonte e RFI prima di qualsiasi intervento edilizio.",
+  },
+};
+
 // ── Ferrovia Card ──
-function FerroviaCard({ data }) {
-  if (!data) return null;
-  const dati = data.dati || [];
+function FerroviaCard({ data, comune }) {
+  const comuneLower = (comune || '').toLowerCase().trim();
+  const staticMatch = FERROVIA_DISMESSA_PANEL[comuneLower];
+
+  const dati = data?.dati || [];
   const trovati = dati.filter(d => d.trovato);
-  const hasFerr = trovati.length > 0;
+  // Se il lookup statico trova una ferrovia, prevale sempre su Overpass
+  const hasFerr = trovati.length > 0 || !!staticMatch;
+
+  if (!data && !staticMatch) return null;
 
   return (
     <div style={{ border: `1px solid ${hasFerr ? '#fde68a' : '#6ee7b7'}`, background: hasFerr ? '#fffbeb' : '#f0fdf4' }}>
@@ -243,15 +257,25 @@ function FerroviaCard({ data }) {
 
       {hasFerr && (
         <div style={{ borderTop: '1px solid #fde68a', padding: '0.75rem 1rem' }}>
-          {trovati.map((f, i) => (
-            <div key={i} className="mb-2 last:mb-0">
-              <div className="flex items-center gap-2">
-                <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.68rem', fontWeight: 700, color: '#d97706' }}>{f.nome}</span>
-                {f.fascia_rispetto && <Badge variant="outline" className="text-[10px]">{f.fascia_rispetto}</Badge>}
+          {staticMatch ? (
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.68rem', fontWeight: 700, color: '#d97706' }}>⚠ {staticMatch.nome}</span>
               </div>
-              {f.descrizione && <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.6rem', color: '#7A7268', lineHeight: 1.6, marginTop: 2 }}>{f.descrizione}</p>}
+              <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.6rem', color: '#7A7268', lineHeight: 1.6, marginTop: 2 }}>{staticMatch.nota}</p>
+              <span style={{ display: 'inline-block', fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.58rem', fontWeight: 700, background: '#fef3c7', color: '#92400e', padding: '2px 8px', borderRadius: 2, marginTop: 4 }}>VERIFICA NECESSARIA — {staticMatch.legge}</span>
             </div>
-          ))}
+          ) : (
+            trovati.map((f, i) => (
+              <div key={i} className="mb-2 last:mb-0">
+                <div className="flex items-center gap-2">
+                  <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.68rem', fontWeight: 700, color: '#d97706' }}>{f.nome}</span>
+                  {f.fascia_rispetto && <Badge variant="outline" className="text-[10px]">{f.fascia_rispetto}</Badge>}
+                </div>
+                {f.descrizione && <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.6rem', color: '#7A7268', lineHeight: 1.6, marginTop: 2 }}>{f.descrizione}</p>}
+              </div>
+            ))
+          )}
         </div>
       )}
 
@@ -325,9 +349,13 @@ function getCduLinks(comuneNome) {
 }
 
 // ── Zona Urbanistica Card ──
-function ZonaUrbanisticaCard({ data, comuneNome }) {
+function ZonaUrbanisticaCard({ data, comuneNome, ntaZona, ntaDest }) {
   if (!data) return null;
   const cduInfo = !data.disponibile ? getCduLinks(comuneNome) : null;
+  // Mostra dato NTA come primario, mosaicatura WMS come nota secondaria
+  const zonaDisplay = ntaZona || data.zona_codice || null;
+  const destDisplay = ntaDest || data.destinazione_uso || null;
+  const hasNta = !!(ntaZona || ntaDest);
   return (
     <div style={{ border: '1px solid #C4BAA8', background: '#fff' }}>
       <div className="flex items-start justify-between p-4 gap-3">
@@ -344,7 +372,25 @@ function ZonaUrbanisticaCard({ data, comuneNome }) {
         <Badge variant="outline" className="text-[10px] text-muted-foreground whitespace-nowrap">Dati comunali</Badge>
       </div>
       <div style={{ borderTop: '1px solid #C4BAA8', padding: '0.6rem 1rem' }}>
-        <div className="flex items-start gap-2">
+        {hasNta && (
+          <div className="mb-2">
+            {zonaDisplay && <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.68rem', fontWeight: 700, color: '#1C1A17' }}>{zonaDisplay}</p>}
+            {destDisplay && <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.62rem', color: '#7A7268', marginTop: 2 }}>{destDisplay}</p>}
+            <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.58rem', color: '#7A7268', fontStyle: 'italic', marginTop: 4 }}>Fonte: Database NTA UrbiCheck (prevalente)</p>
+          </div>
+        )}
+        {data.zona_codice && !hasNta && (
+          <div className="mb-2">
+            <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.68rem', fontWeight: 700, color: '#1C1A17' }}>{data.zona_codice}{data.destinazione_uso ? ` — ${data.destinazione_uso}` : ''}</p>
+            <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.58rem', color: '#7A7268', fontStyle: 'italic', marginTop: 2 }}>Fonte: Mosaicatura PRG regionale (WMS)</p>
+          </div>
+        )}
+        {data.zona_codice && hasNta && (
+          <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.58rem', color: '#7A7268', fontStyle: 'italic', marginTop: 2 }}>
+            Nota WMS mosaicatura: {data.zona_codice}{data.destinazione_uso ? ` — ${data.destinazione_uso}` : ''}
+          </p>
+        )}
+        <div className="flex items-start gap-2 mt-2">
           <Info className="w-3 h-3 text-muted-foreground mt-0.5 shrink-0" />
           <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.62rem', color: '#7A7268', fontStyle: 'italic', lineHeight: 1.6 }}>
             {data.messaggio}
@@ -850,9 +896,14 @@ export default function WfsLiguriaPanel({ query, onComplete }) {
               <LagoCard vincolo_lacustre={risultati.vincoli_paesaggistici_ope_legis.vincolo_lacustre} comuneNome={query?.comune} />
             )}
             <CorsiAcquaCard data={risultati?.vincolo_corsi_acqua} />
-            <FerroviaCard data={risultati?.vincolo_ferroviario} />
+            <FerroviaCard data={risultati?.vincolo_ferroviario} comune={query?.comune} />
             <SismicaCard data={risultati?.sismica} />
-            <ZonaUrbanisticaCard data={risultati?.zona_urbanistica} comuneNome={query?.comune} />
+            <ZonaUrbanisticaCard
+              data={risultati?.zona_urbanistica}
+              comuneNome={query?.comune}
+              ntaZona={query?.report_data?.quadro_urbanistico?.zona_urbanistica || query?.report_data?.zonizzazione?.zona_codice || null}
+              ntaDest={query?.report_data?.quadro_urbanistico?.destinazione_uso || query?.report_data?.zonizzazione?.destinazione_prevalente || null}
+            />
             {isPiemonte && (risultati?.vincoli_prg || risultati?.mod_intervento || risultati?.caratt_storica) && (
               <VincoliPRGCard
                 vincoli={risultati?.vincoli_prg}

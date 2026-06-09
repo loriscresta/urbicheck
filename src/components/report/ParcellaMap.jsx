@@ -29,7 +29,14 @@ export default function ParcellaMap({ record, query, item }) {
   const entity     = record || query || item || {};
   const foglio     = String(entity.foglio     || "");
   const particella = String(entity.particella || "");
-  const geomJson   = entity.geometry_geojson  || null;
+  const rawGeom    = entity.geometry_geojson  || null;
+
+  // Normalizza geometry_geojson in un GeoJSON Feature (L.geoJSON accetta sia Feature che Geometry)
+  // Il DB può contenere sia {"type":"Polygon","coordinates":[...]} (Geometry)
+  // sia {"type":"Feature","geometry":{...}} (Feature)
+  const geomJson = rawGeom
+    ? (rawGeom.type === "Feature" ? rawGeom : { type: "Feature", geometry: rawGeom, properties: {} })
+    : null;
 
   // ── Centroide: da poligono DB oppure da centroid_lat/lng DB — MAI geocoding ──
   let initLat = null;
@@ -72,7 +79,7 @@ export default function ParcellaMap({ record, query, item }) {
       }
       const layer = L.geoJSON(feature, { style: PARCEL_STYLE }).addTo(map);
       geojsonLayerRef.current = layer;
-      map.fitBounds(layer.getBounds(), { maxZoom: 18, padding: [40, 40] });
+      map.fitBounds(layer.getBounds(), { padding: [20, 20], maxZoom: 19 });
       setPolygonLoaded(true);
     } catch (err) {
       console.error("addPolygonToMap error", err);
@@ -281,12 +288,13 @@ export default function ParcellaMap({ record, query, item }) {
 
       if (hasPolygon) {
         // Poligono ufficiale: arancione pieno 35% — fitBounds sul poligono reale
+        // CRITICO: usare padding piccolo e maxZoom alto per particelle piccole (~20m)
         const layer = L.geoJSON(geomJson, { style: PARCEL_STYLE }).addTo(map);
         geojsonLayerRef.current = layer;
         layer.bindPopup(
           `<strong>📐 Mappale catastale</strong><br/>Foglio ${foglio}, Particella ${particella}${entity.subalterno ? `, Sub. ${entity.subalterno}` : ''}<br/><small style="color:#666">Confine catastale ufficiale</small>`
         );
-        map.fitBounds(layer.getBounds(), { maxZoom: 18, padding: [40, 40] });
+        map.fitBounds(layer.getBounds(), { padding: [20, 20], maxZoom: 19 });
         setPolygonLoaded(true);
       } else {
         // Nessun poligono: cerchio rosso tratteggiato come posizione approssimativa
@@ -335,7 +343,7 @@ export default function ParcellaMap({ record, query, item }) {
     try {
       const layer = L.geoJSON(geomJson, { style: PARCEL_STYLE }).addTo(map);
       geojsonLayerRef.current = layer;
-      map.fitBounds(layer.getBounds(), { maxZoom: 18, padding: [40, 40] });
+      map.fitBounds(layer.getBounds(), { padding: [20, 20], maxZoom: 19 });
       setPolygonLoaded(true);
     } catch (err) {
       console.error("geomJson update layer error", err);
