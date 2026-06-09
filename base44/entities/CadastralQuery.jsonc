@@ -94,6 +94,7 @@
       "enum": [
         "openapi_com",
         "catastomappe",
+        "catasto_agent",
         "sister_manual",
         "input_utente",
         "tbd"

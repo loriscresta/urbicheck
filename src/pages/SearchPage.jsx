@@ -12,6 +12,7 @@ import { trackEvent } from "@/lib/metaPixel";
 import { motion } from "framer-motion";
 import { useQuery } from "@tanstack/react-query";
 import { calculatePlanimetriaArea } from '@/functions/calculatePlanimetriaArea';
+import { fetchParcelFromAgent } from '@/functions/fetchParcelFromAgent';
 
 const BETA_REGIONS = ['piemonte', 'liguria', 'lombardia'];
 
@@ -115,12 +116,20 @@ export default function SearchPage() {
       });
     }
 
+    // Chiama in parallelo: catasto_resolver (dati urbanistici) + fetchParcelFromAgent (mappale server-side)
     catasto_resolver({
       nome_comune: formData.comune, regione: formData.regione,
       foglio: formData.foglio, particella: formData.particella,
       sezione: formData.sezione_catastale || undefined,
       indirizzo_immobile: formData.indirizzo_immobile || undefined,
       query_id: query.id,
+    }).catch(() => {});
+
+    fetchParcelFromAgent({
+      query_id: query.id,
+      comune: formData.comune,
+      foglio: formData.foglio,
+      particella: formData.particella,
     }).catch(() => {});
 
     navigate(`/report/${query.id}`);
@@ -230,6 +239,13 @@ export default function SearchPage() {
           sezione: unit.sezione_catastale || undefined,
           indirizzo_immobile: unit.indirizzo_immobile || undefined,
           query_id: query.id,
+        }).catch(() => {});
+
+        fetchParcelFromAgent({
+          query_id: query.id,
+          comune: sharedCadastral.comune,
+          foglio: unit.foglio,
+          particella: unit.particella,
         }).catch(() => {});
 
       } catch (err) {

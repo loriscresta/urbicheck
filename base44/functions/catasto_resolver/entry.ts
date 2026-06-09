@@ -839,6 +839,43 @@ Deno.serve(async (req) => {
     }
   }
 
+  // ── STEP 3b: Microservizio catastale interno — geometria mappale (HTTP, server-side) ──
+  // Viene chiamato DOPO il salvataggio OnData/WFS per arricchire con il poligono del microservizio
+  // se il WFS AdE non ha restituito geometria.
+  if (query_id && queryRecord && !wfsResult?.geojson_polygon) {
+    try {
+      const agentBase = Deno.env.get('CATASTO_API_URL') || 'http://80.211.24.114:8001';
+      const lookupUrl = `${agentBase}/parcel/lookup?comune=${encodeURIComponent(nome_comune || queryRecord.comune)}&foglio=${encodeURIComponent(foglio)}&particella=${encodeURIComponent(particella)}`;
+      console.log(`[catasto_resolver] catasto_agent lookup: ${lookupUrl}`);
+      const agentRes = await fetchWithTimeout(lookupUrl, {}, 10000);
+      if (agentRes.ok) {
+        const agentData = await agentRes.json();
+        if (agentData.found && agentData.parcels?.length > 0) {
+          const p = agentData.parcels[0];
+          if (p.geometry) {
+            const agentUpdate = {
+              geometry_geojson: p.geometry,
+              fonte_dati_catastali: 'catasto_agent',
+            };
+            if (p.centroid_lat != null) { agentUpdate.centroid_lat = p.centroid_lat; finalLat = p.centroid_lat; }
+            if (p.centroid_lon != null) { agentUpdate.centroid_lng = p.centroid_lon; finalLon = p.centroid_lon; }
+            if (p.comune_code) agentUpdate.codice_comune_catasto = p.comune_code;
+            await base44.entities.CadastralQuery.update(query_id, agentUpdate);
+            console.log(`[catasto_resolver] catasto_agent OK: comune_code=${p.comune_code}`);
+            // aggiorna catasto_data con geometria agent
+            catasto_data.geojson_polygon = p.geometry;
+          }
+        } else {
+          console.log(`[catasto_resolver] catasto_agent: found=false`);
+        }
+      } else {
+        console.warn(`[catasto_resolver] catasto_agent HTTP ${agentRes.status}`);
+      }
+    } catch (agentErr) {
+      console.warn(`[catasto_resolver] catasto_agent error: ${agentErr.message}`);
+    }
+  }
+
   // Fix D — Overpass: verifica vincolo ferroviario e idrico (parallel)
   let vincoloFerroviaRelevato = null;
   let vincoloIdricoRilevato = null;
