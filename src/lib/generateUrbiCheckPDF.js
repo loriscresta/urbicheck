@@ -106,6 +106,10 @@ async function fetchImageAsDataUrl(url) {
   }
 }
 
+import { getOMIDataByNome } from './omiData.js';
+import { findInNta, lookupNTA } from './ntaDatabase.js';
+import { buildStaticMapUrl } from '../components/report/StaticParcellaMap';
+
 export async function generatePDF(query, financialSnapshot, staticMapUrl = null) {
   await loadJsPDF();
   const { jsPDF } = window.jspdf;
@@ -115,6 +119,35 @@ export async function generatePDF(query, financialSnapshot, staticMapUrl = null)
   const wfsData = wfsReport?.risultati;
   const isPiemonte = wfsReport?.regione_logica === 'piemonte' || (query.regione || '').toLowerCase().includes('piemonte');
   const fd = r.fin_data || {};
+
+  // ── FIX 2: calcola OMI lato client se non passato ──────────────────────────
+  let resolvedSnapshot = financialSnapshot;
+  if (!resolvedSnapshot?.omi && query.comune) {
+    const isZonaCentrale = !!(r.zonizzazione?.zona_codice || '').match(/A[0-9]?/i);
+    const omiCalc = getOMIDataByNome(
+      query.comune,
+      isZonaCentrale,
+      query.sigla_provincia || query.provincia,
+      query.indirizzo_immobile
+    );
+    resolvedSnapshot = { ...(resolvedSnapshot || {}), omi: omiCalc };
+  }
+
+  // ── FIX 1: genera URL mappa statica se non presente ────────────────────────
+  let resolvedMapUrl = staticMapUrl || query.mappa_image_url || null;
+  if (!resolvedMapUrl && (query.centroid_lat || query.centroid_lng)) {
+    const lat = parseFloat(query.centroid_lat);
+    const lng = parseFloat(query.centroid_lng);
+    const rawGeom = query.geometry_geojson || null;
+    let polygonCoords = null;
+    if (rawGeom) {
+      const geom = rawGeom.type === "Feature" ? rawGeom.geometry : rawGeom;
+      if (geom?.coordinates?.[0]?.length > 2) polygonCoords = geom.coordinates[0];
+    }
+    if (!isNaN(lat) && !isNaN(lng)) {
+      resolvedMapUrl = buildStaticMapUrl({ lat, lng, polygonCoords, width: 800, height: 400 });
+    }
+  }
 
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
   const margin = 20;
@@ -235,14 +268,25 @@ export async function generatePDF(query, financialSnapshot, staticMapUrl = null)
   y += 7;
 
   const ie = r.indici_edilizi || {};
-  const ND = "Non disponibile — richiedere CU al Comune";
+  const ND = "Da verificare con CDU al Comune";
+
+  // ── FIX 3: lookup NTA database reale (Piemonte/Liguria/Lombardia) ──────────
+  const zonaAI = r.zonizzazione?.zona_codice || r.zonizzazione?.destinazione_prevalente || null;
+  const ntaDb = findInNta(query.comune) || lookupNTA(query.comune, zonaAI);
+  // Fondi: 1) dati dal report AI  2) DB NTA UrbiCheck  3) ND
+  const getIndice = (aiVal, ntaKey) => {
+    if (aiVal && aiVal !== ND && aiVal !== "—") return aiVal;
+    if (ntaDb?.[ntaKey]) return ntaDb[ntaKey];
+    return ND;
+  };
+
   const indici = [
-    ["Indice di Fabbricabilita' (IF)", ie.if_mc_mq || ND, "m³/m²"],
-    ["Rapporto di Copertura (RC)", ie.rc_percentuale || ND, "%"],
-    ["Altezza massima (H max)", ie.h_max || ND, "m"],
-    ["Distanza dai confini", ie.distanza_confini || ND, "m"],
-    ["Distanza dalla strada", ie.distanza_strada || ND, "m"],
-    ["Distanza tra fabbricati", ie.distanza_fabbricati || ND, "m"],
+    ["Indice di Fabbricabilita' (IF)", getIndice(ie.if_mc_mq, 'IF'), "m³/m²"],
+    ["Rapporto di Copertura (RC)", getIndice(ie.rc_percentuale, 'RC'), "%"],
+    ["Altezza massima (H max)", getIndice(ie.h_max, 'Hmax'), "m"],
+    ["Distanza dai confini", getIndice(ie.distanza_confini, 'Dc'), "m"],
+    ["Distanza dalla strada", getIndice(ie.distanza_strada, 'Ds'), "m"],
+    ["Distanza tra fabbricati", getIndice(ie.distanza_fabbricati, 'Df'), "m"],
   ];
   doc.setFontSize(9);
   indici.forEach(([k, v, u], i) => {
@@ -257,6 +301,13 @@ export async function generatePDF(query, financialSnapshot, staticMapUrl = null)
     doc.setTextColor(50, 50, 50);
     y += 8;
   });
+  // Fonte NTA se dati dal database interno
+  if (ntaDb) {
+    doc.setFont("helvetica", "italic"); doc.setFontSize(7.5); doc.setTextColor(80, 100, 80);
+    const ntaFonte = ntaDb.fonte || ntaDb.strumento || 'Database NTA UrbiCheck';
+    doc.text("Fonte indici: " + ntaFonte + " — verificare sempre con CDU ufficiale.", margin + 2, y, { maxWidth: 166 });
+    y += 5; doc.setTextColor(50, 50, 50);
+  }
 
   // ── SEZ 3 — VINCOLI PAESAGGISTICI ────────────────────────────────────────
   y += 4;
@@ -538,6 +589,9 @@ export async function generatePDF(query, financialSnapshot, staticMapUrl = null)
   const mq = mqRaw ? parseFloat(mqRaw) : 80;
   const prezzoAcquisto = parseFloat(fd.prezzo_acquisto) || 0;
   const spesePerc = parseFloat(fd.spese_accessorie) || 10;
+  // FIX 2: omi e score da resolvedSnapshot (calcolato all'inizio se mancante)
+  const omi = resolvedSnapshot?.omi || null;
+  const score = resolvedSnapshot?.score || null;
   const RISTR_COSTS = {
     ottimo:           { min: 0,   mid: 65,  max: 150  },
     buono:            { min: 200, mid: 275, max: 350  },
@@ -554,10 +608,7 @@ export async function generatePDF(query, financialSnapshot, staticMapUrl = null)
   const totMid = prezzoAcquisto + ristrMid + spese;
   const totMax = prezzoAcquisto + ristrMax + spese;
 
-  // BUG3: usa valore OMI come proxy se prezzo non inserito
-  const snap = financialSnapshot || {};
-  const omi = snap.omi || null;
-  const score = snap.score || null;
+  // usa valore OMI come proxy se prezzo non inserito
   const omiProxyPrezzo = prezzoAcquisto === 0 && omi ? (omi.omi_min_mq + omi.omi_max_mq) / 2 * mq : 0;
   const prezzoEffettivo = prezzoAcquisto > 0 ? prezzoAcquisto : omiProxyPrezzo;
   const usandoProxyPrezzo = prezzoAcquisto === 0 && omiProxyPrezzo > 0;
@@ -616,14 +667,10 @@ export async function generatePDF(query, financialSnapshot, staticMapUrl = null)
         y += 2;
       }
     } else {
+      // Fallback: OMI non disponibile per questo comune
       doc.setFont("helvetica", "italic"); doc.setFontSize(8); doc.setTextColor(150, 100, 0);
-      const noOmiLines = [
-        "Dati OMI non ancora caricati al momento del download.",
-        "Per l'analisi finanziaria completa: apri la scheda online, attendi il caricamento",
-        "della sezione 'Analisi Finanziaria', poi scarica nuovamente il PDF.",
-      ];
-      noOmiLines.forEach(l => { doc.text(l, margin + 2, y); y += 5; });
-      y += 3;
+      doc.text("Dati OMI non disponibili per questo comune — verifica su agenziaentrate.gov.it/omi.", margin + 2, y, { maxWidth: 166 }); y += 7;
+      doc.setTextColor(50, 50, 50);
     }
 
     // BUG5: Stima costi ristrutturazione — sempre presente per finalità investimento
@@ -999,7 +1046,7 @@ export async function generatePDF(query, financialSnapshot, staticMapUrl = null)
 
   // ── SEZ MAPPA CATASTALE STATICA ──────────────────────────────────────────
   {
-    const mapUrlToUse = staticMapUrl || query.mappa_image_url || null;
+    const mapUrlToUse = resolvedMapUrl;
     y += 6;
     if (y > 200) { y = newPage(doc); }
     y = sectionHeader(doc, margin, y, "11", "MAPPA CATASTALE DELLA PARTICELLA");
