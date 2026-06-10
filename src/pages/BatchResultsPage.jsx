@@ -14,6 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { motion } from "framer-motion";
 import { getOMIDataByNome } from "@/lib/omiData";
+import StaticParcellaMap from "@/components/report/StaticParcellaMap";
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 function fmtEur(n) {
@@ -572,7 +573,20 @@ export default function BatchResultsPage() {
             </p>
           </div>
           <div className="p-3">
-            <BatchMap lat={centLat} lng={centLng} geomJson={batchGeom} address={addressLabel} totalUnits={batch.total_units} foglio={foglio} particella={particella} />
+            {/* Mappa interattiva — nascosta in stampa */}
+            <div className="no-print">
+              <BatchMap lat={centLat} lng={centLng} geomJson={batchGeom} address={addressLabel} totalUnits={batch.total_units} foglio={foglio} particella={particella} />
+            </div>
+            {/* Mappa statica — visibile solo in stampa/PDF */}
+            {firstWithCoords && (
+              <div className="print-only hidden print:block">
+                <StaticParcellaMap
+                  query={{ ...firstWithCoords, comune: batch.comune }}
+                  width={800}
+                  height={380}
+                />
+              </div>
+            )}
             {centLat && (
               <p className="text-[10px] text-muted-foreground mt-1.5" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
                 {batch?.geocoding_source?.includes('google')

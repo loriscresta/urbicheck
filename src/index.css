@@ -68,6 +68,11 @@
 }
 
 @media print {
+  /* Mostra elementi solo-stampa */
+  .print-only {
+    display: block !important;
+  }
+
   /* Nascondi elementi non stampabili */
   nav, header, aside,
   [data-sidebar],

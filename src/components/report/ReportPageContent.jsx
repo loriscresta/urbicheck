@@ -24,6 +24,7 @@ import ParcellaMap from "@/components/report/ParcellaMap";
 import IndiciEdiliziSection from "@/components/report/IndiciEdiliziSection";
 import PlanimetriaSection from "@/components/report/PlanimetriaSection";
 import VincoliRischiPiemonte, { FerroviaCard } from "@/components/report/VincoliRischiPiemonte";
+import StaticParcellaMap from "@/components/report/StaticParcellaMap";
 
 // ── Utilities ──────────────────────────────────────────────────────────────
 
@@ -203,6 +204,7 @@ export default function ReportPageContent({ query, refetch = () => {}, isPublicV
   const [resolvedNta, setResolvedNta] = useState(null);
   const [comunePrefill, setComunePrefill] = useState(null);
   const [financialSnapshot, setFinancialSnapshot] = useState(null);
+  const [staticMapUrl, setStaticMapUrl] = useState(null);
 
   useEffect(() => {
     if (!isPublicView) {
@@ -212,7 +214,7 @@ export default function ReportPageContent({ query, refetch = () => {}, isPublicV
 
   const handleDownloadPDF = async () => {
     setIsDownloadingPDF(true);
-    const { doc, reportNum } = await generatePDF(query, financialSnapshot);
+    const { doc, reportNum } = await generatePDF(query, financialSnapshot, staticMapUrl);
     doc.save(`URBICHECK_${query.comune}_${reportNum}.pdf`);
     setIsDownloadingPDF(false);
     toast({ title: "PDF scaricato ✓", description: `Scheda ${reportNum} salvata.` });
@@ -766,6 +768,24 @@ export default function ReportPageContent({ query, refetch = () => {}, isPublicV
           />
         </motion.div>
       )}
+
+      {/* Mappa Catastale Statica — visibile a schermo E nel PDF/stampa */}
+      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.28 }} className="mt-8">
+        <div className="flex items-center gap-3 mb-3">
+          <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: '#1e3a5f' }}>
+            <MapPin className="w-4 h-4 text-white" />
+          </div>
+          <h2 className="text-lg font-bold tracking-tight" style={{ color: '#1e3a5f' }}>Mappa Catastale della Particella</h2>
+        </div>
+        <div className="rounded-xl border border-border bg-card p-4">
+          <StaticParcellaMap
+            query={query}
+            onImageReady={url => setStaticMapUrl(url)}
+            width={900}
+            height={420}
+          />
+        </div>
+      </motion.div>
 
       {/* Disclaimer */}
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.35 }} className="mt-6 p-4 rounded-lg border-2 border-amber-300 bg-amber-50 flex items-start gap-3">

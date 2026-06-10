@@ -83,7 +83,30 @@ function newPage(doc) {
   return 20;
 }
 
-export async function generatePDF(query, financialSnapshot) {
+/**
+ * Carica un'immagine da URL come data URL base64 per includerla nel PDF.
+ * Timeout 8s per evitare attese eccessive.
+ */
+async function fetchImageAsDataUrl(url) {
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 8000);
+    const res = await fetch(url, { signal: controller.signal });
+    clearTimeout(timer);
+    if (!res.ok) return null;
+    const blob = await res.blob();
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result);
+      reader.onerror = () => resolve(null);
+      reader.readAsDataURL(blob);
+    });
+  } catch (_e) {
+    return null;
+  }
+}
+
+export async function generatePDF(query, financialSnapshot, staticMapUrl = null) {
   await loadJsPDF();
   const { jsPDF } = window.jspdf;
   const r = query.report_data || {};
@@ -785,7 +808,7 @@ export async function generatePDF(query, financialSnapshot) {
     const coordLon2 = catastoData2.lon || query.centroid_lng;
     y += 4;
     if (y > 230) { y = newPage(doc); }
-    y = sectionHeader(doc, margin, y, "8", "MAPPA PARTICELLA CATASTALE");
+    y = sectionHeader(doc, margin, y, "8", "GEOREFERENZIAZIONE CATASTALE");
 
     if (coordLat2 && coordLon2) {
       const mapRows = [
@@ -974,11 +997,72 @@ export async function generatePDF(query, financialSnapshot) {
     }
   }
 
+  // ── SEZ MAPPA CATASTALE STATICA ──────────────────────────────────────────
+  {
+    const mapUrlToUse = staticMapUrl || query.mappa_image_url || null;
+    y += 6;
+    if (y > 200) { y = newPage(doc); }
+    y = sectionHeader(doc, margin, y, "11", "MAPPA CATASTALE DELLA PARTICELLA");
+
+    if (mapUrlToUse) {
+      // Tenta di caricare l'immagine
+      const imgData = await fetchImageAsDataUrl(mapUrlToUse);
+      if (imgData) {
+        // L'immagine occupa tutta la larghezza della pagina (170mm), altezza proporzionale 800×420 → ~89mm
+        const imgW = 170;
+        const imgH = Math.round(imgW * (420 / 800));
+        if (y + imgH > 275) { y = newPage(doc); }
+        doc.addImage(imgData, "PNG", margin, y, imgW, imgH);
+        y += imgH + 4;
+        doc.setFont("helvetica", "italic");
+        doc.setFontSize(7);
+        doc.setTextColor(120, 120, 120);
+        doc.text(
+          `${query.comune} · Foglio ${query.foglio} · Particella ${query.particella}${query.subalterno ? ` · Sub. ${query.subalterno}` : ""} · Fonte: Catasto AdE / INSPIRE · © OpenStreetMap contributors`,
+          margin + 2, y, { maxWidth: 166 }
+        );
+        y += 6;
+        doc.setTextColor(50, 50, 50);
+      } else {
+        // Fallback testo se immagine non caricabile
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(8);
+        doc.setTextColor(100, 100, 100);
+        doc.text("Mappa non disponibile nel PDF — visualizzabile online su urbicheck.it/report/" + (query.id || ""), margin + 2, y, { maxWidth: 166 });
+        y += 8;
+        if (query.centroid_lat && query.centroid_lng) {
+          doc.setTextColor(30, 80, 180);
+          doc.setFontSize(7.5);
+          doc.text(`https://www.openstreetmap.org/?mlat=${Number(query.centroid_lat).toFixed(6)}&mlon=${Number(query.centroid_lng).toFixed(6)}&zoom=18`, margin + 2, y, { maxWidth: 166 });
+          y += 7;
+        }
+        doc.setTextColor(50, 50, 50);
+      }
+    } else if (query.centroid_lat && query.centroid_lng) {
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8);
+      doc.setTextColor(80, 80, 80);
+      doc.text("Immagine mappa non ancora generata — visualizzabile online:", margin + 2, y); y += 6;
+      doc.setTextColor(30, 80, 180);
+      doc.setFontSize(7.5);
+      doc.text(`https://www.openstreetmap.org/?mlat=${Number(query.centroid_lat).toFixed(6)}&mlon=${Number(query.centroid_lng).toFixed(6)}&zoom=18`, margin + 2, y, { maxWidth: 166 });
+      y += 8;
+      doc.setTextColor(50, 50, 50);
+    } else {
+      doc.setFont("helvetica", "italic");
+      doc.setFontSize(8);
+      doc.setTextColor(150, 100, 0);
+      doc.text("Coordinate non disponibili — georeferenziare il record per generare la mappa.", margin + 2, y); y += 7;
+      doc.setTextColor(50, 50, 50);
+    }
+  }
+
   // ── SEZ FONTI DATI ───────────────────────────────────────────────────────
   {
     y += 4;
     if (y > 230) { y = newPage(doc); }
-    y = sectionHeader(doc, margin, y, "11", "FONTI DATI UFFICIALI");
+    y = sectionHeader(doc, margin, y, "12", "FONTI DATI UFFICIALI");
+
 
     doc.setFillColor(235, 244, 255);
     doc.rect(margin, y - 4, 170, 7, "F");
