@@ -109,6 +109,7 @@ async function fetchImageAsDataUrl(url) {
 import { getOMIDataByNome } from './omiData.js';
 import { findInNta, lookupNTA } from './ntaDatabase.js';
 import { buildStaticMapUrl } from '../components/report/StaticParcellaMap';
+import { fetchMapImage } from '../functions/fetchMapImage';
 
 export async function generatePDF(query, financialSnapshot, staticMapUrl = null) {
   await loadJsPDF();
@@ -1048,48 +1049,57 @@ export async function generatePDF(query, financialSnapshot, staticMapUrl = null)
     }
   }
 
-  // ── SEZ MAPPA CATASTALE STATICA ──────────────────────────────────────────
+  // ── SEZ 11 — MAPPA CATASTALE STATICA ─────────────────────────────────────
   {
-    const mapUrlToUse = resolvedMapUrl;
     y += 6;
     if (y > 200) { y = newPage(doc); }
     y = sectionHeader(doc, margin, y, "11", "MAPPA CATASTALE DELLA PARTICELLA");
 
-    // Build a CORS-friendly Geoapify static map URL if we don't have a saved image
-    const geoapifyMapUrl = (() => {
-      const lat = parseFloat(query.centroid_lat);
-      const lng = parseFloat(query.centroid_lng);
-      if (!lat || !lng || isNaN(lat) || isNaN(lng)) return null;
-      const rawGeom = query.geometry_geojson || null;
+    const mapLat = parseFloat(query.centroid_lat);
+    const mapLng = parseFloat(query.centroid_lng);
+    const hasCoords2 = !isNaN(mapLat) && !isNaN(mapLng) && mapLat !== 0 && mapLng !== 0;
+
+    if (hasCoords2) {
+      // Estrai poligono dal geometry_geojson
       let polygonCoords = null;
+      const rawGeom = query.geometry_geojson || null;
       if (rawGeom) {
         const geom = rawGeom.type === "Feature" ? rawGeom.geometry : rawGeom;
         if (geom?.coordinates?.[0]?.length > 2) polygonCoords = geom.coordinates[0];
       }
-      // Calculate zoom from bbox
-      let zoom = 17;
-      let cLat = lat, cLng = lng;
-      if (polygonCoords) {
-        const lats = polygonCoords.map(c => c[1]);
-        const lngs = polygonCoords.map(c => c[0]);
-        cLat = (Math.min(...lats) + Math.max(...lats)) / 2;
-        cLng = (Math.min(...lngs) + Math.max(...lngs)) / 2;
-        const span = Math.max(Math.max(...lats) - Math.min(...lats), Math.max(...lngs) - Math.min(...lngs));
-        if (span > 0.01) zoom = 14; else if (span > 0.003) zoom = 16; else if (span > 0.001) zoom = 17; else zoom = 18;
-      }
-      if (polygonCoords && polygonCoords.length > 2) {
-        const pathCoords = polygonCoords.map(c => `${c[1]},${c[0]}`).join("|");
-        const path = encodeURIComponent(`color:0xff7a00ff|weight:3|fillcolor:0xff7a0060|${pathCoords}`);
-        return `https://staticmap.openstreetmap.de/staticmap.php?center=${cLat},${cLng}&zoom=${zoom}&size=800x420&path=${path}`;
-      }
-      return `https://staticmap.openstreetmap.de/staticmap.php?center=${cLat},${cLng}&zoom=${zoom}&size=800x420&markers=${cLat},${cLng},red-pushpin`;
-    })();
 
-    const finalMapUrl = mapUrlToUse || geoapifyMapUrl;
+      // ── Strategia 1: usa data_url già salvata nel record ──────────────────
+      let imgData = query.mappa_image_url?.startsWith('data:') ? query.mappa_image_url : null;
 
-    if (finalMapUrl) {
-      // Tenta di caricare l'immagine
-      const imgData = await fetchImageAsDataUrl(finalMapUrl);
+      // ── Strategia 2: chiama il backend proxy (nessun CORS) ────────────────
+      if (!imgData) {
+        try {
+          const mapRes = await fetchMapImage({
+            lat: mapLat,
+            lng: mapLng,
+            polygon_coords: polygonCoords,
+          });
+          if (mapRes?.data?.data_url) {
+            imgData = mapRes.data.data_url;
+          }
+        } catch (_e) {
+          // fallback continua sotto
+        }
+      }
+
+      // ── Strategia 3: fetch diretto (potrebbe fallire per CORS) ────────────
+      if (!imgData) {
+        let fbUrl;
+        if (polygonCoords && polygonCoords.length > 2) {
+          const pathCoords = polygonCoords.map(c => `${c[1]},${c[0]}`).join('|');
+          const path = encodeURIComponent(`color:0xff7a00ff|weight:3|fillcolor:0xff7a0060|${pathCoords}`);
+          fbUrl = `https://staticmap.openstreetmap.de/staticmap.php?center=${mapLat},${mapLng}&zoom=17&size=800x420&path=${path}`;
+        } else {
+          fbUrl = `https://staticmap.openstreetmap.de/staticmap.php?center=${mapLat},${mapLng}&zoom=17&size=800x420&markers=${mapLat},${mapLng},red-pushpin`;
+        }
+        imgData = await fetchImageAsDataUrl(fbUrl);
+      }
+
       if (imgData) {
         const imgW = 170;
         const imgH = Math.round(imgW * (420 / 800));
@@ -1106,24 +1116,14 @@ export async function generatePDF(query, financialSnapshot, staticMapUrl = null)
         y += 6;
         doc.setTextColor(50, 50, 50);
       } else {
-        // Fallback: immagine non caricabile (CORS o timeout) — mostra link cliccabile
+        // Fallback testo con link — non mostrare più il messaggio CORS
         doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.setTextColor(80, 80, 80);
-        doc.text("Anteprima mappa non disponibile nel PDF (CORS) — visualizza online:", margin + 2, y); y += 6;
+        doc.text("Mappa non disponibile in questa versione — visualizza online:", margin + 2, y); y += 6;
         doc.setTextColor(30, 80, 180); doc.setFontSize(7.5);
-        doc.text(`https://www.openstreetmap.org/?mlat=${Number(query.centroid_lat).toFixed(6)}&mlon=${Number(query.centroid_lng).toFixed(6)}&zoom=18`, margin + 2, y, { maxWidth: 166 });
+        doc.text(`https://www.openstreetmap.org/?mlat=${mapLat.toFixed(6)}&mlon=${mapLng.toFixed(6)}&zoom=18`, margin + 2, y, { maxWidth: 166 });
         y += 7;
         doc.setTextColor(50, 50, 50);
       }
-    } else if (query.centroid_lat && query.centroid_lng) {
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(8);
-      doc.setTextColor(80, 80, 80);
-      doc.text("Immagine mappa non ancora generata — visualizzabile online:", margin + 2, y); y += 6;
-      doc.setTextColor(30, 80, 180);
-      doc.setFontSize(7.5);
-      doc.text(`https://www.openstreetmap.org/?mlat=${Number(query.centroid_lat).toFixed(6)}&mlon=${Number(query.centroid_lng).toFixed(6)}&zoom=18`, margin + 2, y, { maxWidth: 166 });
-      y += 8;
-      doc.setTextColor(50, 50, 50);
     } else {
       doc.setFont("helvetica", "italic");
       doc.setFontSize(8);
