@@ -730,20 +730,21 @@ export async function generatePDF(query, financialSnapshot, staticMapUrl = null)
       });
     }
 
-    // Flipping analysis
+    // Flipping analysis — usa totMidC (scenario medio della tabella costi ristrutturazione)
     if (fd.destinazione_obiettivo === "flipping" && prezzoAcquisto > 0 && omi) {
       y += 4;
       if (y > 240) { y = newPage(doc); }
       y = subHeader(doc, margin, y, "Analisi Flipping — Scenario Medio");
       const valoreFlip = (omi.omi_post_ristr_max || 0) * mq;
-      const margineLordo = valoreFlip - totMid;
+      // FIX: usa investimento totale medio dalla tabella costi (totMidC), non totMid
+      const margineLordo = valoreFlip - totMidC;
       const tasse = margineLordo > 0 ? margineLordo * 0.26 : 0;
       const margineNetto = margineLordo - tasse;
-      const roiFlip = totMid > 0 ? (margineLordo / totMid) * 100 : 0;
-      const breakEvenMq = totMid > 0 && mq > 0 ? totMid / mq : 0;
+      const roiFlip = totMidC > 0 ? (margineLordo / totMidC) * 100 : 0;
+      const breakEvenMq = totMidC > 0 && mq > 0 ? totMidC / mq : 0;
 
       const flipRows = [
-        ["Investimento totale (scenario medio)", fmtEur(totMid)],
+        ["Investimento totale (scenario medio)", fmtEur(totMidC)],
         ["Valore post-ristrutturazione (OMI max)", fmtEur(valoreFlip)],
         ["Margine lordo", fmtEur(margineLordo)],
         ["Tassa plusvalenza (26%)", fmtEur(tasse)],
@@ -1051,11 +1052,42 @@ export async function generatePDF(query, financialSnapshot, staticMapUrl = null)
     if (y > 200) { y = newPage(doc); }
     y = sectionHeader(doc, margin, y, "11", "MAPPA CATASTALE DELLA PARTICELLA");
 
-    if (mapUrlToUse) {
+    // Build a CORS-friendly Geoapify static map URL if we don't have a saved image
+    const geoapifyMapUrl = (() => {
+      const lat = parseFloat(query.centroid_lat);
+      const lng = parseFloat(query.centroid_lng);
+      if (!lat || !lng || isNaN(lat) || isNaN(lng)) return null;
+      const rawGeom = query.geometry_geojson || null;
+      let polygonCoords = null;
+      if (rawGeom) {
+        const geom = rawGeom.type === "Feature" ? rawGeom.geometry : rawGeom;
+        if (geom?.coordinates?.[0]?.length > 2) polygonCoords = geom.coordinates[0];
+      }
+      // Calculate zoom from bbox
+      let zoom = 17;
+      let cLat = lat, cLng = lng;
+      if (polygonCoords) {
+        const lats = polygonCoords.map(c => c[1]);
+        const lngs = polygonCoords.map(c => c[0]);
+        cLat = (Math.min(...lats) + Math.max(...lats)) / 2;
+        cLng = (Math.min(...lngs) + Math.max(...lngs)) / 2;
+        const span = Math.max(Math.max(...lats) - Math.min(...lats), Math.max(...lngs) - Math.min(...lngs));
+        if (span > 0.01) zoom = 14; else if (span > 0.003) zoom = 16; else if (span > 0.001) zoom = 17; else zoom = 18;
+      }
+      if (polygonCoords && polygonCoords.length > 2) {
+        const pathCoords = polygonCoords.map(c => `${c[1]},${c[0]}`).join("|");
+        const path = encodeURIComponent(`color:0xff7a00ff|weight:3|fillcolor:0xff7a0060|${pathCoords}`);
+        return `https://staticmap.openstreetmap.de/staticmap.php?center=${cLat},${cLng}&zoom=${zoom}&size=800x420&path=${path}`;
+      }
+      return `https://staticmap.openstreetmap.de/staticmap.php?center=${cLat},${cLng}&zoom=${zoom}&size=800x420&markers=${cLat},${cLng},red-pushpin`;
+    })();
+
+    const finalMapUrl = mapUrlToUse || geoapifyMapUrl;
+
+    if (finalMapUrl) {
       // Tenta di caricare l'immagine
-      const imgData = await fetchImageAsDataUrl(mapUrlToUse);
+      const imgData = await fetchImageAsDataUrl(finalMapUrl);
       if (imgData) {
-        // L'immagine occupa tutta la larghezza della pagina (170mm), altezza proporzionale 800×420 → ~89mm
         const imgW = 170;
         const imgH = Math.round(imgW * (420 / 800));
         if (y + imgH > 275) { y = newPage(doc); }
@@ -1071,18 +1103,12 @@ export async function generatePDF(query, financialSnapshot, staticMapUrl = null)
         y += 6;
         doc.setTextColor(50, 50, 50);
       } else {
-        // Fallback testo se immagine non caricabile
-        doc.setFont("helvetica", "normal");
-        doc.setFontSize(8);
-        doc.setTextColor(100, 100, 100);
-        doc.text("Mappa non disponibile nel PDF — visualizzabile online su urbicheck.it/report/" + (query.id || ""), margin + 2, y, { maxWidth: 166 });
-        y += 8;
-        if (query.centroid_lat && query.centroid_lng) {
-          doc.setTextColor(30, 80, 180);
-          doc.setFontSize(7.5);
-          doc.text(`https://www.openstreetmap.org/?mlat=${Number(query.centroid_lat).toFixed(6)}&mlon=${Number(query.centroid_lng).toFixed(6)}&zoom=18`, margin + 2, y, { maxWidth: 166 });
-          y += 7;
-        }
+        // Fallback: immagine non caricabile (CORS o timeout) — mostra link cliccabile
+        doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.setTextColor(80, 80, 80);
+        doc.text("Anteprima mappa non disponibile nel PDF (CORS) — visualizza online:", margin + 2, y); y += 6;
+        doc.setTextColor(30, 80, 180); doc.setFontSize(7.5);
+        doc.text(`https://www.openstreetmap.org/?mlat=${Number(query.centroid_lat).toFixed(6)}&mlon=${Number(query.centroid_lng).toFixed(6)}&zoom=18`, margin + 2, y, { maxWidth: 166 });
+        y += 7;
         doc.setTextColor(50, 50, 50);
       }
     } else if (query.centroid_lat && query.centroid_lng) {
