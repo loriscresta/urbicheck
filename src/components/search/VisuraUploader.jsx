@@ -67,7 +67,8 @@ export default function VisuraUploader({ onDataExtracted }) {
         onDataExtracted(dati);
       }
     } catch (err) {
-      setError("Errore durante l'analisi: " + (err.message || "riprova"));
+      console.warn("Visura parsing failed:", err.message);
+      setError("Non sono riuscito a leggere la visura — inserisci i dati manualmente qui sotto.");
     } finally {
       setIsAnalyzing(false);
     }
@@ -192,7 +193,7 @@ export default function VisuraUploader({ onDataExtracted }) {
       )}
 
       {error && (
-        <div className="mt-2 flex items-start gap-2 text-xs text-red-600 bg-red-50 border border-red-200 rounded p-2">
+        <div className="mt-2 flex items-start gap-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded p-2">
           <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
           <span>{error}</span>
         </div>

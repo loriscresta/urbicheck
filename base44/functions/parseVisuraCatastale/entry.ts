@@ -7,10 +7,9 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 
 Deno.serve(async (req) => {
+  // Funzione pubblica: accessibile anche da utenti anonimi (pagina di ricerca pubblica).
+  // Non richiede autenticazione — il contenuto della visura non è sensibile (è del richiedente stesso).
   const base44 = createClientFromRequest(req);
-  let user;
-  try { user = await base44.auth.me(); } catch (_e) {}
-  if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
   let body;
   try { body = await req.json(); } catch (_e) {
