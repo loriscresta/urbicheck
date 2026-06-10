@@ -20,15 +20,64 @@ function fmtEur(n) {
   return new Intl.NumberFormat("it-IT", { style: "currency", currency: "EUR", minimumFractionDigits: 0, maximumFractionDigits: 0, useGrouping: true }).format(n);
 }
 
-function roiToScore(roi) {
-  if (roi > 25) return 10; if (roi > 15) return 8; if (roi > 5) return 6;
-  if (roi > 0) return 4; return 2;
+// ── Scorecard pesata (non AI) ────────────────────────────────────────────────
+function calcWeightedScore({ roiNetto, omiIsDefault, rurale, hasVerifiedVincoli, hasPartialData, vincoli, categoriaGroup, zonaUrbanistica }) {
+  // FINANZA (max 5): basato su ROI netto
+  let finanza = 0;
+  if (roiNetto != null) {
+    if (roiNetto > 80) finanza = 5;
+    else if (roiNetto > 40) finanza = 4;
+    else if (roiNetto > 15) finanza = 3;
+    else if (roiNetto > 0) finanza = 2;
+    else finanza = roiNetto < -10 ? 0 : 1;
+  } else {
+    finanza = 2; // dati mancanti → punteggio neutro basso
+  }
+
+  // LIQUIDITÀ/MERCATO (max 2)
+  let liquidita = 0;
+  if (!omiIsDefault && !rurale) liquidita = 2;
+  else if (omiIsDefault && !rurale) liquidita = 1;
+  else liquidita = 0;
+
+  // AFFIDABILITÀ DATI (max 2)
+  let affidabilita = 0;
+  if (hasVerifiedVincoli && !hasPartialData) affidabilita = 2;
+  else if (hasVerifiedVincoli || hasPartialData) affidabilita = 1;
+  else affidabilita = 0;
+
+  // VINCOLI/RISCHI (max 1)
+  let vincoliScore = 1;
+  if (vincoli?.vincolo_sismico?.zona?.includes('Zona 1') ||
+      vincoli?.vincolo_idraulico?.presente === true ||
+      vincoli?.vincolo_paesaggistico?.presente === true) {
+    vincoliScore = 0;
+  }
+
+  let total = finanza + liquidita + affidabilita + vincoliScore;
+
+  // BONUS cambio destinazione d'uso: categoria industriale/commerciale + zona residenziale
+  const isIndustriale = ['industrial', 'commercial'].includes(categoriaGroup);
+  const zonaStr = (zonaUrbanistica || '').toLowerCase();
+  const isZonaResidenziale = /resid|abitativ|r\d|zona\s*[abc]/i.test(zonaStr);
+  const hasCambioDest = isIndustriale && isZonaResidenziale;
+  if (hasCambioDest) total = Math.min(10, total + 1);
+
+  return { total: Math.min(10, Math.max(0, total)), finanza, liquidita, affidabilita, vincoliScore, hasCambioDest };
+}
+
+function scoreLabel(score) {
+  if (score >= 8) return "Eccellente";
+  if (score >= 6) return "Buono";
+  if (score >= 4) return "Discreto";
+  if (score >= 2) return "Critico";
+  return "Sconsigliato";
 }
 
 function ScoreCircle({ score }) {
-  const color = score >= 7 ? "text-emerald-600" : score >= 5 ? "text-amber-500" : "text-red-500";
-  const ring  = score >= 7 ? "border-emerald-400" : score >= 5 ? "border-amber-400" : "border-red-400";
-  const label = score >= 9 ? "Eccellente" : score >= 7 ? "Molto interessante" : score >= 5 ? "Interessante" : score >= 3 ? "Marginale" : "Non conveniente";
+  const color = score >= 8 ? "text-emerald-600" : score >= 6 ? "text-amber-600" : score >= 4 ? "text-orange-500" : "text-red-600";
+  const ring  = score >= 8 ? "border-emerald-400" : score >= 6 ? "border-amber-400" : score >= 4 ? "border-orange-400" : "border-red-400";
+  const label = scoreLabel(score);
   return (
     <div className="flex flex-col items-center gap-2">
       <div className={`w-24 h-24 rounded-full border-4 ${ring} flex items-center justify-center`}>
@@ -36,6 +85,19 @@ function ScoreCircle({ score }) {
       </div>
       <p className={`text-sm font-bold ${color}`}>{score}/10 — {label}</p>
     </div>
+  );
+}
+
+function AffidabilitaBadge({ level }) {
+  const cfg = {
+    alta:  { cls: "bg-emerald-100 text-emerald-800 border-emerald-300", icon: "✓", label: "Affidabilità analisi: Alta" },
+    media: { cls: "bg-amber-100 text-amber-800 border-amber-300", icon: "~", label: "Affidabilità analisi: Media" },
+    bassa: { cls: "bg-red-100 text-red-800 border-red-300", icon: "⚠", label: "Affidabilità analisi: Bassa" },
+  }[level] || { cls: "bg-gray-100 text-gray-700 border-gray-300", icon: "?", label: "Affidabilità: n/d" };
+  return (
+    <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded border text-xs font-semibold ${cfg.cls}`}>
+      {cfg.icon} {cfg.label}
+    </span>
   );
 }
 
@@ -493,63 +555,99 @@ Fornisci punteggio e analisi sintetica.`,
         </motion.div>
       )}
 
-      {/* BLOCCO 5 — Scorecard AI */}
-      {loadingScore && (
-        <div className="flex items-center justify-center py-8 gap-3">
-          <Loader2 className="w-4 h-4 animate-spin text-primary" />
-          <span className="text-xs text-muted-foreground">Calcolo scorecard investimento…</span>
-        </div>
-      )}
-      {scoreData && (
-        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}
-          className="rounded-xl border border-border bg-card overflow-hidden">
-          <div className="flex items-center gap-2 px-5 py-3 border-b border-border bg-muted/30">
-            <BarChart3 className="w-4 h-4 text-primary" />
-            <h4 className="font-semibold text-sm">Scorecard Investimento</h4>
-          </div>
-          <div className="p-5 flex flex-col md:flex-row gap-6 items-start">
-            <div className="shrink-0 flex justify-center md:block">
-              <ScoreCircle score={roiFlip != null ? roiToScore(roiFlip) : Math.round(scoreData.score)} />
+      {/* BLOCCO 5 — Scorecard pesata */}
+      {(() => {
+        const isPiemonte = (query.regione || '').toLowerCase().includes('piemonte');
+        const isLiguria  = (query.regione || '').toLowerCase().includes('liguria');
+        const isLombardia = (query.regione || '').toLowerCase().includes('lombardia');
+        const wfsRis = r.wfs_liguria?.risultati;
+        const hasVerifiedVincoli = !!(wfsRis) || isPiemonte || isLiguria || isLombardia;
+        const hasPartialData = omi.is_default;
+        // ROI netto: usa flipping se disponibile, altrimeti rendimento netto affitto
+        const roiNetto = roiFlip != null ? roiFlip
+          : rendimentoNetto != null ? rendimentoNetto
+          : null;
+        const categoriaRaw = query.categoria_catastale || r.dati_catastali?.categoria || '';
+        const categoriaGroup = /^D\//i.test(categoriaRaw) ? 'industrial'
+          : /^C\//i.test(categoriaRaw) ? 'commercial' : 'other';
+        const zonaUrbanistica = r.zonizzazione?.destinazione_prevalente || wfsRis?.zona_urbanistica?.destinazione_uso || '';
+        const { total: wscore, finanza: wFin, liquidita: wLiq, affidabilita: wAff, vincoliScore: wVin, hasCambioDest }
+          = calcWeightedScore({ roiNetto, omiIsDefault: omi.is_default, rurale, hasVerifiedVincoli, hasPartialData, vincoli: r.vincoli, categoriaGroup, zonaUrbanistica });
+
+        const affidabilitaLevel = wAff === 2 && !omi.is_default ? 'alta' : wAff === 1 || omi.is_default ? 'media' : 'bassa';
+
+        // Punti di forza / rischi da scoreData AI (se presente) filtrati, più cambio destinazione d'uso
+        const forza = [
+          ...(scoreData?.punti_forza || []).filter(p => !(prezzoAcquisto === 0 && /prezzo|acquisto|€0|0€/i.test(p))).slice(0, 3),
+          ...(hasCambioDest ? [`Possibile cambio di destinazione d'uso (${categoriaRaw} → residenziale) — potenziale rivalutazione. Da verificare con NTA/CDU del Comune.`] : []),
+        ];
+        const rischi = (scoreData?.rischi || [])
+          .filter(risk => !hasCambioDest || !/incoerenza|disallineamento|incompatib/i.test(risk))
+          .slice(0, 3);
+
+        return (
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}
+            className="rounded-xl border border-border bg-card overflow-hidden">
+            <div className="flex items-center gap-2 px-5 py-3 border-b border-border bg-muted/30 flex-wrap">
+              <BarChart3 className="w-4 h-4 text-primary" />
+              <h4 className="font-semibold text-sm">Scorecard Investimento</h4>
+              <div className="ml-auto">
+                <AffidabilitaBadge level={affidabilitaLevel} />
+              </div>
             </div>
-            <div className="flex-1 grid md:grid-cols-2 gap-4">
-              {scoreData.punti_forza?.length > 0 && (
-                <div>
-                  <p className="text-sm font-semibold text-emerald-700 mb-2 flex items-center gap-1">
-                    <CheckCircle2 className="w-4 h-4" /> Punti di forza
-                  </p>
-                  <ul className="space-y-1">
-                    {scoreData.punti_forza
-                      .filter(p => !(prezzoAcquisto === 0 && /prezzo|acquisto|€0|0€/i.test(p)))
-                      .slice(0, 3).map((p, i) => (
-                      <li key={i} className="text-sm text-muted-foreground">• {p}</li>
-                    ))}
-                  </ul>
+            <div className="p-5 flex flex-col md:flex-row gap-6 items-start">
+              <div className="shrink-0 flex flex-col items-center gap-3">
+                <ScoreCircle score={wscore} />
+                {/* Dettaglio pesi */}
+                <div className="text-[10px] text-muted-foreground space-y-0.5 text-center" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
+                  <p>Finanza: {wFin}/5 · Mercato: {wLiq}/2</p>
+                  <p>Dati: {wAff}/2 · Vincoli: {wVin}/1</p>
+                  {hasCambioDest && <p className="text-emerald-600 font-semibold">+1 cambio dest. uso</p>}
                 </div>
-              )}
-              {scoreData.rischi?.length > 0 && (
-                <div>
-                  <p className="text-sm font-semibold text-red-600 mb-2 flex items-center gap-1">
-                    <AlertTriangle className="w-4 h-4" /> Rischi da considerare
-                  </p>
-                  <ul className="space-y-1">
-                    {scoreData.rischi.slice(0, 2).map((r2, i) => (
-                      <li key={i} className="text-sm text-muted-foreground">• {r2}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
+              </div>
+              <div className="flex-1 grid md:grid-cols-2 gap-4">
+                {forza.length > 0 && (
+                  <div>
+                    <p className="text-sm font-semibold text-emerald-700 mb-2 flex items-center gap-1">
+                      <CheckCircle2 className="w-4 h-4" /> Punti di forza
+                    </p>
+                    <ul className="space-y-1">
+                      {forza.map((p, i) => (
+                        <li key={i} className="text-sm text-muted-foreground">• {p}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {rischi.length > 0 && (
+                  <div>
+                    <p className="text-sm font-semibold text-red-600 mb-2 flex items-center gap-1">
+                      <AlertTriangle className="w-4 h-4" /> Rischi da considerare
+                    </p>
+                    <ul className="space-y-1">
+                      {rischi.map((r2, i) => (
+                        <li key={i} className="text-sm text-muted-foreground">• {r2}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {loadingScore && (
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground col-span-2">
+                    <Loader2 className="w-3 h-3 animate-spin" /> Analisi qualitativa in caricamento…
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
-          <div className="px-5 pb-4">
-            <p className="text-[10px] text-muted-foreground italic">
-              Valori di mercato da Banca Dati OMI — Agenzia delle Entrate (dati ufficiali, open data CC BY).
-              Per valutazioni ufficiali consultare{" "}
-              <a href="https://www.agenziaentrate.gov.it/portale/schede/fabbricatiterreni/omi/banche-dati/quotazioni-immobiliari"
-                target="_blank" rel="noopener noreferrer" className="underline">agenziaentrate.gov.it/omi</a>.
-            </p>
-          </div>
-        </motion.div>
-      )}
+            <div className="px-5 pb-4">
+              <p className="text-[10px] text-muted-foreground italic">
+                Punteggio pesato: Finanza (max 5) + Mercato/liquidità (max 2) + Affidabilità dati (max 2) + Vincoli (max 1).
+                Valori OMI da Banca Dati AdE (open data CC BY).{" "}
+                <a href="https://www.agenziaentrate.gov.it/portale/schede/fabbricatiterreni/omi/banche-dati/quotazioni-immobiliari"
+                  target="_blank" rel="noopener noreferrer" className="underline">agenziaentrate.gov.it/omi</a>.
+              </p>
+            </div>
+          </motion.div>
+        );
+      })()}
     </div>
   );
 }
