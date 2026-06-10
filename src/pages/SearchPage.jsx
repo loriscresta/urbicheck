@@ -1,8 +1,7 @@
 import { ENRICHMENT_API_URL } from '@/lib/config';
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 
-
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import { catasto_resolver } from "@/functions/catasto_resolver";
 import CadastralSearchForm from "@/components/search/CadastralSearchForm.jsx";
@@ -13,6 +12,7 @@ import { motion } from "framer-motion";
 import { useQuery } from "@tanstack/react-query";
 import { calculatePlanimetriaArea } from '@/functions/calculatePlanimetriaArea';
 import { fetchParcelFromAgent } from '@/functions/fetchParcelFromAgent';
+import PublicSearchPreview from "@/components/search/PublicSearchPreview";
 
 const BETA_REGIONS = ['piemonte', 'liguria', 'lombardia'];
 
@@ -20,7 +20,33 @@ export default function SearchPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [batchProgress, setBatchProgress] = useState(null);
   const [geoBlockError, setGeoBlockError] = useState(null);
+  const [publicPreview, setPublicPreview] = useState(null); // anteprima per utenti non loggati
+  const [pendingFormData, setPendingFormData] = useState(null);
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+
+  // Recupera la ricerca salvata prima del login (utente appena autenticato)
+  useEffect(() => {
+    const shouldRestore = searchParams.get("restore") === "1";
+    if (!shouldRestore) return;
+    try {
+      const saved = sessionStorage.getItem("urbicheck_pending_search");
+      if (saved) {
+        const parsedForm = JSON.parse(saved);
+        sessionStorage.removeItem("urbicheck_pending_search");
+        // Esegui la ricerca completa automaticamente
+        handleSearch(parsedForm);
+      }
+    } catch (_) {}
+  }, []);
+
+  const { data: currentUser } = useQuery({
+    queryKey: ["currentUser"],
+    queryFn: () => base44.auth.me(),
+    retry: false,
+  });
+
+  const isAuthenticated = !!currentUser;
 
   const { data: credits } = useQuery({
     queryKey: ["userCredits"],
@@ -29,10 +55,12 @@ export default function SearchPage() {
       const list = await base44.entities.UserCredits.filter({ user_email: user.email });
       return list[0] || { balance: 0 };
     },
+    enabled: isAuthenticated,
   });
 
   const handleSearch = async (formData) => {
     setGeoBlockError(null);
+    setPublicPreview(null);
     // Geographic block: beta only covers Piemonte, Liguria, Lombardia
     const regioneLower = (formData.regione || '').toLowerCase();
     const isBetaRegion = BETA_REGIONS.some(r => regioneLower.includes(r));
@@ -42,12 +70,78 @@ export default function SearchPage() {
     }
     setIsLoading(true);
     trackEvent('Search');
+
+    // ── Flusso pubblico: solo anteprima senza login ─────────────────────────
+    if (!isAuthenticated && !formData._batch) {
+      await handlePublicPreview(formData);
+      setIsLoading(false);
+      return;
+    }
+
     if (formData._batch) {
       await handleBatchSearch(formData);
     } else {
       await handleSingleSearch(formData);
     }
     setIsLoading(false);
+  };
+
+  // Ricerca pubblica: recupera solo dati minimi (catasto WFS) senza creare record
+  const handlePublicPreview = async (formData) => {
+    setPendingFormData(formData);
+    try {
+      // Chiama catasto_resolver in modalità "preview" — non salva in DB (no query_id)
+      // Usa fetchParcelFromAgent per ottenere geometria e coordinate
+      const [resolverRes, agentRes] = await Promise.allSettled([
+        catasto_resolver({
+          nome_comune: formData.comune,
+          regione: formData.regione,
+          foglio: formData.foglio,
+          particella: formData.particella,
+          sezione: formData.sezione_catastale || undefined,
+          indirizzo_immobile: formData.indirizzo_immobile || undefined,
+          preview_only: true, // flag per non salvare su DB
+        }),
+        fetchParcelFromAgent({
+          comune: formData.comune,
+          foglio: formData.foglio,
+          particella: formData.particella,
+          preview_only: true,
+        }),
+      ]);
+
+      const resolverData = resolverRes.status === "fulfilled" ? resolverRes.value?.data : null;
+      const agentData = agentRes.status === "fulfilled" ? agentRes.value?.data : null;
+
+      setPublicPreview({
+        comune: formData.comune,
+        foglio: formData.foglio,
+        particella: formData.particella,
+        subalterno: formData.subalterno || null,
+        regione: formData.regione,
+        provincia: formData.provincia,
+        categoria: resolverData?.categoria_catastale || agentData?.categoria || null,
+        superficie_mq: resolverData?.superficie_mq || agentData?.superficie_mq || null,
+        centroid_lat: agentData?.centroid_lat || resolverData?.centroid_lat || null,
+        centroid_lng: agentData?.centroid_lng || resolverData?.centroid_lng || null,
+        geometry_geojson: agentData?.geometry_geojson || resolverData?.geometry_geojson || null,
+      });
+    } catch (err) {
+      // Anche se fallisce, mostra comunque l'anteprima con i dati inseriti dall'utente
+      setPublicPreview({
+        comune: formData.comune,
+        foglio: formData.foglio,
+        particella: formData.particella,
+        subalterno: formData.subalterno || null,
+        regione: formData.regione,
+        provincia: formData.provincia,
+        categoria: null,
+        superficie_mq: null,
+        centroid_lat: null,
+        centroid_lng: null,
+        geometry_geojson: null,
+      });
+    }
   };
 
   const handleSingleSearch = async (formData) => {
@@ -359,11 +453,13 @@ export default function SearchPage() {
     <div className="p-6 lg:p-10 max-w-4xl mx-auto">
       <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}>
         <h1 className="text-2xl lg:text-3xl font-bold tracking-tight mb-1" style={{ color: '#1A3A6B', fontFamily: "'Libre Baskerville', serif", fontStyle: 'italic' }}>
-          Analisi Urbanistica
+          {publicPreview ? "Anteprima risultato" : "Analisi Urbanistica"}
         </h1>
-        <div className="mb-6 flex items-center gap-2 px-3 py-2 text-xs" style={{ background: '#f0fdf4', border: '1px solid #86efac', fontFamily: "'IBM Plex Mono', monospace", color: '#15803d' }}>
-          🚀 <strong>Beta attiva</strong> — Prime 3 analisi gratuite · poi €2,99/report (offerta lancio, max 3) · poi €9,90 · Solo Piemonte, Liguria, Lombardia
-        </div>
+        {!publicPreview && (
+          <div className="mb-6 flex items-center gap-2 px-3 py-2 text-xs" style={{ background: '#f0fdf4', border: '1px solid #86efac', fontFamily: "'IBM Plex Mono', monospace", color: '#15803d' }}>
+            🚀 <strong>Beta attiva</strong> — Prime 3 analisi gratuite · poi €2,99/report (offerta lancio, max 3) · poi €9,90 · Solo Piemonte, Liguria, Lombardia
+          </div>
+        )}
         {geoBlockError && (
           <div className="mb-5 p-4 flex flex-col gap-2" style={{ background: '#fff8f0', border: '2px solid #f59e0b', fontFamily: "'IBM Plex Mono', monospace" }}>
             <p className="text-sm font-semibold" style={{ color: '#92400e' }}>
@@ -377,42 +473,67 @@ export default function SearchPage() {
         )}
       </motion.div>
 
-      <div className="bg-white p-6 lg:p-8" style={{ border: '1px solid #C4BAA8' }}>
-        <ErrorBoundary>
-          <CadastralSearchForm
-            onSubmit={handleSearch}
-            isLoading={isLoading}
-            submitLabel="Ottieni anteprima gratuita →"
-            userBalance={credits?.balance ?? null}
+      {/* Anteprima pubblica — mostrata dopo la ricerca per utenti non loggati */}
+      {publicPreview ? (
+        <div className="space-y-4">
+          <PublicSearchPreview
+            previewData={publicPreview}
+            formData={pendingFormData}
           />
-        </ErrorBoundary>
-      </div>
-
-      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="mt-8">
-        <h2 className="text-[10px] font-semibold uppercase tracking-[2px] mb-4" style={{ color: '#B33A2A', fontFamily: "'IBM Plex Mono', monospace" }}>Come funziona</h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {[
-            { n: "1", icon: Search, title: "Inserisci i dati catastali", desc: "Comune, foglio e particella. Aggiungi più subalterni per palazzine intere." },
-            { n: "2", icon: Shield, title: "Anteprima gratuita istantanea", desc: "Ricevi subito zonizzazione, tipologia e presenza vincoli — gratis." },
-            { n: "3", icon: Info, title: "Sblocca la scheda completa", desc: "€9,90 per unità singola. Sconti fino al -40% su analisi multi-unità." },
-          ].map(({ n, icon: Icon, title, desc }) => (
-            <div key={n} className="bg-white p-5 flex gap-4" style={{ border: '1px solid #C4BAA8' }}>
-              <div className="w-8 h-8 flex items-center justify-center text-xs font-bold shrink-0 mt-0.5"
-                style={{ background: '#1A3A6B', color: '#B33A2A', fontFamily: "'IBM Plex Mono', monospace" }}>
-                {n}
-              </div>
-              <div>
-                <p className="font-semibold text-xs uppercase tracking-[1px]" style={{ color: '#1A3A6B', fontFamily: "'IBM Plex Mono', monospace" }}>{title}</p>
-                <p className="text-xs mt-1" style={{ color: '#7A7268', fontFamily: "'IBM Plex Mono', monospace" }}>{desc}</p>
-              </div>
-            </div>
-          ))}
+          <button
+            onClick={() => { setPublicPreview(null); setPendingFormData(null); }}
+            className="text-xs underline text-muted-foreground"
+            style={{ fontFamily: "'IBM Plex Mono', monospace", background: "none", border: "none", cursor: "pointer" }}
+          >
+            ← Nuova ricerca
+          </button>
         </div>
-      </motion.div>
+      ) : (
+        <>
+          <div className="bg-white p-6 lg:p-8" style={{ border: '1px solid #C4BAA8' }}>
+            <ErrorBoundary>
+              <CadastralSearchForm
+                onSubmit={handleSearch}
+                isLoading={isLoading}
+                submitLabel={isAuthenticated ? "Analizza →" : "Cerca particella — gratis →"}
+                userBalance={credits?.balance ?? null}
+              />
+            </ErrorBoundary>
+          </div>
 
-      <div className="mt-10 pt-6 border-t border-border text-center text-xs text-muted-foreground">
-        urbicheck.it — Dati aggiornati da fonti GIS ufficiali regionali
-      </div>
+          {!isAuthenticated && (
+            <div className="mt-4 px-4 py-3 text-xs text-center" style={{ background: '#f0fdf4', border: '1px solid #86efac', fontFamily: "'IBM Plex Mono', monospace", color: '#15803d' }}>
+              🔍 Cerca senza registrarti — accedi con Google solo per sbloccare il report completo (3 gratis)
+            </div>
+          )}
+
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="mt-8">
+            <h2 className="text-[10px] font-semibold uppercase tracking-[2px] mb-4" style={{ color: '#B33A2A', fontFamily: "'IBM Plex Mono', monospace" }}>Come funziona</h2>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {[
+                { n: "1", icon: Search, title: "Cerca senza login", desc: "Inserisci comune, foglio e particella — gratis, senza registrazione." },
+                { n: "2", icon: Shield, title: "Vedi la mappa + dati base", desc: "Confermi subito che la particella esiste con mappa e dati catastali." },
+                { n: "3", icon: Info, title: "Sblocca con Google — gratis", desc: "Accedi con Google per il report completo. Prime 3 analisi gratuite." },
+              ].map(({ n, icon: Icon, title, desc }) => (
+                <div key={n} className="bg-white p-5 flex gap-4" style={{ border: '1px solid #C4BAA8' }}>
+                  <div className="w-8 h-8 flex items-center justify-center text-xs font-bold shrink-0 mt-0.5"
+                    style={{ background: '#1A3A6B', color: '#B33A2A', fontFamily: "'IBM Plex Mono', monospace" }}>
+                    {n}
+                  </div>
+                  <div>
+                    <p className="font-semibold text-xs uppercase tracking-[1px]" style={{ color: '#1A3A6B', fontFamily: "'IBM Plex Mono', monospace" }}>{title}</p>
+                    <p className="text-xs mt-1" style={{ color: '#7A7268', fontFamily: "'IBM Plex Mono', monospace" }}>{desc}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </motion.div>
+
+          <div className="mt-10 pt-6 border-t border-border text-center text-xs text-muted-foreground">
+            urbicheck.it — Dati aggiornati da fonti GIS ufficiali regionali
+          </div>
+        </>
+      )}
     </div>
   );
 }

@@ -100,11 +100,15 @@ const AuthenticatedApp = () => {
         <Route path="/report/public/:reportId" element={<PublicReportPage />} />
         {LegalRoutes}
 
+        {/* Semi-public: /search accessible without login */}
+        <Route element={<AppLayout />}>
+          <Route path="/search" element={<ErrorBoundary><SearchPage /></ErrorBoundary>} />
+        </Route>
+
         {/* Protected app routes */}
         <Route element={<ProtectedRoute unauthenticatedElement={<Navigate to="/login" replace />} />}>
           <Route element={<AppLayout />}>
             <Route path="/dashboard" element={<ErrorBoundary><Dashboard /></ErrorBoundary>} />
-            <Route path="/search" element={<ErrorBoundary><SearchPage /></ErrorBoundary>} />
             <Route path="/report/:id" element={<ErrorBoundary><ReportPage /></ErrorBoundary>} />
             <Route path="/history" element={<ErrorBoundary><HistoryPage /></ErrorBoundary>} />
             <Route path="/credits" element={<ErrorBoundary><CreditsPage /></ErrorBoundary>} />

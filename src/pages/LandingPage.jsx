@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { base44 } from "@/api/base44Client";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { CheckCircle2, MapPin, AlertTriangle, Waves, Activity, FileText, TrendingUp, ClipboardList } from "lucide-react";
 
@@ -75,7 +75,9 @@ const stats = [
 
 export default function LandingPage() {
   const [showDemoModal, setShowDemoModal] = useState(false);
+  const navigate = useNavigate();
   const handleLogin = () => base44.auth.redirectToLogin("/dashboard");
+  const handleStartSearch = () => navigate("/search");
 
   return (
     <div style={{ background: BG, fontFamily: MONO, minHeight: "100vh" }}>
@@ -117,9 +119,9 @@ export default function LandingPage() {
             </p>
 
             <div className="flex flex-col sm:flex-row gap-3 items-start">
-              <button onClick={handleLogin}
+              <button onClick={handleStartSearch}
                 style={{ background: AC, color: W, fontFamily: MONO, fontWeight: 700, fontSize: "0.8rem", letterSpacing: "1.5px", textTransform: "uppercase", border: "none", padding: "0 2rem", height: "3.25rem", cursor: "pointer", boxShadow: `0 4px 20px ${AC}60` }}>
-                Inizia ora — €9,90 a report →
+                Cerca la tua particella — gratis →
               </button>
               <button onClick={() => setShowDemoModal(true)}
                 style={{ background: "transparent", color: "rgba(244,239,230,0.7)", fontFamily: MONO, fontSize: "0.78rem", letterSpacing: "1px", border: `1px solid rgba(244,239,230,0.25)`, padding: "0 1.5rem", height: "3.25rem", cursor: "pointer" }}
@@ -217,9 +219,9 @@ export default function LandingPage() {
                   </li>
                 ))}
               </ul>
-              <button onClick={handleLogin}
+              <button onClick={handleStartSearch}
                 style={{ background: AC, color: W, fontFamily: MONO, fontWeight: 700, fontSize: "0.78rem", letterSpacing: "1.5px", textTransform: "uppercase", border: "none", padding: "0 2rem", height: "3rem", cursor: "pointer" }}>
-                Inizia gratis →
+                Cerca senza registrarti →
               </button>
             </div>
             <div style={{ border: `1px solid ${BD}`, background: BG, padding: "1.75rem" }}>
@@ -271,12 +273,12 @@ export default function LandingPage() {
                 ))}
               </ul>
               <p style={{ fontFamily: MONO, fontSize: "0.58rem", color: GR, textAlign: "center", marginBottom: "1.25rem" }}>Valido 30 giorni dal lancio · Solo Piemonte, Liguria, Lombardia</p>
-              <button onClick={handleLogin} style={{
+              <button onClick={handleStartSearch} style={{
                 background: AC, color: W, border: "none",
                 fontFamily: MONO, fontWeight: 700, fontSize: "0.78rem", letterSpacing: "1.5px", textTransform: "uppercase",
                 padding: "0.85rem", cursor: "pointer", width: "100%",
               }}>
-                Inizia gratis →
+                Cerca la tua particella — gratis →
               </button>
             </div>
           </div>
@@ -314,9 +316,9 @@ export default function LandingPage() {
             3 gratis → €2,99/report → fino a 6 report totali in beta · Prezzo speciale beta · Valido 30 giorni dal lancio
           </p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
-            <button onClick={handleLogin}
+            <button onClick={handleStartSearch}
               style={{ background: AC, color: W, fontFamily: MONO, fontWeight: 700, fontSize: "0.8rem", letterSpacing: "1.5px", textTransform: "uppercase", border: "none", padding: "0 2rem", height: "3.25rem", cursor: "pointer" }}>
-              3 gratis → poi €2,99/report →
+              Cerca senza registrarti →
             </button>
             <Link to="/waitlist"
               style={{ display: "flex", alignItems: "center", justifyContent: "center", background: "transparent", color: "rgba(244,239,230,0.7)", fontFamily: MONO, fontSize: "0.78rem", letterSpacing: "1px", border: `1px solid rgba(244,239,230,0.25)`, padding: "0 1.5rem", height: "3.25rem", textDecoration: "none" }}
@@ -380,8 +382,8 @@ export default function LandingPage() {
             <div className="mt-4 p-3" style={{ background: `${P}10`, border: `1px solid ${P}30` }}>
               <p style={{ fontFamily: MONO, fontWeight: 700, color: P, fontSize: "0.72rem" }}>✓ Operazione fattibile — Score 7/10</p>
             </div>
-            <button onClick={handleLogin} style={{ width: "100%", marginTop: "1rem", background: AC, color: W, fontFamily: MONO, fontWeight: 700, fontSize: "0.75rem", letterSpacing: "1.5px", textTransform: "uppercase", border: "none", padding: "0.85rem", cursor: "pointer" }}>
-              Prime 3 analisi gratis · poi €2,99/report →
+            <button onClick={handleStartSearch} style={{ width: "100%", marginTop: "1rem", background: AC, color: W, fontFamily: MONO, fontWeight: 700, fontSize: "0.75rem", letterSpacing: "1.5px", textTransform: "uppercase", border: "none", padding: "0.85rem", cursor: "pointer" }}>
+              Cerca la tua particella — gratis →
             </button>
           </motion.div>
         </div>
