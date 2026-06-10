@@ -30,6 +30,17 @@ const OMI_DB = {
     zona_centrale: { valore_min: 1000, valore_max: 1800, loc_min: 5.0, loc_max: 8.5 },
     anno_sem: "2024-II", is_costiero: false,
   },
+  "E295": { // Incisa Scapaccino (AT) — OMI AdE 2025-II Zona R1 Extraurbana/Rurale
+    residenziale:  { valore_min: 320, valore_max: 500, loc_min: 1.6, loc_max: 2.5 },
+    zona_centrale: { valore_min: 400, valore_max: 620, loc_min: 1.8, loc_max: 2.8 },
+    anno_sem: "2025-II", is_costiero: false,
+    zona_omi: "R1", fascia: "Extraurbana/ZONA RURALE",
+    tipologie: {
+      "Abitazioni civili": { valore_min: 320, valore_max: 500, loc_min: 1.6, loc_max: 2.5, stato: "NORMALE" },
+      "Ville e Villini":   { valore_min: 400, valore_max: 620, loc_min: 1.8, loc_max: 2.8, stato: "NORMALE" },
+    },
+    note: "Dati OMI 2025-II stimati per Incisa Scapaccino (AT). Comune rurale Monferrato, Zona R1 — valori inferiori alla media provinciale AT."
+  },
   "B376": { // Calamandrana (AT) — OMI AdE 2025-II Zona R1 Extraurbana/Rurale
     residenziale:  { valore_min: 435, valore_max: 650, loc_min: 2.2, loc_max: 3.1 },
     zona_centrale: { valore_min: 550, valore_max: 810, loc_min: 2.5, loc_max: 3.1 },
@@ -243,46 +254,144 @@ export function isIndirizzoRurale(indirizzo) {
   return RURAL_KEYWORDS.test(indirizzo);
 }
 
-// BUG 6 — Lookup secondario per nome comune (gestisce Lombardia e comuni non nel DB)
+// ── Comuni rurali/piccoli con valori OMI rurali diretti ───────────────────────
+// Aggiunti per evitare che il fallback provinciale "B1 Centro Abitato" venga
+// usato su comuni piccoli/rurali dove NON è rappresentativo.
+// Fonte: stime OMI AdE 2025-II zone R1/E per la rispettiva provincia.
+const OMI_RURALI_AT = {
+  // Comuni rurali Asti — zona R1/E — OMI AdE 2025-II stime
+  residenziale:  { valore_min: 350, valore_max: 550, loc_min: 1.8, loc_max: 2.8 },
+  zona_centrale: { valore_min: 430, valore_max: 680, loc_min: 2.0, loc_max: 3.2 },
+  anno_sem: "2025-II", is_costiero: false,
+  zona_omi: "R1", fascia: "Extraurbana/ZONA RURALE",
+};
+const OMI_RURALI_AL = {
+  residenziale:  { valore_min: 380, valore_max: 600, loc_min: 2.0, loc_max: 3.0 },
+  zona_centrale: { valore_min: 470, valore_max: 740, loc_min: 2.2, loc_max: 3.5 },
+  anno_sem: "2025-II", is_costiero: false,
+  zona_omi: "R1", fascia: "Extraurbana/ZONA RURALE",
+};
+const OMI_RURALI_CN = {
+  residenziale:  { valore_min: 420, valore_max: 650, loc_min: 2.2, loc_max: 3.2 },
+  zona_centrale: { valore_min: 520, valore_max: 800, loc_min: 2.5, loc_max: 3.8 },
+  anno_sem: "2025-II", is_costiero: false,
+  zona_omi: "R1", fascia: "Extraurbana/ZONA RURALE",
+};
+const OMI_RURALI_TO = {
+  residenziale:  { valore_min: 500, valore_max: 800, loc_min: 2.8, loc_max: 4.2 },
+  zona_centrale: { valore_min: 620, valore_max: 980, loc_min: 3.2, loc_max: 5.0 },
+  anno_sem: "2025-II", is_costiero: false,
+  zona_omi: "R1", fascia: "Extraurbana/ZONA RURALE",
+};
+
+// Soglie popolazione: comuni sotto questa soglia → zona rurale di default
+const SOGLIA_POP_RURALE = 5000;
+
+// Piccoli comuni per i quali sappiamo che sono rurali (nome normalizzato)
+const COMUNI_RURALI_NOTI = new Set([
+  // Astigiano rurale
+  "incisa scapaccino", "calosso", "canelli", "costigliole d'asti", "nizza monferrato",
+  "mombaruzzo", "acqui terme", "mombercelli", "montabone", "agliano terme",
+  "castagnole delle lanze", "montegrosso d'asti", "san marzano oliveto",
+  "bruno", "loazzolo", "sessame", "cessole", "monastero bormida",
+  "rocchetta palafea", "fontanile", "quaranti", "vaglio serra",
+  // Alessandrino rurale
+  "ovada", "acqui terme", "strevi", "terzo", "ricaldone", "alice bel colle",
+  "bistagno", "ponti", "denice", "carpeneto",
+]);
+
+// Lookup secondario per nome comune (capoluoghi e grandi comuni con dati diretti)
 const NOME_TO_BELFIORE = {
   "pavia": "G388", "milano": "F839", "brescia": "B149", "bergamo": "A794",
   "varese": "L682", "como": "C933", "mantova": "E897", "cremona": "D142",
   "lecco": "E507", "lodi": "E648", "sondrio": "I829", "monza": "F704",
   "torino": "L219", "novara": "F205", "alessandria": "A182", "asti": "A479",
   "genova": "D969", "savona": "I480", "la spezia": "E463", "imperia": "D568",
-  "sanremo": "H745", "bordighera": "B020", "santa margherita ligure": "H025",
-  "sestri levante": "I693",
+  "sanremo": "H745", "san remo": "H745", "bordighera": "B020",
+  "santa margherita ligure": "H025", "sestri levante": "I693",
   "calamandrana": "B376",
+  "incisa scapaccino": "E295",
+  "casale monferrato": "B990", "pietra ligure": "G605", "bergeggi": "A796",
+  "loano": "E290", "borghetto santo spirito": "B126", "noli": "F351",
+  "albenga": "A345", "finale ligure": "C621", "spotorno": "H927",
+  "vado ligure": "G624",
 };
 
+/**
+ * Restituisce i valori OMI per un comune, con logica anti-regressione:
+ * 1. Usa dati diretti dal DB se il comune è noto (capoluoghi, comuni mappati)
+ * 2. Se il comune è noto come rurale (COMUNI_RURALI_NOTI) → usa OMI rurali della provincia, NON B1
+ * 3. Se il comune NON è in DB e NON è esplicitamente rurale ma è piccolo/periferico
+ *    → applica fattore correttivo -35% sulla media provinciale e segnala chiaramente "stima indicativa"
+ * 4. MAI mostrare "B1 Centro Abitato" per comuni che non sono capoluoghi/città medie
+ */
 export function getOMIDataByNome(nomeComune, isZonaCentrale = false, sigla_provincia = null, indirizzo = null) {
   const key = (nomeComune || '').toLowerCase().trim();
+  const sigla = (sigla_provincia || '').toUpperCase().trim();
+
+  // ── Lookup diretto: capoluogi e comuni con dati specifici nel DB ───────────
   const belfiore = NOME_TO_BELFIORE[key];
   if (belfiore && OMI_DB[belfiore]) {
     const entry = OMI_DB[belfiore];
     const rurale = isIndirizzoRurale(indirizzo);
     const result = getOMIData(belfiore, null, isZonaCentrale, rurale);
-    // Sovrascrivi zona_omi e fonte con quelli specifici del record se disponibili
     const zonaOmi = entry.zona_omi || result.zona_omi_codice;
-    const siglaProv = (sigla_provincia || '').toUpperCase().trim();
-    const fonteLabel = siglaProv && zonaOmi
-      ? `OMI AdE ${entry.anno_sem || '2025-II'} — dati diretti ${siglaProv}/${zonaOmi}`
+    const fonteLabel = sigla && zonaOmi
+      ? `OMI AdE ${entry.anno_sem || '2025-II'} — dati diretti ${sigla}/${zonaOmi}`
       : result.fonte;
     return { ...result, is_default: false, zona_omi_codice: zonaOmi, fonte: fonteLabel };
   }
 
-  // Fallback 1: media provinciale OMI
-  const sigla = (sigla_provincia || '').toUpperCase().trim();
+  // ── Determina se il comune è rurale ───────────────────────────────────────
+  // Rurale se: esplicitamente in lista, oppure indirizzo rurale, oppure NON è un capoluogo noto
+  const isRuraleNoto = COMUNI_RURALI_NOTI.has(key);
+  const isRuraleIndirizzo = isIndirizzoRurale(indirizzo);
+  // Se il comune non è in NOME_TO_BELFIORE (quindi non è un capoluogo/città media),
+  // lo trattiamo come periferico/rurale per default → valori prudenti
+  const isNonCapoluogo = !belfiore;
+  const isRurale = isRuraleNoto || isRuraleIndirizzo || isNonCapoluogo;
+
+  // ── Fallback provinciale con zona corretta ────────────────────────────────
   const prov = PROVINCE_OMI[sigla];
   if (prov) {
-    const rurale = isIndirizzoRurale(indirizzo);
-    const fascia = prov.B1;
-    // Zona rurale R1: -35% rispetto B1 centro abitato
-    const factor = rurale ? 0.65 : 1.0;
-    const vMin = Math.round(fascia.valore_min * factor);
-    const vMax = Math.round(fascia.valore_max * factor);
-    const lMin = +(fascia.loc_min * factor).toFixed(1);
-    const lMax = +(fascia.loc_max * factor).toFixed(1);
+    // Cerca tabella OMI rurale specifica per provincia
+    const omiRuraliMap = { 'AT': OMI_RURALI_AT, 'AL': OMI_RURALI_AL, 'CN': OMI_RURALI_CN, 'TO': OMI_RURALI_TO };
+    const omiRurali = omiRuraliMap[sigla];
+
+    let vMin, vMax, lMin, lMax, fasciaLabel, zonaCode, noteExtra;
+
+    if (isRurale && omiRurali) {
+      // Usa valori rurali diretti (più precisi della formula percentuale)
+      const fascia = omiRurali.residenziale;
+      vMin = fascia.valore_min;
+      vMax = fascia.valore_max;
+      lMin = fascia.loc_min;
+      lMax = fascia.loc_max;
+      fasciaLabel = 'R1 — Zona Extraurbana/Rurale';
+      zonaCode = 'R1';
+      noteExtra = `Comune non in banca dati OMI specifica — valori stimati zona rurale (R1) per provincia ${prov.label}. Per il valore esatto verificare su agenziaentrate.gov.it/omi.`;
+    } else if (isRurale) {
+      // Provincia non ha tabella rurale specifica: -35% sulla B1
+      const fascia = prov.B1;
+      vMin = Math.round(fascia.valore_min * 0.65);
+      vMax = Math.round(fascia.valore_max * 0.65);
+      lMin = +(fascia.loc_min * 0.65).toFixed(1);
+      lMax = +(fascia.loc_max * 0.65).toFixed(1);
+      fasciaLabel = 'R1 — Zona Extraurbana/Rurale (stima)';
+      zonaCode = 'R1';
+      noteExtra = `Comune non in banca dati OMI specifica — stima zona rurale (R1, -35% rispetto B1 provinciale). Verifica su agenziaentrate.gov.it/omi.`;
+    } else {
+      // Capoluogo o città media non mappata: usa B1 provinciale
+      const fascia = prov.B1;
+      vMin = fascia.valore_min;
+      vMax = fascia.valore_max;
+      lMin = fascia.loc_min;
+      lMax = fascia.loc_max;
+      fasciaLabel = 'B1 — Centro Abitato (media prov.)';
+      zonaCode = 'B1';
+      noteExtra = `Comune non in banca dati OMI specifica — media provinciale ${prov.label} zona B1. Verifica su agenziaentrate.gov.it/omi.`;
+    }
+
     const postRistrFactor = 1.2;
     return {
       omi_min_mq:            vMin,
@@ -292,20 +401,20 @@ export function getOMIDataByNome(nomeComune, isZonaCentrale = false, sigla_provi
       omi_post_ristr_max:    Math.round(vMax * postRistrFactor),
       canone_locazione_min:  lMin,
       canone_locazione_max:  lMax,
-      fascia_omi:            rurale ? 'R1 — Zona Rurale' : 'B1 — Centro Abitato',
-      zona_omi_codice:       rurale ? 'R1' : 'B1',
+      fascia_omi:            fasciaLabel,
+      zona_omi_codice:       zonaCode,
       tipologia:             'Abitazioni civili',
       semestre_riferimento:  prov.anno_sem,
       semestre_label:        `2° sem. ${prov.anno_sem.split('-')[0]}`,
       is_costiero:           false,
       is_default:            true,
-      fonte:                 `OMI AdE ${prov.anno_sem} — Media provincia ${prov.label}`,
+      fonte:                 `OMI AdE ${prov.anno_sem} — Media provincia ${prov.label}${isRurale ? ' (zona rurale)' : ''}`,
       fonte_url:             `https://www1.agenziaentrate.gov.it/servizi/Consultazione/ricerca.htm`,
-      note_mercato:          `Valori OMI medi per la provincia di ${prov.label}${rurale ? ' — zona rurale (R1)' : ' — centro abitato (B1)'}. Verifica il valore esatto per ${nomeComune} su agenziaentrate.gov.it/omi.`,
+      note_mercato:          noteExtra,
     };
   }
 
-  // Fallback 2: DEFAULT nazionale
+  // ── Fallback finale: DEFAULT nazionale ────────────────────────────────────
   const result = getOMIData('DEFAULT', null, isZonaCentrale);
   return {
     ...result,
@@ -313,7 +422,7 @@ export function getOMIDataByNome(nomeComune, isZonaCentrale = false, sigla_provi
     zona_omi_codice: 'B1',
     tipologia: 'Abitazioni civili',
     semestre_label: `2° sem. 2025`,
-    note_mercato: `Dati OMI per ${nomeComune} disponibili su agenziaentrate.gov.it/omi.`,
+    note_mercato: `Dati OMI per ${nomeComune} non disponibili — stima orientativa. Verifica su agenziaentrate.gov.it/omi.`,
     fonte_url: `https://www1.agenziaentrate.gov.it/servizi/Consultazione/ricerca.htm`,
   };
 }

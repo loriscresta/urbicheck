@@ -635,7 +635,10 @@ export async function generatePDF(query, financialSnapshot, staticMapUrl = null)
     }
 
     if (omi) {
-      y = subHeader(doc, margin, y, "Valori OMI — Osservatorio Mercato Immobiliare (stime AI — verifica su agenziaentrate.gov.it)");
+      const omiSubLabel = omi.is_default
+        ? `Valori OMI — ${omi.fascia_omi} — media provinciale indicativa (comune non in DB OMI specifico)`
+        : `Valori OMI — ${omi.fascia_omi} — verifica su agenziaentrate.gov.it`;
+      y = subHeader(doc, margin, y, omiSubLabel);
       const valoreMercatoMin = omi.omi_min_mq * mq;
       const valoreMercatoMax = omi.omi_max_mq * mq;
       const valorePostRistrMin = omi.omi_post_ristr_min * mq;
