@@ -13,6 +13,7 @@ import { useQuery } from "@tanstack/react-query";
 import { calculatePlanimetriaArea } from '@/functions/calculatePlanimetriaArea';
 import { fetchParcelFromAgent } from '@/functions/fetchParcelFromAgent';
 import PublicSearchPreview from "@/components/search/PublicSearchPreview";
+import { logSearch } from "@/functions/logSearch";
 
 const BETA_REGIONS = ['piemonte', 'liguria', 'lombardia'];
 
@@ -113,7 +114,7 @@ export default function SearchPage() {
       const resolverData = resolverRes.status === "fulfilled" ? resolverRes.value?.data : null;
       const agentData = agentRes.status === "fulfilled" ? agentRes.value?.data : null;
 
-      setPublicPreview({
+      const previewResult = {
         comune: formData.comune,
         foglio: formData.foglio,
         particella: formData.particella,
@@ -125,8 +126,12 @@ export default function SearchPage() {
         centroid_lat: agentData?.centroid_lat || resolverData?.centroid_lat || null,
         centroid_lng: agentData?.centroid_lng || resolverData?.centroid_lng || null,
         geometry_geojson: agentData?.geometry_geojson || resolverData?.geometry_geojson || null,
-      });
+      };
+      const trovata = !!(previewResult.centroid_lat || previewResult.categoria);
+      logSearch({ comune: formData.comune, foglio: formData.foglio, particella: formData.particella, regione: formData.regione || '', esito: trovata ? 'trovata' : 'non_trovata', user_email: '' }).catch(() => {});
+      setPublicPreview(previewResult);
     } catch (err) {
+      logSearch({ comune: formData.comune, foglio: formData.foglio, particella: formData.particella, regione: formData.regione || '', esito: 'non_trovata', user_email: '' }).catch(() => {});
       // Anche se fallisce, mostra comunque l'anteprima con i dati inseriti dall'utente
       setPublicPreview({
         comune: formData.comune,
@@ -211,6 +216,8 @@ export default function SearchPage() {
     }
 
     // Chiama in parallelo: catasto_resolver (dati urbanistici) + fetchParcelFromAgent (mappale server-side)
+    logSearch({ comune: formData.comune, foglio: formData.foglio, particella: formData.particella, regione: formData.regione || '', esito: 'trovata', user_email: currentUser?.email || '' }).catch(() => {});
+
     catasto_resolver({
       nome_comune: formData.comune, regione: formData.regione,
       foglio: formData.foglio, particella: formData.particella,
@@ -399,6 +406,8 @@ export default function SearchPage() {
         console.error('Batch charge error:', e);
       }
     }
+
+    logSearch({ comune: sharedCadastral.comune, foglio: units[0]?.foglio || '', particella: units[0]?.particella || '', regione: sharedCadastral.regione || '', esito: completedCount > 0 ? 'trovata' : 'non_trovata', user_email: currentUser?.email || '' }).catch(() => {});
 
     navigate(`/batch/${batchRecord.id}`);
   };

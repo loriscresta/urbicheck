@@ -1,0 +1,62 @@
+{
+  "name": "SearchLog",
+  "type": "object",
+  "properties": {
+    "comune": {
+      "type": "string",
+      "description": "Nome del comune cercato"
+    },
+    "foglio": {
+      "type": "string",
+      "description": "Numero foglio catastale"
+    },
+    "particella": {
+      "type": "string",
+      "description": "Numero particella catastale"
+    },
+    "regione": {
+      "type": "string",
+      "description": "Regione italiana"
+    },
+    "esito": {
+      "type": "string",
+      "enum": [
+        "trovata",
+        "non_trovata"
+      ],
+      "description": "Esito della ricerca catastale"
+    },
+    "user_email": {
+      "type": "string",
+      "description": "Email utente se loggato, vuoto se anonimo"
+    }
+  },
+  "required": [
+    "comune",
+    "foglio",
+    "particella",
+    "esito"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "read": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}
