@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
-import { base44 } from "@/api/base44Client";
+import { getPublicReport } from "@/functions/getPublicReport";
 import { Loader2, Lock, AlertTriangle } from "lucide-react";
 import ReportPageContent from "@/components/report/ReportPageContent";
 
@@ -20,26 +20,24 @@ export default function PublicReportPage() {
       return;
     }
 
-    base44.asServiceRole.entities.CadastralQuery.filter({ id: reportId })
-      .then((results) => {
-        const q = results[0];
-        if (!q) {
+    getPublicReport({ query_id: reportId, token })
+      .then((res) => {
+        const data = res?.data;
+        if (data?.error) {
+          setError(
+            data.error === 'Link scaduto'
+              ? "Il link di accesso è scaduto. Richiedi un nuovo link al mittente."
+              : data.error === 'Token non valido'
+              ? "Token non valido — controlla di aver copiato il link correttamente."
+              : data.error
+          );
+          return;
+        }
+        if (!data?.query) {
           setError("Report non trovato.");
           return;
         }
-        if (q.public_token !== token) {
-          setError("Token non valido o link scaduto.");
-          return;
-        }
-        if (q.token_expires_at && new Date(q.token_expires_at) < new Date()) {
-          setError("Il link di accesso è scaduto. Richiedi un nuovo link al mittente.");
-          return;
-        }
-        if (!q.paid) {
-          setError("Report non ancora disponibile.");
-          return;
-        }
-        setQuery(q);
+        setQuery(data.query);
       })
       .catch(() => setError("Errore nel caricamento del report."))
       .finally(() => setLoading(false));

@@ -1,14 +1,30 @@
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 
 // ── Funnel di lancio ──────────────────────────────────────────────────────────
 // Report 1–3:  GRATIS
 // Report 4–6:  €2,99 (offerta lancio, max 3)
 // Report 7+:   €9,90 (prezzo standard)
+const APP_URL = Deno.env.get('APP_URL') || 'https://urbicheck.it';
+
 const FREE_REPORTS = 3;        // report gratuiti per email
 const FREE_REPORTS_IP = 25;    // report gratuiti per indirizzo IP — modifica qui per cambiare soglia
 const LAUNCH_PAID_REPORTS = 3; // report a prezzo lancio (dopo i gratuiti)
 const LAUNCH_PRICE = 2.99;     // prezzo offerta lancio
 const STANDARD_PRICE = 9.90;   // prezzo standard (report 7+)
+
+// Genera un token pubblico firmato con scadenza 72h e salva report_url sul record
+async function generateAndSavePublicToken(base44, query_id, comune, foglio, particella) {
+  const token = crypto.randomUUID().replace(/-/g, '');
+  const expiresAt = new Date(Date.now() + 72 * 60 * 60 * 1000).toISOString();
+  const reportUrl = `${APP_URL}/report/public/${query_id}?token=${token}`;
+  await base44.asServiceRole.entities.CadastralQuery.update(query_id, {
+    public_token: token,
+    token_expires_at: expiresAt,
+    report_url: reportUrl,
+  });
+  console.log(`chargeReport: generated public token for ${query_id}, expires ${expiresAt}`);
+  return { token, expiresAt, reportUrl };
+}
 
 // Estrae l'IP reale del client dagli header della request
 function getClientIp(req) {
@@ -37,6 +53,7 @@ Deno.serve(async (req) => {
       if (!adminQuery) return Response.json({ error: 'Query not found' }, { status: 404 });
       if (!adminQuery.paid) {
         await base44.asServiceRole.entities.CadastralQuery.update(query_id, { paid: true, status: 'completed', cost: 0 });
+        await generateAndSavePublicToken(base44, query_id, adminQuery.comune, adminQuery.foglio, adminQuery.particella);
       }
       return Response.json({ ok: true, deducted: 0, tier: 'admin_free' });
     }
@@ -114,6 +131,7 @@ Deno.serve(async (req) => {
       }
 
       await base44.asServiceRole.entities.CadastralQuery.update(query_id, { paid: true, status: 'completed', cost: 0 });
+      await generateAndSavePublicToken(base44, query_id, query.comune, query.foglio, query.particella);
       await base44.asServiceRole.entities.CreditTransaction.create({
         user_email: user.email, type: 'query_charge', amount: 0,
         description: `Report gratuito #${freeUsed + 1}/3 — ${query.comune || ''} F.${query.foglio} P.${query.particella}`,
@@ -141,6 +159,7 @@ Deno.serve(async (req) => {
         beta_paid_reports_used: launchPaidUsed + 1,
       });
       await base44.asServiceRole.entities.CadastralQuery.update(query_id, { paid: true, status: 'completed', cost: LAUNCH_PRICE });
+      await generateAndSavePublicToken(base44, query_id, query.comune, query.foglio, query.particella);
       await base44.asServiceRole.entities.CreditTransaction.create({
         user_email: user.email, type: 'query_charge', amount: -LAUNCH_PRICE,
         description: `Report lancio €2,99 #${launchPaidUsed + 1}/3 — ${query.comune || ''} F.${query.foglio} P.${query.particella}`,
@@ -167,6 +186,7 @@ Deno.serve(async (req) => {
         total_queries: (credits.total_queries || 0) + 1,
       });
       await base44.asServiceRole.entities.CadastralQuery.update(query_id, { paid: true, status: 'completed', cost: STANDARD_PRICE });
+      await generateAndSavePublicToken(base44, query_id, query.comune, query.foglio, query.particella);
       await base44.asServiceRole.entities.CreditTransaction.create({
         user_email: user.email, type: 'query_charge', amount: -STANDARD_PRICE,
         description: `Report standard €9,90 — ${query.comune || ''} F.${query.foglio} P.${query.particella}`,

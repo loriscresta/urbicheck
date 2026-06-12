@@ -1,13 +1,12 @@
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 
 const APP_URL = Deno.env.get('APP_URL') || 'https://urbicheck.base44.app';
 
-function buildEmailHtml({ userName, comune, foglio, particella, score, elementi, queryId, publicToken }) {
+function buildEmailHtml({ userName, comune, foglio, particella, score, elementi, queryId, publicToken, reportUrl: reportUrlArg }) {
   const scoreColor = score >= 7 ? '#059669' : score >= 5 ? '#d97706' : '#dc2626';
   const scoreLabel = score >= 7 ? 'Basso Rischio' : score >= 5 ? 'Rischio Medio' : 'Alto Rischio';
-  const reportUrl = publicToken
-    ? `${APP_URL}/report/public/${queryId}?token=${publicToken}`
-    : APP_URL;
+  const reportUrl = reportUrlArg
+    || (publicToken ? `${APP_URL}/report/public/${queryId}?token=${publicToken}` : APP_URL);
 
   const elementiHtml = (elementi || []).map(e => `
     <tr>
@@ -220,6 +219,24 @@ Deno.serve(async (req) => {
       elementi.push({ icon: p2 ? '🔴' : '🟢', label: 'Rischio Idraulico', value: p2 ? 'Rilevato' : 'Nessun rischio', ok: !p2 });
     }
 
+    // Usa report_url già firmato salvato sul record; fallback a generazione inline se mancante
+    let publicToken = query.public_token || null;
+    let reportUrlOverride = query.report_url || null;
+
+    if (!reportUrlOverride && !publicToken) {
+      // report_url non ancora generato (record vecchio) — genera ora
+      const APP_URL = Deno.env.get('APP_URL') || 'https://urbicheck.it';
+      publicToken = crypto.randomUUID().replace(/-/g, '');
+      const expiresAt = new Date(Date.now() + 72 * 60 * 60 * 1000).toISOString();
+      reportUrlOverride = `${APP_URL}/report/public/${query_id}?token=${publicToken}`;
+      await base44.asServiceRole.entities.CadastralQuery.update(query_id, {
+        public_token: publicToken,
+        token_expires_at: expiresAt,
+        report_url: reportUrlOverride,
+      });
+      console.log('[sendReportReadyEmail] generated missing public token for', query_id);
+    }
+
     const subject = `✅ Il tuo report UrbiCheck è pronto — ${query.comune} Fg.${query.foglio} Map.${query.particella}`;
     const html = buildEmailHtml({
       userName,
@@ -229,7 +246,8 @@ Deno.serve(async (req) => {
       score,
       elementi: elementi.slice(0, 4),
       queryId: query_id,
-      publicToken: query.public_token || null,
+      publicToken,
+      reportUrl: reportUrlOverride,
     });
 
     await base44.asServiceRole.integrations.Core.SendEmail({

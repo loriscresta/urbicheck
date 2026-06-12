@@ -145,6 +145,15 @@
       "description": "Provincia (auto-popolata)",
       "type": "string"
     },
+    "public_token": {
+      "description": "Token univoco per accesso pubblico al report senza login (UUID v4 senza trattini)",
+      "type": "string"
+    },
+    "token_expires_at": {
+      "description": "Scadenza del public_token (ISO 8601) \u2014 validit\u00e0 72 ore dalla generazione",
+      "type": "string",
+      "format": "date-time"
+    },
     "regione": {
       "description": "Regione italiana (auto-popolata)",
       "type": "string"
@@ -158,7 +167,7 @@
       "type": "object"
     },
     "report_url": {
-      "description": "URL al PDF del report finale elaborato da UrbiCheck",
+      "description": "URL firmato con public_token per accesso diretto al report (incluso nell'email post-acquisto)",
       "type": "string"
     },
     "sezione_catastale": {
