@@ -80,6 +80,8 @@ export default function PlanimetriaSection({ query, onUpdated }) {
     if (!mq || mq < 1) return;
     try {
       const current = query;
+      // NON sovrascrivere superficie_mq se già presente da catasto (fonte primaria)
+      const soloSeManca = !superficieCatasto ? { superficie_mq: mq } : {};
       await base44.entities.CadastralQuery.update(query.id, {
         report_data: {
           ...current.report_data,
@@ -92,7 +94,7 @@ export default function PlanimetriaSection({ query, onUpdated }) {
             confidence: 'manuale',
           },
         },
-        superficie_mq: mq,
+        ...soloSeManca,
       });
       setShowManual(false);
       queryClient.invalidateQueries({ queryKey: ["query", query.id] });
@@ -136,12 +138,12 @@ export default function PlanimetriaSection({ query, onUpdated }) {
             </div>
           )}
 
-          {/* 2. Planimetria AI — mostrata se calcolata */}
+          {/* 2. Planimetria AI — mostrata se calcolata (secondaria: NON sovrascrive catasto) */}
           {superficiePlanimetrica && (
             <div className="flex items-center justify-between p-2 rounded bg-emerald-50 border border-emerald-200">
               <div>
                 <span className="text-xs text-emerald-700 font-medium">
-                  {planimetriaData?.method === 'inserimento_manuale' ? 'Inserita manualmente' : 'Da planimetria (stima AI)'}
+                  {planimetriaData?.method === 'inserimento_manuale' ? 'Inserita manualmente' : 'Da planimetria (stima AI — secondaria)'}
                 </span>
                 {planimetriaData?.scala && (
                   <span className="text-[10px] text-emerald-600 ml-2">scala {planimetriaData.scala}</span>
@@ -155,8 +157,19 @@ export default function PlanimetriaSection({ query, onUpdated }) {
               <span className="text-sm font-semibold text-emerald-800">
                 {Number(superficiePlanimetrica).toLocaleString('it-IT', { minimumFractionDigits: 0 })} m²
                 {planimetriaData?.method !== 'inserimento_manuale' && (
-                  <span className="text-[10px] font-normal text-emerald-600 ml-1">(indicativa)</span>
+                  <span className="text-[10px] font-normal text-emerald-600 ml-1">(±10%)</span>
                 )}
+              </span>
+            </div>
+          )}
+
+          {/* Disclaimer: planimetria è secondaria, superficie ufficiale è quella catastale */}
+          {superficiePlanimetrica && planimetriaData?.method !== 'inserimento_manuale' && (
+            <div className="mt-2 flex items-start gap-2 p-2 rounded bg-blue-50 border border-blue-200 text-[10px] text-blue-700">
+              <AlertTriangle className="w-3 h-3 shrink-0 mt-0.5" />
+              <span>
+                <strong>Stima da planimetria (±10%)</strong> — la superficie ufficiale è quella catastale (da visura AdE).
+                La planimetria serve solo come confronto; non sostituisce il dato catastale.
               </span>
             </div>
           )}

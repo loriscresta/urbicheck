@@ -265,10 +265,13 @@ export default function SearchPage() {
       query_ids: [],
     });
 
-    // Per-unit price allocation from total acquisition price
+    // Per-unit price allocation from total acquisition price — pertinenze ESCLUSE da sommatoria
     const totalAcquisitionPrice = parseFloat(formData.total_acquisition_price) || 0;
-    const unitSurfaces = units.map(u => parseFloat(u.superficie_mq) || (parseFloat(u.vani) * 27) || 0);
+    const nonPertinenzaUnits = units.filter(u => !u.is_pertinenza);
+    const pertinenzaUnits = units.filter(u => u.is_pertinenza);
+    const unitSurfaces = units.map(u => (u.is_pertinenza ? 0 : parseFloat(u.superficie_mq) || (parseFloat(u.vani) * 27) || 0));
     const totalSupBatch = unitSurfaces.reduce((s, v) => s + v, 0);
+    const pertinenzaTotalMq = pertinenzaUnits.reduce((s, u) => s + (parseFloat(u.superficie_mq) || 0), 0);
     const getAllocatedPrice = (i) => {
       if (!totalAcquisitionPrice) return null;
       if (totalSupBatch > 0 && unitSurfaces[i] > 0)
@@ -296,16 +299,17 @@ export default function SearchPage() {
       try {
         const reportData = await generateReport({ ...sharedCadastral, ...unit }, batchEnrichment);
 
-        // Per-unit catastral data from visura (overrides shared)
-        const unitCatastral = unit.categoria_catastale || unit.superficie_mq || unit.rendita_catastale || unit.vani
+        // Per-unit catastral data from visura — SOLO dati reali di QUESTO sub, mai dal primo sub
+        const hasOwnData = unit.categoria_catastale || unit.superficie_mq || unit.rendita_catastale || unit.vani;
+        const unitCatastral = hasOwnData
           ? {
-              categoria_catastale: unit.categoria_catastale,
-              superficie_mq: unit.superficie_mq,
-              rendita_catastale: unit.rendita_catastale,
-              vani: unit.vani,
+              categoria_catastale: unit.categoria_catastale || undefined,
+              superficie_mq: unit.superficie_mq || undefined,
+              rendita_catastale: unit.rendita_catastale || undefined,
+              vani: unit.vani || undefined,
               visura_uploaded: true,
             }
-          : visuraExtra;
+          : { visura_uploaded: false, _dati_mancanti: true };
 
         const prezzoUnitaAllocato = getAllocatedPrice(i);
         const batchGeoCoords = (_bLat && isValidItalianCoord(_bLat, _bLon)) ? {
@@ -378,26 +382,29 @@ export default function SearchPage() {
     });
 
     // ── Charge batch credits once + set paid=true on all queries ──────────
-    if (queryIds.length > 0) {
+    // Pertinenze (C/2, C/6, C/7) NON consumano report/crediti — solo unità residenziali
+    const billableQueryIds = queryIds.filter((qid, i) => !units[i]?.is_pertinenza);
+    const billableCount = billableQueryIds.length;
+    if (billableCount > 0) {
       try {
         const user = await base44.auth.me();
         const creditsList = await base44.entities.UserCredits.filter({ user_email: user.email });
         const credits = creditsList[0];
-        const totalCost = +(pricePerUnit * queryIds.length).toFixed(2);
+        const totalCost = +(pricePerUnit * billableCount).toFixed(2);
 
         if (credits && credits.balance >= totalCost) {
           await base44.entities.UserCredits.update(credits.id, {
             balance: +(credits.balance - totalCost).toFixed(2),
             total_spent: +((credits.total_spent || 0) + totalCost).toFixed(2),
-            total_queries: (credits.total_queries || 0) + queryIds.length,
+            total_queries: (credits.total_queries || 0) + billableCount,
           });
           await base44.entities.CreditTransaction.create({
             user_email: user.email,
             type: 'query_charge',
             amount: -totalCost,
-            description: `Batch ${queryIds.length} unità — ${sharedCadastral.comune} (€${pricePerUnit.toFixed(2)}/ud)`,
+            description: `Batch ${billableCount} unità${pertinenzaUnits.length > 0 ? ` (+${pertinenzaUnits.length} pertinenze)` : ''} — ${sharedCadastral.comune} (€${pricePerUnit.toFixed(2)}/ud)`,
           });
-          // Set paid=true on all batch queries in parallel
+          // Set paid=true on all batch queries (including pertinenze — they're free extras)
           await Promise.all(queryIds.map(qid =>
             base44.entities.CadastralQuery.update(qid, { paid: true })
           ));

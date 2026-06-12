@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
 import { parseVisuraCatastale } from "@/functions/parseVisuraCatastale";
 import { Loader2, FileUp, CheckCircle2, X, AlertCircle, Building2, Users } from "lucide-react";
@@ -10,6 +10,7 @@ export default function VisuraUploader({ onDataExtracted }) {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [error, setError] = useState(null);
   const [extracted, setExtracted] = useState(null);
+  const [pertinenzaSelections, setPertinenzaSelections] = useState(null); // { [idx]: 'si'|'no'|'unknown' }
   const inputRef = useRef(null);
 
   const handleFile = async (file) => {
@@ -81,10 +82,30 @@ export default function VisuraUploader({ onDataExtracted }) {
     handleFile(file);
   };
 
+  // Sync pertinenza selections when multiSubData changes
+  React.useEffect(() => {
+    if (!multiSubData?.subs) { setPertinenzaSelections(null); return; }
+    const subs = multiSubData.subs;
+    const hasResidential = subs.some(s => /^A\//i.test(s.categoria || ''));
+    const hasAccessory = subs.some(s => /^(C\/2|C\/6|C\/7)/i.test(s.categoria || ''));
+    if (hasResidential && hasAccessory) {
+      setPertinenzaSelections(
+        subs.reduce((acc, s, i) => {
+          if (/^(C\/2|C\/6|C\/7)/i.test(s.categoria || '')) acc[i] = 'unknown';
+          else acc[i] = 'no';
+          return acc;
+        }, {})
+      );
+    } else {
+      setPertinenzaSelections(null);
+    }
+  }, [multiSubData]);
+
   const handleReset = () => {
     setExtracted(null);
     setError(null);
     setMultiSubData(null);
+    setPertinenzaSelections(null);
     if (inputRef.current) inputRef.current.value = "";
     onDataExtracted({});
   };
@@ -105,42 +126,177 @@ export default function VisuraUploader({ onDataExtracted }) {
 
   // Multi-subalterno confirm UI
   if (multiSubData) {
+    const subs = multiSubData.subs;
+    const hasResidential = subs.some(s => /^A\//i.test(s.categoria || ''));
+    const hasAccessory = subs.some(s => /^(C\/2|C\/6|C\/7)/i.test(s.categoria || ''));
+    const hasMixedAC = hasResidential && hasAccessory;
+
+    const handlePertinenzaChoice = (idx, choice) => {
+      setPertinenzaSelections(prev => ({ ...prev, [idx]: choice }));
+    };
+
+    const allPertinenzeResolved = !hasMixedAC || Object.values(pertinenzaSelections).every(v => v !== 'unknown');
+    const hasPertinenzeYes = hasMixedAC && Object.values(pertinenzaSelections).some(v => v === 'si');
+
+    const handleAnalizzaTuttiWithPertinenze = () => {
+      const taggedSubs = subs.map((s, i) => ({
+        ...s,
+        is_pertinenza: pertinenzaSelections[i] === 'si',
+      }));
+      const dati = { ...multiSubData, _allSubalterns: taggedSubs, _hasPertinenze: hasPertinenzeYes };
+      setExtracted(dati);
+      setMultiSubData(null);
+      onDataExtracted(dati);
+    };
+
+    if (hasMixedAC && !allPertinenzeResolved) {
+      // Mostra UI pertinenze: per ogni C/x, chiedi all'utente
+      return (
+        <div className="mb-6 border-2 border-amber-400 rounded-lg p-4 bg-amber-50" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
+          <div className="flex items-start gap-3 mb-4">
+            <Building2 className="w-6 h-6 text-amber-600 shrink-0 mt-0.5" />
+            <div>
+              <p className="font-bold text-sm" style={{ color: '#92400e' }}>
+                Trovati {subs.length} subalterni — alcuni potrebbero essere pertinenze
+              </p>
+              <p className="text-xs text-amber-800 mt-0.5">
+                F.{multiSubData.foglio} P.{multiSubData.particella} — 
+                Le categorie C/2 (cantina), C/6 (box/garage), C/7 (tettoia) sono spesso pertinenze di un'abitazione.
+                Una pertinenza non consuma crediti aggiuntivi.
+              </p>
+            </div>
+          </div>
+
+          <div className="overflow-x-auto mb-4">
+            <table className="w-full text-xs border-collapse bg-white rounded">
+              <thead>
+                <tr className="bg-amber-100">
+                  {['Sub.', 'Categoria', 'Superficie', 'Vani', 'Rendita', 'È pertinenza?'].map(h => (
+                    <th key={h} className="border border-amber-200 px-2 py-1.5 text-left font-semibold text-[10px] uppercase tracking-wide text-amber-900">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {subs.map((s, i) => {
+                  const isC = /^(C\/2|C\/6|C\/7)/i.test(s.categoria || '');
+                  const isA = /^A\//i.test(s.categoria || '');
+                  return (
+                    <tr key={i} className={i % 2 === 0 ? 'bg-white' : 'bg-amber-50/30'}>
+                      <td className="border border-amber-200 px-2 py-1.5 font-bold">{s.subalterno || '—'}</td>
+                      <td className="border border-amber-200 px-2 py-1.5">
+                        <span className={isA ? 'text-emerald-700 font-semibold' : isC ? 'text-amber-700' : ''}>
+                          {s.categoria || '—'}
+                        </span>
+                      </td>
+                      <td className="border border-amber-200 px-2 py-1.5">{s.superficie_mq ? `${s.superficie_mq} mq` : '—'}</td>
+                      <td className="border border-amber-200 px-2 py-1.5">{s.vani ?? '—'}</td>
+                      <td className="border border-amber-200 px-2 py-1.5">{s.rendita_catastale ? `€${s.rendita_catastale.toLocaleString('it-IT')}` : '—'}</td>
+                      <td className="border border-amber-200 px-2 py-1.5">
+                        {isC ? (
+                          <div className="flex gap-1">
+                            <button
+                              type="button"
+                              onClick={() => handlePertinenzaChoice(i, 'si')}
+                              className={`px-2 py-0.5 text-[10px] rounded border font-semibold transition-colors ${
+                                pertinenzaSelections[i] === 'si'
+                                  ? 'bg-amber-600 text-white border-amber-600'
+                                  : 'bg-white text-amber-700 border-amber-300 hover:bg-amber-100'
+                              }`}
+                            >
+                              Sì, è pertinenza
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handlePertinenzaChoice(i, 'no')}
+                              className={`px-2 py-0.5 text-[10px] rounded border font-semibold transition-colors ${
+                                pertinenzaSelections[i] === 'no'
+                                  ? 'bg-primary text-white border-primary'
+                                  : 'bg-white text-primary border-border hover:bg-blue-50'
+                              }`}
+                            >
+                              No, unità separata
+                            </button>
+                          </div>
+                        ) : (
+                          <span className="text-[10px] text-emerald-700">Unità principale</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="flex flex-col sm:flex-row gap-2">
+            <Button
+              type="button"
+              onClick={handleAnalizzaTuttiWithPertinenze}
+              className="flex-1 gap-2"
+              style={{ background: hasPertinenzeYes ? '#d97706' : '#1A3A6B' }}
+            >
+              <Users className="w-4 h-4" />
+              {hasPertinenzeYes
+                ? `Analizza — ${subs.length - Object.values(pertinenzaSelections).filter(v => v === 'si').length} unità (+ pertinenze)`
+                : `Analizza tutti ${subs.length} subalterni`}
+            </Button>
+            <Button type="button" variant="outline" onClick={handleAnalizzaSolo} className="flex-1">
+              Solo 1 subalterno
+            </Button>
+          </div>
+        </div>
+      );
+    }
+
+    // All subs are residential (A/x) or pertinenze resolved — standard multi-sub UI
     return (
       <div className="mb-6 border-2 border-primary rounded-lg p-4 bg-blue-50" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
         <div className="flex items-start gap-3 mb-4">
           <Building2 className="w-6 h-6 text-primary shrink-0 mt-0.5" />
           <div>
-            <p className="font-bold text-sm" style={{ color: '#1A3A6B' }}>Trovati {multiSubData.subs.length} subalterni nella visura</p>
-            <p className="text-xs text-muted-foreground mt-0.5">F.{multiSubData.foglio} P.{multiSubData.particella} — Come vuoi procedere?</p>
+            <p className="font-bold text-sm" style={{ color: '#1A3A6B' }}>Trovati {subs.length} subalterni nella visura</p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              F.{multiSubData.foglio} P.{multiSubData.particella}
+              {hasMixedAC && hasPertinenzeYes ? ` — ${Object.values(pertinenzaSelections).filter(v => v === 'si').length} pertinenze rilevate` : ''}
+              — Come vuoi procedere?
+            </p>
           </div>
         </div>
         <div className="overflow-x-auto mb-4">
           <table className="w-full text-xs border-collapse">
             <thead>
               <tr className="bg-white">
-                {['Sub.', 'Categoria', 'Piano', 'Superficie', 'Vani', 'Rendita'].map(h => (
+                {['Sub.', 'Categoria', 'Piano', 'Superficie', 'Vani', 'Rendita', 'Tipo'].map(h => (
                   <th key={h} className="border border-border px-2 py-1.5 text-left font-semibold text-[10px] uppercase tracking-wide">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {multiSubData.subs.map((s, i) => (
-                <tr key={i} className={i % 2 === 0 ? 'bg-white' : 'bg-blue-50/50'}>
-                  <td className="border border-border px-2 py-1 font-bold">{s.subalterno || '—'}</td>
-                  <td className="border border-border px-2 py-1">{s.categoria || '—'}</td>
-                  <td className="border border-border px-2 py-1">{s.piano || '—'}</td>
-                  <td className="border border-border px-2 py-1">{s.superficie_mq ? `${s.superficie_mq} mq` : '—'}</td>
-                  <td className="border border-border px-2 py-1">{s.vani ?? '—'}</td>
-                  <td className="border border-border px-2 py-1">{s.rendita_catastale ? `€${s.rendita_catastale.toLocaleString('it-IT')}` : '—'}</td>
-                </tr>
-              ))}
+              {subs.map((s, i) => {
+                const isPertinenza = s.is_pertinenza === true;
+                return (
+                  <tr key={i} className={i % 2 === 0 ? 'bg-white' : 'bg-blue-50/50'}>
+                    <td className="border border-border px-2 py-1 font-bold">{s.subalterno || '—'}</td>
+                    <td className="border border-border px-2 py-1">{s.categoria || '—'}</td>
+                    <td className="border border-border px-2 py-1">{s.piano || '—'}</td>
+                    <td className="border border-border px-2 py-1">{s.superficie_mq ? `${s.superficie_mq} mq` : '—'}</td>
+                    <td className="border border-border px-2 py-1">{s.vani ?? '—'}</td>
+                    <td className="border border-border px-2 py-1">{s.rendita_catastale ? `€${s.rendita_catastale.toLocaleString('it-IT')}` : '—'}</td>
+                    <td className="border border-border px-2 py-1">
+                      {isPertinenza
+                        ? <span className="text-[10px] text-amber-700 font-semibold">Pertinenza</span>
+                        : <span className="text-[10px] text-emerald-700">Unità</span>}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
         <div className="flex flex-col sm:flex-row gap-2">
-          <Button type="button" onClick={handleAnalizzaTutti} className="flex-1 gap-2" style={{ background: '#1A3A6B' }}>
+          <Button type="button" onClick={hasMixedAC ? handleAnalizzaTuttiWithPertinenze : handleAnalizzaTutti} className="flex-1 gap-2" style={{ background: '#1A3A6B' }}>
             <Users className="w-4 h-4" />
-            Analizza tutti {multiSubData.subs.length} subalterni <span className="opacity-70 text-xs">(consigliato)</span>
+            Analizza tutti {subs.length} subalterni <span className="opacity-70 text-xs">(consigliato)</span>
           </Button>
           <Button type="button" variant="outline" onClick={handleAnalizzaSolo} className="flex-1">
             Solo 1 subalterno

@@ -264,6 +264,7 @@ export default function CadastralSearchForm({ onSubmit, isLoading, submitLabel =
             ...(subVis.vani ? { vani: subVis.vani } : {}),
             ...(subVis.rendita_catastale ? { rendita_catastale: subVis.rendita_catastale } : {}),
             ...(subVis.categoria ? { categoria_catastale: subVis.categoria } : {}),
+            ...(subVis.is_pertinenza ? { is_pertinenza: true } : {}),
           });
         }
       }
@@ -273,6 +274,7 @@ export default function CadastralSearchForm({ onSubmit, isLoading, submitLabel =
         units,
         bulkPricing: pricing,
         total_acquisition_price: parseFloat(totalAcquisitionPrice) || undefined,
+        _hasPertinenze: visuraDati?._hasPertinenze || false,
       });
     }
   };

@@ -30,6 +30,15 @@ Deno.serve(async (req) => {
   // ── STEP 2: Parsing regex ──
   const dati = testo ? parseRegex(testo) : {};
 
+  // ── STEP 2b: Estrai Superficie Catastale da visura (campo separato da mq singola) ──
+  if (testo) {
+    const supTotale = parseSuperficieCatastale(testo);
+    if (supTotale.superficie_totale_mq) dati.superficie_totale_mq = supTotale.superficie_totale_mq;
+    if (supTotale.superficie_escluse_aree_scoperte_mq) dati.superficie_escluse_aree_scoperte_mq = supTotale.superficie_escluse_aree_scoperte_mq;
+    // Superficie mq primaria = Totale (se presente), altrimenti resta quella da regex/AI
+    if (supTotale.superficie_totale_mq && !dati.superficie_mq) dati.superficie_mq = supTotale.superficie_totale_mq;
+  }
+
   // ── STEP 3: Fallback / arricchimento AI ──
   const campiMancanti = !dati.foglio || !dati.particella || !dati.comune;
   const needsAI = campiMancanti || file_url;
@@ -50,7 +59,9 @@ Deno.serve(async (req) => {
             particella: { type: "string" },
             subalterno: { type: "string" },
             categoria_catastale: { type: "string", description: "es. A/3, C/6, D/1" },
-            superficie_mq: { type: "number" },
+            superficie_mq: { type: "number", description: "Superficie in mq dalla colonna Superficie della tabella intestazione. NON il Totale." },
+            superficie_catastale_totale: { type: "number", description: "Superficie Catastale Totale in mq (es. Totale: 245 m²). Campo separato dalla superficie della singola unità." },
+            superficie_catastale_escluse_aree_scoperte: { type: "number", description: "Superficie Catastale Totale escluse aree scoperte in mq, quando presente separatamente." },
             rendita_catastale: { type: "number" },
             vani: { type: "number" },
             indirizzo_catastale: { type: "string" },
@@ -82,6 +93,10 @@ Deno.serve(async (req) => {
         if (!dati.subalterno && aiResult.subalterno) dati.subalterno = aiResult.subalterno;
         if (!dati.categoria_catastale && aiResult.categoria_catastale) dati.categoria_catastale = aiResult.categoria_catastale;
         if (!dati.superficie_mq && aiResult.superficie_mq) dati.superficie_mq = aiResult.superficie_mq;
+        if (!dati.superficie_totale_mq && aiResult.superficie_catastale_totale) dati.superficie_totale_mq = aiResult.superficie_catastale_totale;
+        if (!dati.superficie_escluse_aree_scoperte_mq && aiResult.superficie_catastale_escluse_aree_scoperte) dati.superficie_escluse_aree_scoperte_mq = aiResult.superficie_catastale_escluse_aree_scoperte;
+        // Se superficie_totale esiste ma superficie_mq no, usa totale come fallback
+        if (!dati.superficie_mq && dati.superficie_totale_mq) dati.superficie_mq = dati.superficie_totale_mq;
         if (!dati.rendita_catastale && aiResult.rendita_catastale) dati.rendita_catastale = aiResult.rendita_catastale;
         if (!dati.vani && aiResult.vani) dati.vani = aiResult.vani;
         if (!dati.indirizzo_catastale && aiResult.indirizzo_catastale) dati.indirizzo_catastale = aiResult.indirizzo_catastale;
@@ -173,6 +188,44 @@ function parseRegex(testo) {
   return dati;
 }
 
+// ── Parser Superficie Catastale ──────────────────────────────────────────────
+function parseSuperficieCatastale(testo) {
+  const result = {};
+
+  // Pattern "Totale: XXXX m²" (presente nella sezione DATI DI CLASSAMENTO o RIEPILOGO)
+  // Prova prima "Superficie Catastale Totale: N m²" o "Totale Superficie Catastale: N m²"
+  const totaleRe = /(?:Superficie\s+Catastale\s*(?:Totale)?|Totale\s*(?:Superficie\s*Catastale)?)[:\s]+(\d[\d.,]*)\s*[Mm]q/i;
+  const totaleM = totaleRe.exec(testo);
+  if (totaleM) result.superficie_totale_mq = parseInt(totaleM[1].replace(/[,.]/g, ''), 10);
+
+  // Fallback diretto: "Totale: N" o "Totale: N m²" (senza "Superficie Catastale" prima)
+  if (!result.superficie_totale_mq) {
+    const totSimpleRe = /Totale[:\s]+(\d[\d.,]{1,6})\s*[Mm]q/i;
+    const totSimpleM = totSimpleRe.exec(testo);
+    if (totSimpleM) {
+      const val = parseInt(totSimpleM[1].replace(/[,.]/g, ''), 10);
+      if (val > 50) result.superficie_totale_mq = val;
+    }
+  }
+
+  // Pattern "Totale escluse aree scoperte: Y m²"
+  const escluseRe = /(?:Totale\s*escluse\s*aree\s*scoperte)[:\s]*(\d[\d.,]*)\s*[Mm]q/i;
+  const escluseM = escluseRe.exec(testo);
+  if (escluseM) result.superficie_escluse_aree_scoperte_mq = parseInt(escluseM[1].replace(/[,.]/g, ''), 10);
+
+  // Fallback: "Superficie Catastale" seguito da numero grande (>100) — diverso dalla colonna "Superficie" singola
+  if (!result.superficie_totale_mq) {
+    const supCatRe = /Superficie\s*Catastale[:\s]*(\d[\d.,]*)\s*[Mm]q/gi;
+    let m;
+    while ((m = supCatRe.exec(testo)) !== null) {
+      const val = parseInt(m[1].replace(/[,.]/g, ''), 10);
+      if (val > 50) { result.superficie_totale_mq = val; break; }
+    }
+  }
+
+  return result;
+}
+
 function buildAIPrompt(testo) {
   return `Sei un esperto catastale italiano. Analizza questa visura catastale dell'Agenzia delle Entrate ed estrai i seguenti dati strutturati.
 
@@ -190,7 +243,8 @@ Devi estrarre TUTTI questi campi dalla tabella:
 - categoria_catastale: es. "A/3", "C/6", "D/1"
 - classe_catastale: il valore nella colonna "Classe" — OBBLIGATORIO estrarlo. È tipicamente un numero intero ("1","2","3") o può essere "//" o una lettera. Mettilo come stringa.
 - zona_censuaria: il valore nella colonna "Zona Censuaria" — OBBLIGATORIO estrarlo. È tipicamente un numero ("1","2","3") o codice alfanumerico ("2A","3B"). Mettilo come stringa.
-- superficie_mq: numero in mq dalla colonna Superficie, null se assente
+- superficie_mq: numero in mq dalla colonna "Superficie" della tabella (valore per la singola unità). Non confonderla con la "Superficie Catastale Totale" che è un campo SEPARATO nella parte bassa della visura.
+- superficie_catastale_totale: il campo "Superficie Catastale Totale" (es. "Totale: 245 m²" o "Totale: 300 m² Totale escluse aree scoperte**: 280 m²"). Cerca nella parte finale della visura. Estrai il numero del "Totale" generale. Se presente anche "Totale escluse aree scoperte", metti quel valore in superficie_catastale_escluse_aree_scoperte.
 - rendita_catastale: importo in € (solo il numero, senza simbolo), null se assente
 - vani: numero di vani dalla colonna Consistenza, null se assente
 - indirizzo_catastale: indirizzo dell'immobile riportato nella visura
