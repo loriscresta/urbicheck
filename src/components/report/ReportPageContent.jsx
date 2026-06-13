@@ -212,6 +212,31 @@ export default function ReportPageContent({ query, refetch = () => {}, isPublicV
     }
   }, [isPublicView]);
 
+  // Generate static map URL for PDF (from buildStaticMapUrl)
+  useEffect(() => {
+    if (!query.centroid_lat || !query.centroid_lng) return;
+    const lat = parseFloat(query.centroid_lat);
+    const lng = parseFloat(query.centroid_lng);
+    if (isNaN(lat) || isNaN(lng)) return;
+    const rawGeom = query.geometry_geojson || null;
+    let polygonCoords = null;
+    if (rawGeom) {
+      const geom = rawGeom.type === "Feature" ? rawGeom.geometry : rawGeom;
+      if (geom?.coordinates?.[0]?.length > 2) polygonCoords = geom.coordinates[0];
+    }
+    const mapUrl = query.mappa_image_url ||
+      (window.location.hostname.includes('localhost') ? null : null);
+    if (mapUrl) { setStaticMapUrl(mapUrl); return; }
+    // Build OSM static map URL directly (no API call needed for basic map)
+    if (polygonCoords && polygonCoords.length > 2) {
+      const pathCoords = polygonCoords.map(c => `${c[1]},${c[0]}`).join("|");
+      const path = encodeURIComponent(`color:0xff7a00ff|weight:3|fillcolor:0xff7a0060|${pathCoords}`);
+      setStaticMapUrl(`https://staticmap.openstreetmap.de/staticmap.php?center=${lat},${lng}&zoom=17&size=800x420&path=${path}`);
+    } else {
+      setStaticMapUrl(`https://staticmap.openstreetmap.de/staticmap.php?center=${lat},${lng}&zoom=17&size=800x420&markers=${lat},${lng},red-pushpin`);
+    }
+  }, [query.centroid_lat, query.centroid_lng, query.geometry_geojson]);
+
   const handleDownloadPDF = async () => {
     setIsDownloadingPDF(true);
     const { doc, reportNum } = await generatePDF(query, financialSnapshot, staticMapUrl);
@@ -260,9 +285,29 @@ export default function ReportPageContent({ query, refetch = () => {}, isPublicV
   const wfsPaesaggisticoVincoli = wfsVincoliPaesaggistici?.vincoli?.filter(v => v.livello === 'APPLICABILE') || [];
   const _paesaggisticoAI = r.vincoli?.vincolo_paesaggistico;
   const paesaggisticoDettagliAI = cleanOrFallback(_paesaggisticoAI?.dettagli, 'Verifica puntuale consigliata — richiedere CDU al Comune');
+  // Comuni costieri con fascia 300m art.142 D.Lgs 42/2004
+  const COMUNI_COSTIERI = new Set([
+    'pietra ligure', 'bergeggi', 'savona', 'loano', 'borghetto santo spirito', 'noli',
+    'albenga', 'finale ligure', 'spotorno', 'vado ligure', 'sestri levante',
+    'santa margherita ligure', 'la spezia', 'imperia', 'sanremo', 'san remo',
+    'bordighera', 'rapallo', 'chiavari', 'arenzano', 'varazze', 'ventimiglia',
+    'camogli', 'portofino', 'portovenere', 'lerici', 'bonassola', 'levanto',
+    'alassio', 'ceriale', 'andora', 'diano marina', 'cervo', 'taggia',
+    'riomaggiore', 'vernazza', 'monterosso al mare', 'corniglia', 'manarola',
+  ]);
+  const isComuneCostiero = COMUNI_COSTIERI.has(comuneLower);
+  const coastalWarning = 'Fascia costiera 300m dalla battigia — art.142 c.1 lett.a D.Lgs 42/2004. Vincolo paesaggistico ope legis: richiedere CDU al Comune per verifica puntuale.';
   const vincoloPaesaggisticoEffettivo = wfsVincoliPaesaggistici
-    ? { presente: wfsPaesaggisticoVincoli.length > 0, dettagli: wfsPaesaggisticoVincoli.length > 0 ? wfsPaesaggisticoVincoli.map(v => v.descrizione || v.tipo).join(' | ') : (wfsVincoliPaesaggistici.vincoli?.[0]?.nota || 'Nessun vincolo paesaggistico ope legis rilevato.'), tipo: wfsPaesaggisticoVincoli.length > 0 ? wfsPaesaggisticoVincoli.map(v => v.tipo).join(', ') : null }
-    : (_paesaggisticoAI ? { ..._paesaggisticoAI, dettagli: paesaggisticoDettagliAI } : { presente: false, dettagli: 'Non verificato via WFS — richiedere CDU al Comune' });
+    ? { 
+        presente: wfsPaesaggisticoVincoli.length > 0 || isComuneCostiero, 
+        dettagli: wfsPaesaggisticoVincoli.length > 0 
+          ? wfsPaesaggisticoVincoli.map(v => v.descrizione || v.tipo).join(' | ') 
+          : isComuneCostiero 
+            ? coastalWarning 
+            : (wfsVincoliPaesaggistici.vincoli?.[0]?.nota || 'Nessun vincolo paesaggistico ope legis rilevato.'),
+        tipo: wfsPaesaggisticoVincoli.length > 0 ? wfsPaesaggisticoVincoli.map(v => v.tipo).join(', ') : (isComuneCostiero ? 'art.142 fascia costiera' : null)
+      }
+    : (_paesaggisticoAI ? { ..._paesaggisticoAI, dettagli: paesaggisticoDettagliAI } : { presente: isComuneCostiero, dettagli: isComuneCostiero ? coastalWarning : 'Non verificato via WFS — richiedere CDU al Comune' });
 
   const wfsCorsiAcqua = wfsRis?.vincolo_corsi_acqua;
   const corsiAcquaTrovati = wfsCorsiAcqua?.dati?.filter(d => d.trovato) || [];
@@ -433,13 +478,13 @@ export default function ReportPageContent({ query, refetch = () => {}, isPublicV
           <ReportSection icon={Building2} title="Tipologia Immobile" delay={0.02}>
             <DataRow label="Categoria catastale" value={query.categoria_catastale || cleanVal(r.dati_catastali.categoria) || r.catasto_data?.categoria} />
             <DataRow label="Destinazione d'Uso" value={cleanVal(r.dati_catastali.destinazione_uso) || r.catasto_data?.destinazione_uso} />
-            <DataRow label="Consistenza / Superficie" value={query.vani ? `${query.vani} vani` : query.superficie_mq ? `${query.superficie_mq} mq` : (cleanVal(r.dati_catastali.consistenza) || r.catasto_data?.superficie)} />
+            <DataRow label="Consistenza" value={query.vani ? `${query.vani} vani` : (cleanVal(r.dati_catastali.consistenza) || r.catasto_data?.superficie)} />
+            {query.superficie_mq && <DataRow label="Superficie catastale" value={`${query.superficie_mq} mq`} />}
             <DataRow label="Classe" value={query.classe_catastale || cleanVal(r.dati_catastali.classe)} />
             <DataRow label="Rendita Catastale" value={query.rendita_catastale != null ? `€${Number(query.rendita_catastale).toFixed(2)}` : cleanVal(r.dati_catastali.rendita_catastale)} />
             <DataRow label="Zona Censuaria" value={query.zona_censuaria || cleanVal(r.dati_catastali.zona_censuaria)} />
             {r.dati_catastali.microzona && !/verificare su visura/i.test(r.dati_catastali.microzona) && <DataRow label="Microzona" value={r.dati_catastali.microzona} />}
             {query.intestatari?.length > 0 && <DataRow label="Intestatari" value={query.intestatari.join(" — ")} />}
-            {query.superficie_mq && <DataRow label="Superficie catastale" value={`${query.superficie_mq} mq`} />}
             {r.planimetria_data?.source === 'planimetria_upload' && r.planimetria_data?.was_uploaded === true && r.planimetria_data?.superficie_mq && (
               <div className="mt-2 p-2 rounded bg-blue-50 border border-blue-200 text-xs text-blue-800 flex items-center gap-2">
                 <span>📐</span>
@@ -769,23 +814,7 @@ export default function ReportPageContent({ query, refetch = () => {}, isPublicV
         </motion.div>
       )}
 
-      {/* Mappa Catastale Statica — visibile a schermo E nel PDF/stampa */}
-      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.28 }} className="mt-8">
-        <div className="flex items-center gap-3 mb-3">
-          <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: '#1e3a5f' }}>
-            <MapPin className="w-4 h-4 text-white" />
-          </div>
-          <h2 className="text-lg font-bold tracking-tight" style={{ color: '#1e3a5f' }}>Mappa Catastale della Particella</h2>
-        </div>
-        <div className="rounded-xl border border-border bg-card p-4">
-          <StaticParcellaMap
-            query={query}
-            onImageReady={url => setStaticMapUrl(url)}
-            width={900}
-            height={420}
-          />
-        </div>
-      </motion.div>
+
 
       {/* Disclaimer */}
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.35 }} className="mt-6 p-4 rounded-lg border-2 border-amber-300 bg-amber-50 flex items-start gap-3">

@@ -246,7 +246,7 @@ export default function AppLayout() {
         </div>
         <footer className="border-t border-border/30 px-6 py-4" style={{ background: 'rgba(26,58,107,0.04)', fontFamily: "'IBM Plex Mono', monospace" }}>
           <div className="flex flex-wrap items-center justify-between gap-2 text-[10px] text-muted-foreground mb-2">
-            <span>© 2025 UrbiCheck — Titolare: Dell'Aria Claudia Giuseppina — P.IVA 02655840060 — Via Costa 44, Carentino (AL)</span>
+            <span>© 2026 UrbiCheck — Titolare: Dell'Aria Claudia Giuseppina — P.IVA 02655840060 — Via Costa 44, Carentino (AL)</span>
             <div className="flex gap-4">
               <Link to="/privacy" className="hover:text-foreground transition-colors">Privacy Policy</Link>
               <Link to="/termini" className="hover:text-foreground transition-colors">Termini e Condizioni</Link>

@@ -21,7 +21,7 @@ function fmtEur(n) {
 }
 
 // ── Scorecard pesata (non AI) ────────────────────────────────────────────────
-function calcWeightedScore({ roiNetto, omiIsDefault, rurale, hasVerifiedVincoli, hasPartialData, vincoli, categoriaGroup, zonaUrbanistica }) {
+function calcWeightedScore({ roiNetto, omiIsDefault, rurale, hasVerifiedVincoli, hasPartialData, vincoli, categoriaGroup, zonaUrbanistica, hasVerifiedZoning }) {
   // FINANZA (max 5): basato su ROI netto
   let finanza = 0;
   if (roiNetto != null) {
@@ -40,9 +40,9 @@ function calcWeightedScore({ roiNetto, omiIsDefault, rurale, hasVerifiedVincoli,
   else if (omiIsDefault && !rurale) liquidita = 1;
   else liquidita = 0;
 
-  // AFFIDABILITÀ DATI (max 2)
+  // AFFIDABILITÀ DATI (max 2) — richiede sia vincoli verificati CHE zonizzazione ufficiale
   let affidabilita = 0;
-  if (hasVerifiedVincoli && !hasPartialData) affidabilita = 2;
+  if (hasVerifiedVincoli && !hasPartialData && hasVerifiedZoning) affidabilita = 2;
   else if (hasVerifiedVincoli || hasPartialData) affidabilita = 1;
   else affidabilita = 0;
 
@@ -108,12 +108,12 @@ export default function FinancialDueDiligence({ query, finData, onSnapshotReady 
 
   const [scoreData, setScoreData] = useState(null);
   const [loadingScore, setLoadingScore] = useState(false);
-  const [mqOverride, setMqOverride] = useState(() => fd.superficie ? parseFloat(fd.superficie) : null);
+  const [mqOverride, setMqOverride] = useState(null);
   const [inputMq, setInputMq] = useState('');
 
-  // ── Superficie: usa sempre il valore reale, mai fallback numerico ──────────
+  // ── Superficie: cat. reale > input manuale > fallback null ─────────────────
   const mqRaw = query.superficie_mq || null;
-  const mq    = mqOverride || (mqRaw ? parseFloat(mqRaw) : null);
+  const mq    = (mqRaw ? parseFloat(mqRaw) : null) || mqOverride;
 
   // Use per-unit allocated price (batch) if available, else fin_data price
   const prezzoAcquisto     = parseFloat(r.prezzo_acquisto_unita) || parseFloat(fd.prezzo_acquisto) || 0;
@@ -563,6 +563,7 @@ Fornisci punteggio e analisi sintetica.`,
         const wfsRis = r.wfs_liguria?.risultati;
         const hasVerifiedVincoli = !!(wfsRis) || isPiemonte || isLiguria || isLombardia;
         const hasPartialData = omi.is_default;
+        const hasVerifiedZoning = !!(r.prg_lookup_status === 'found' && r.zonizzazione?.zona_codice);
         // ROI netto: usa flipping se disponibile, altrimeti rendimento netto affitto
         const roiNetto = roiFlip != null ? roiFlip
           : rendimentoNetto != null ? rendimentoNetto
@@ -572,7 +573,7 @@ Fornisci punteggio e analisi sintetica.`,
           : /^C\//i.test(categoriaRaw) ? 'commercial' : 'other';
         const zonaUrbanistica = r.zonizzazione?.destinazione_prevalente || wfsRis?.zona_urbanistica?.destinazione_uso || '';
         const { total: wscore, finanza: wFin, liquidita: wLiq, affidabilita: wAff, vincoliScore: wVin, hasCambioDest }
-          = calcWeightedScore({ roiNetto, omiIsDefault: omi.is_default, rurale, hasVerifiedVincoli, hasPartialData, vincoli: r.vincoli, categoriaGroup, zonaUrbanistica });
+          = calcWeightedScore({ roiNetto, omiIsDefault: omi.is_default, rurale, hasVerifiedVincoli, hasPartialData, vincoli: r.vincoli, categoriaGroup, zonaUrbanistica, hasVerifiedZoning });
 
         const affidabilitaLevel = wAff === 2 && !omi.is_default ? 'alta' : wAff === 1 || omi.is_default ? 'media' : 'bassa';
 
