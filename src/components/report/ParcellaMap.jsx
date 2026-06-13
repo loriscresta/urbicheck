@@ -391,18 +391,7 @@ export default function ParcellaMap({ record, query, item }) {
       if (hasValidCoords && inItaly && !isComuneFallback && !isNominatimWorserethan) {
         setAddressCoords({ lat: d.lat, lng: d.lng, formatted: d.formatted_address, source: 'rooftop' });
         console.log('[ParcellaMap] geocoded OK:', d.lat, d.lng, d.location_type);
-        // Aggiorna DB centroid se diverso da quello attuale (fix permanente per reload successivi)
-        if (entity.id) {
-          const currLat = parseFloat(entity.centroid_lat);
-          const currLng = parseFloat(entity.centroid_lng);
-          const dist = Math.hypot(d.lat - currLat, d.lng - currLng);
-          if (dist > 0.001) { // >~100m di differenza → aggiorna DB
-            import("@/api/entities").then(({ CadastralQuery }) => {
-              CadastralQuery.update(entity.id, { centroid_lat: d.lat, centroid_lng: d.lng })
-                .catch(() => {});
-            }).catch(() => {});
-          }
-        }
+        // NON sovrascrivere mai centroid_lat/lng con il geocoding — il centroide catastale è l'autorità
       } else {
         console.log('[ParcellaMap] geocoding scartato:', d.location_type, '— uso centroide da DB');
       }

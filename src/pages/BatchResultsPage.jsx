@@ -61,7 +61,25 @@ function getCatConfig(cat) {
   return CAT_CONFIG[key] || CAT_CONFIG["A/3"];
 }
 
+const FREE_REPORTS = 3;
+const LAUNCH_PRICE = 2.99;
+const STANDARD_PRICE = 9.90;
+const BATCH_FLAT_THRESHOLD = 8;
 const BATCH_FLAT_PRICE = 19.90;
+
+function computeBatchPrice(billableCount, freeUsed, launchPaidUsed) {
+  if (billableCount >= BATCH_FLAT_THRESHOLD) return { total: BATCH_FLAT_PRICE, tier: 'flat' };
+  let total = 0;
+  let f = freeUsed;
+  let l = launchPaidUsed;
+  let freeInBatch = 0, launchInBatch = 0, standardInBatch = 0;
+  for (let i = 0; i < billableCount; i++) {
+    if (f < FREE_REPORTS) { f++; freeInBatch++; }
+    else if (l < 3) { total += LAUNCH_PRICE; l++; launchInBatch++; }
+    else { total += STANDARD_PRICE; standardInBatch++; }
+  }
+  return { total: parseFloat(total.toFixed(2)), freeInBatch, launchInBatch, standardInBatch, tier: total === 0 ? 'free' : 'beta_counter' };
+}
 
 // ── Leaflet Map for batch — disegna poligono se disponibile ─────────────────
 function BatchMap({ lat, lng, geomJson, address, totalUnits, foglio, particella }) {
@@ -384,6 +402,14 @@ export default function BatchResultsPage() {
   const [savingPrice, setSavingPrice] = useState(false);
   const [isPayingBatch, setIsPayingBatch] = useState(false);
   const [payError, setPayError] = useState("");
+  const { data: credits } = useQuery({
+    queryKey: ["userCredits"],
+    queryFn: async () => {
+      const user = await base44.auth.me();
+      const list = await base44.entities.UserCredits.filter({ user_email: user.email });
+      return list[0] || { balance: 0, free_reports_used: 0, beta_paid_reports_used: 0 };
+    },
+  });
 
   const { data: batch, isLoading: batchLoading } = useQuery({
     queryKey: ["batch", id],
@@ -421,7 +447,7 @@ export default function BatchResultsPage() {
     } catch (err) {
       const data = err?.response?.data;
       if (data?.error === 'insufficient_credits') {
-        setPayError(`Credito insufficiente (€${(data.balance || 0).toFixed(2)} disponibili). Necessari €${BATCH_FLAT_PRICE.toFixed(2)}.`);
+        setPayError(`Credito insufficiente (€${(data.balance || 0).toFixed(2)} disponibili). Necessari €${(parseFloat(data.required) || 0).toFixed(2)}.`);
       } else {
         setPayError(data?.error || err.message || "Errore durante il pagamento");
       }
@@ -521,39 +547,67 @@ export default function BatchResultsPage() {
           </div>
         </div>
 
-        {/* [PAYMENT GATE] — tariffa flat palazzina */}
-        {!isBatchPaid && (
-          <div className="mb-5 rounded-xl border-2 border-emerald-400 bg-emerald-50 p-5">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-full bg-emerald-100 flex items-center justify-center shrink-0">
-                  <Unlock className="w-4 h-4 text-emerald-700" />
+        {/* [PAYMENT GATE] — prezzi con contatore beta */}
+        {!isBatchPaid && (() => {
+          const billableCount = queries.filter(q => !/^(C\/2|C\/6|C\/7)/i.test(q.categoria_catastale || '')).length;
+          const freeUsed = credits?.free_reports_used || 0;
+          const launchUsed = credits?.beta_paid_reports_used || 0;
+          const priceInfo = computeBatchPrice(billableCount, freeUsed, launchUsed);
+          const totalCost = priceInfo.total;
+          const isFlat = priceInfo.tier === 'flat';
+          const balance = credits?.balance || 0;
+          const hasFunds = totalCost === 0 || balance >= totalCost;
+          const priceLabel = totalCost === 0 ? 'GRATIS' : `€${totalCost.toFixed(2)}`;
+          const detailLabel = totalCost === 0
+            ? `${priceInfo.freeInBatch || billableCount} report gratuiti inclusi`
+            : isFlat
+            ? `Tariffa flat (${billableCount}+ subalterni)`
+            : `${priceInfo.freeInBatch > 0 ? `${priceInfo.freeInBatch} gratis · ` : ''}${priceInfo.launchInBatch > 0 ? `${priceInfo.launchInBatch} × €2,99 · ` : ''}${priceInfo.standardInBatch > 0 ? `${priceInfo.standardInBatch} × €9,90` : ''}`.replace(/· $/, '');
+          return (
+            <div className="mb-5 rounded-xl border-2 border-emerald-400 bg-emerald-50 p-5">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-full bg-emerald-100 flex items-center justify-center shrink-0">
+                    <Unlock className="w-4 h-4 text-emerald-700" />
+                  </div>
+                  <div>
+                    <p className="font-bold text-emerald-900 text-base" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
+                      Sblocca tutta la palazzina ({batch.total_units} subalterni{queries.filter(q => /^(C\/2|C\/6|C\/7)/i.test(q.categoria_catastale || '')).length > 0 ? `, ${queries.filter(q => /^(C\/2|C\/6|C\/7)/i.test(q.categoria_catastale || '')).length} pertinenze incluse` : ''}) — {priceLabel}
+                    </p>
+                    <p className="text-xs text-emerald-700 mt-0.5">{isFlat ? 'Tariffa flat unica per palazzine grandi' : 'Contatore beta: ogni unità scala il prezzo progressivo'} · {detailLabel}</p>
+                  </div>
                 </div>
-                <div>
-                  <p className="font-bold text-emerald-900 text-base" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
-                    Sblocca tutta la palazzina ({batch.total_units} subalterni) — €{BATCH_FLAT_PRICE.toFixed(2)}
-                  </p>
-                  <p className="text-xs text-emerald-700 mt-0.5">Tariffa flat unica · mappa edificio · composizione · vincoli · analisi investimento</p>
+                <span className={`text-2xl font-black shrink-0 ${totalCost === 0 ? 'text-emerald-600' : 'text-emerald-800'}`}>{priceLabel}</span>
+              </div>
+              {payError && (
+                <div className="flex items-start gap-2 p-3 rounded-lg bg-red-50 border border-red-200 text-xs text-red-700 mb-3">
+                  <AlertTriangle className="w-3 h-3 shrink-0 mt-0.5" />{payError}
                 </div>
-              </div>
-              <span className="text-2xl font-black text-emerald-800 shrink-0">€{BATCH_FLAT_PRICE.toFixed(2)}</span>
+              )}
+              {hasFunds ? (
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <Button className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold" onClick={handlePayBatch} disabled={isPayingBatch}>
+                    {isPayingBatch ? <><Loader2 className="w-4 h-4 animate-spin mr-2" />Elaborazione…</> : <><Unlock className="w-4 h-4 mr-2" />Sblocca palazzina completa — {priceLabel}</>}
+                  </Button>
+                  <Button variant="outline" className="sm:w-auto" onClick={() => navigate("/credits")}>
+                    <CreditCard className="w-4 h-4 mr-2" />Ricarica crediti
+                  </Button>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 text-sm text-amber-800 flex items-start gap-2">
+                    <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                    Credito insufficiente — servono €{totalCost.toFixed(2)} (saldo: €{balance.toFixed(2)})
+                  </div>
+                  <Button className="w-full" style={{ background: '#1e3a5f' }} onClick={() => navigate("/credits")}>
+                    <CreditCard className="w-4 h-4 mr-2" />Ricarica crediti
+                  </Button>
+                </div>
+              )}
+              <p className="text-[10px] text-muted-foreground mt-2">Addebito immediato dal saldo crediti. Nessun abbonamento.</p>
             </div>
-            {payError && (
-              <div className="flex items-start gap-2 p-3 rounded-lg bg-red-50 border border-red-200 text-xs text-red-700 mb-3">
-                <AlertTriangle className="w-3 h-3 shrink-0 mt-0.5" />{payError}
-              </div>
-            )}
-            <div className="flex flex-col sm:flex-row gap-2">
-              <Button className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold" onClick={handlePayBatch} disabled={isPayingBatch}>
-                {isPayingBatch ? <><Loader2 className="w-4 h-4 animate-spin mr-2" />Elaborazione…</> : <><Unlock className="w-4 h-4 mr-2" />Sblocca palazzina completa — €{BATCH_FLAT_PRICE.toFixed(2)}</>}
-              </Button>
-              <Button variant="outline" className="sm:w-auto" onClick={() => navigate("/credits")}>
-                <CreditCard className="w-4 h-4 mr-2" />Ricarica crediti
-              </Button>
-            </div>
-            <p className="text-[10px] text-muted-foreground mt-2">Addebito immediato dal saldo crediti. Nessun abbonamento.</p>
-          </div>
-        )}
+          );
+        })()}
 
         {/* Actions */}
         <div className="flex gap-2 mb-5 no-print flex-wrap">

@@ -404,10 +404,13 @@ export default function SearchPage() {
             amount: -totalCost,
             description: `Batch ${billableCount} unità${pertinenzaUnits.length > 0 ? ` (+${pertinenzaUnits.length} pertinenze)` : ''} — ${sharedCadastral.comune} (€${pricePerUnit.toFixed(2)}/ud)`,
           });
-          // Set paid=true on all batch queries (including pertinenze — they're free extras)
-          await Promise.all(queryIds.map(qid =>
-            base44.entities.CadastralQuery.update(qid, { paid: true })
-          ));
+          // Set paid=true on all batch queries AND the batch itself
+          await Promise.all([
+            ...queryIds.map(qid =>
+              base44.entities.CadastralQuery.update(qid, { paid: true })
+            ),
+            base44.entities.BatchQuery.update(batchRecord.id, { paid: true }),
+          ]);
         }
       } catch (e) {
         console.error('Batch charge error:', e);
