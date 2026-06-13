@@ -7,16 +7,53 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 
 Deno.serve(async (req) => {
-  // Funzione pubblica: accessibile anche da utenti anonimi (pagina di ricerca pubblica).
-  // Non richiede autenticazione — il contenuto della visura non è sensibile (è del richiedente stesso).
   const base44 = createClientFromRequest(req);
+
+  // ── AUTH: richiede utente autenticato ────────────────────────────────────
+  let user;
+  try { user = await base44.auth.me(); } catch (_e) {}
+  if (!user) return Response.json({ error: 'Unauthorized — autenticazione richiesta' }, { status: 401 });
+
+  // ── RATE LIMIT: max 10 chiamate al giorno per utente ─────────────────────
+  const today = new Date().toISOString().slice(0, 10);
+  try {
+    const recentCalls = await base44.entities.CadastralQuery.filter({
+      created_by_id: user.id,
+      visura_uploaded: true,
+    });
+    const callsToday = recentCalls.filter(q =>
+      (q.created_date || '').startsWith(today)
+    ).length;
+    if (callsToday >= 10) {
+      return Response.json({
+        error: 'Rate limit reached — max 10 visura analyses per day',
+        calls_today: callsToday,
+      }, { status: 429 });
+    }
+  } catch (_e) {
+    // Se il conteggio fallisce, consentiamo comunque (fail-open per non bloccare utenti legittimi)
+    console.warn('[parseVisuraCatastale] rate-limit check failed:', _e.message);
+  }
 
   let body;
   try { body = await req.json(); } catch (_e) {
     return Response.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
-  const { file_url, file_text } = body;
+  const { file_url, file_text, query_id } = body;
+
+  // ── QUERY OWNERSHIP: se query_id è fornito, verifica appartenga all'utente
+  if (query_id) {
+    try {
+      const queries = await base44.entities.CadastralQuery.filter({ id: query_id });
+      const q = queries[0];
+      if (q && q.created_by_id !== user.id && user.role !== 'admin') {
+        return Response.json({ error: 'Forbidden — query non appartiene a questo utente' }, { status: 403 });
+      }
+    } catch (_e) {
+      console.warn('[parseVisuraCatastale] ownership check failed:', _e.message);
+    }
+  }
   if (!file_url && !file_text) {
     return Response.json({ error: 'Richiesto file_url o file_text' }, { status: 400 });
   }

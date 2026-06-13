@@ -22,6 +22,11 @@ Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
 
+    // ── AUTH: richiede utente autenticato ──────────────────────────────────
+    let user;
+    try { user = await base44.auth.me(); } catch (_e) {}
+    if (!user) return Response.json({ error: 'Unauthorized — autenticazione richiesta' }, { status: 401 });
+
     const body = await req.json();
     const { lat, lng, polygon_coords, zoom: zoomOverride } = body;
 

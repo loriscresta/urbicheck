@@ -9,11 +9,26 @@ Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
 
-    // Auth opzionale — funzione accessibile anche a utenti loggati per aggiornare il record
-    let user = null;
+    // ── AUTH: obbligatorio — richiede utente autenticato ──────────────────
+    let user;
     try { user = await base44.auth.me(); } catch (_e) {}
+    if (!user) return Response.json({ error: 'Unauthorized — autenticazione richiesta' }, { status: 401 });
 
     const { file_url, query_id, superficie_catasto } = await req.json();
+
+    // ── QUERY OWNERSHIP: verifica che la query appartenga all'utente ──────
+    if (query_id) {
+      try {
+        const queries = await base44.entities.CadastralQuery.filter({ id: query_id });
+        const q = queries[0];
+        if (q && q.created_by_id !== user.id && user.role !== 'admin') {
+          return Response.json({ error: 'Forbidden — query non appartiene a questo utente' }, { status: 403 });
+        }
+      } catch (_e) {
+        console.warn('[calculatePlanimetriaArea] ownership check failed:', _e.message);
+        return Response.json({ error: 'Query non trovata' }, { status: 404 });
+      }
+    }
     if (!file_url) return Response.json({ error: 'file_url richiesto' }, { status: 400 });
 
     console.log('[planimetria-v3] analisi AI per:', file_url.slice(0, 80));
