@@ -4,7 +4,11 @@
   "properties": {
     "user_email": {
       "type": "string",
-      "description": "Email dell'utente"
+      "description": "Email dell'utente (originale, come da registrazione)"
+    },
+    "normalized_email": {
+      "type": "string",
+      "description": "Email normalizzata (alias '+' rimosso, punti gmail rimossi) \u2014 usata per aggregare i report gratuiti tra alias"
     },
     "balance": {
       "type": "number",
@@ -20,6 +24,16 @@
       "type": "number",
       "default": 0,
       "description": "Totale query effettuate"
+    },
+    "free_reports_used": {
+      "type": "number",
+      "default": 0,
+      "description": "Report gratuiti gi\u00e0 erogati per questa email"
+    },
+    "beta_paid_reports_used": {
+      "type": "number",
+      "default": 0,
+      "description": "Report a prezzo lancio (\u20ac2,99) gi\u00e0 erogati per questa email"
     }
   },
   "required": [

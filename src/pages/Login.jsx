@@ -44,7 +44,14 @@ export default function Login() {
       await base44.auth.loginViaEmailPassword(email, password);
       window.location.href = destination;
     } catch (err) {
-      setError(err.message || "Email o password non validi");
+      const msg = err.message || '';
+      if (msg.toLowerCase().includes('not verified') || msg.toLowerCase().includes('unverified') || msg.toLowerCase().includes('otp')) {
+        setError("Devi prima verificare l'email. Controlla la casella di posta (anche spam) per il codice OTP che ti abbiamo inviato al momento della registrazione.");
+      } else if (msg.toLowerCase().includes('invalid') || msg.toLowerCase().includes('credentials')) {
+        setError("Email non verificata o credenziali errate. Se ti sei appena registrato, verifica prima l'email con il codice OTP. Controlla anche la cartella spam.");
+      } else {
+        setError(msg || "Email o password non validi");
+      }
     } finally {
       setLoading(false);
     }

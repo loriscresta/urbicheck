@@ -1,16 +1,40 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 
 // ── Funnel di lancio ──────────────────────────────────────────────────────────
-// Report 1–3:  GRATIS
+// Report 1–3:  GRATIS (per email normalizzata + per IP, entrambi sotto soglia)
 // Report 4–6:  €2,99 (offerta lancio, max 3)
 // Report 7+:   €9,90 (prezzo standard)
 const APP_URL = Deno.env.get('APP_URL') || 'https://urbicheck.it';
 
-const FREE_REPORTS = 3;        // report gratuiti per email
-const FREE_REPORTS_IP = 25;    // report gratuiti per indirizzo IP — modifica qui per cambiare soglia
+const FREE_REPORTS = 3;        // report gratuiti per email normalizzata
+const FREE_REPORTS_IP = 3;     // report gratuiti per indirizzo IP
 const LAUNCH_PAID_REPORTS = 3; // report a prezzo lancio (dopo i gratuiti)
 const LAUNCH_PRICE = 2.99;     // prezzo offerta lancio
 const STANDARD_PRICE = 9.90;   // prezzo standard (report 7+)
+
+// ── Email normalization ──────────────────────────────────────────────────────
+// Rimuove alias '+' e, per Gmail, rimuove punti nella parte locale.
+// loriscresta+test2@gmail.com → loriscresta@gmail.com
+// loris.cresta@gmail.com → loriscresta@gmail.com
+
+function normalizeEmail(email) {
+  if (!email) return '';
+  let [local, domain] = email.toLowerCase().trim().split('@');
+  if (!domain) return email.toLowerCase().trim();
+
+  // Rimuovi alias dopo il '+' (funziona per TUTTI i provider)
+  const plusIdx = local.indexOf('+');
+  if (plusIdx !== -1) {
+    local = local.substring(0, plusIdx);
+  }
+
+  // Per Gmail/Googlemail: rimuovi anche i punti nella parte locale
+  if (domain === 'gmail.com' || domain === 'googlemail.com') {
+    local = local.replace(/\./g, '');
+  }
+
+  return `${local}@${domain}`;
+}
 
 // Genera un token pubblico firmato con scadenza 72h e salva report_url sul record
 async function generateAndSavePublicToken(base44, query_id, comune, foglio, particella) {
@@ -30,7 +54,6 @@ async function generateAndSavePublicToken(base44, query_id, comune, foglio, part
 function getClientIp(req) {
   const forwarded = req.headers.get('x-forwarded-for');
   if (forwarded) {
-    // x-forwarded-for può contenere una lista: "client, proxy1, proxy2"
     return forwarded.split(',')[0].trim();
   }
   return req.headers.get('x-real-ip') || req.headers.get('cf-connecting-ip') || 'unknown';
@@ -69,24 +92,47 @@ Deno.serve(async (req) => {
       return Response.json({ ok: true, already_paid: true });
     }
 
-    // Load credits
+    // ── Email normalization — aggrega free_reports_used tra tutti gli alias ──
+    const normalizedEmail = normalizeEmail(user.email);
+
+    // Trova (o crea) lo UserCredits per questo utente
     const creditsList = await base44.asServiceRole.entities.UserCredits.filter({ user_email: user.email });
     let credits = creditsList[0];
 
-    // Auto-create UserCredits if missing (new beta user)
+    // Auto-create UserCredits if missing (new user)
     if (!credits) {
       credits = await base44.asServiceRole.entities.UserCredits.create({
         user_email: user.email,
+        normalized_email: normalizedEmail,
         balance: 0,
         total_spent: 0,
         total_queries: 0,
         free_reports_used: 0,
         beta_paid_reports_used: 0,
       });
+      console.log(`chargeReport: created UserCredits for ${user.email} (normalized: ${normalizedEmail})`);
+    } else if (!credits.normalized_email) {
+      // Backfill normalized_email for legacy records
+      await base44.asServiceRole.entities.UserCredits.update(credits.id, {
+        normalized_email: normalizedEmail,
+      });
+      console.log(`chargeReport: backfilled normalized_email for ${user.email} → ${normalizedEmail}`);
     }
 
-    const freeUsed = credits.free_reports_used || 0;
-    const launchPaidUsed = credits.beta_paid_reports_used || 0; // riuso campo esistente per i report lancio €2,99
+    // Aggrega free_reports_used su TUTTI gli UserCredits con la stessa email normalizzata
+    const allNormalizedCredits = await base44.asServiceRole.entities.UserCredits.filter(
+      { normalized_email: normalizedEmail },
+      '', // sort
+      200, // limit — copre casi di molti alias
+    );
+    const aggregatedFreeUsed = allNormalizedCredits.reduce(
+      (sum, c) => sum + (c.free_reports_used || 0), 0
+    );
+    const aggregatedLaunchUsed = allNormalizedCredits.reduce(
+      (sum, c) => sum + (c.beta_paid_reports_used || 0), 0
+    );
+
+    console.log(`chargeReport: email=${user.email} normalized=${normalizedEmail} aggregatedFree=${aggregatedFreeUsed} aggregatedLaunch=${aggregatedLaunchUsed} records=${allNormalizedCredits.length}`);
 
     // ── Controllo limite IP ────────────────────────────────────────────────
     const clientIp = getClientIp(req);
@@ -99,20 +145,21 @@ Deno.serve(async (req) => {
       ipFreeUsed = ipRecord?.free_count || 0;
     }
 
-    console.log(`chargeReport: user=${user.email} ip=${clientIp} freeUsed=${freeUsed} ipFreeUsed=${ipFreeUsed}`);
+    console.log(`chargeReport: ip=${clientIp} ipFreeUsed=${ipFreeUsed}`);
 
     // ── Funnel pricing ────────────────────────────────────────────────────────
-    // Un report è gratuito SOLO SE sia l'email che l'IP sono sotto soglia
-    const emailUnderLimit = freeUsed < FREE_REPORTS;
+    // Un report è gratuito SOLO SE sia l'email normalizzata che l'IP sono sotto soglia
+    const emailUnderLimit = aggregatedFreeUsed < FREE_REPORTS;
     const ipUnderLimit = clientIp === 'unknown' || ipFreeUsed < FREE_REPORTS_IP;
 
     if (emailUnderLimit && ipUnderLimit) {
       // TIER 1 — GRATIS (report 1–3, entrambe le condizioni soddisfatte)
-      console.log(`chargeReport: FREE tier — free_reports_used=${freeUsed} ip_free_used=${ipFreeUsed}`);
+      console.log(`chargeReport: FREE tier — aggregatedFree=${aggregatedFreeUsed} ipFree=${ipFreeUsed}`);
 
       await base44.asServiceRole.entities.UserCredits.update(credits.id, {
-        free_reports_used: freeUsed + 1,
+        free_reports_used: (credits.free_reports_used || 0) + 1,
         total_queries: (credits.total_queries || 0) + 1,
+        normalized_email: normalizedEmail,
       });
 
       if (clientIp && clientIp !== 'unknown') {
@@ -134,14 +181,14 @@ Deno.serve(async (req) => {
       await generateAndSavePublicToken(base44, query_id, query.comune, query.foglio, query.particella);
       await base44.asServiceRole.entities.CreditTransaction.create({
         user_email: user.email, type: 'query_charge', amount: 0,
-        description: `Report gratuito #${freeUsed + 1}/3 — ${query.comune || ''} F.${query.foglio} P.${query.particella}`,
+        description: `Report gratuito #${aggregatedFreeUsed + 1}/3 — ${query.comune || ''} F.${query.foglio} P.${query.particella}`,
         query_id,
       });
       return Response.json({ ok: true, deducted: 0, tier: 'free' });
 
-    } else if (launchPaidUsed < LAUNCH_PAID_REPORTS) {
+    } else if (aggregatedLaunchUsed < LAUNCH_PAID_REPORTS) {
       // TIER 2 — €2,99 offerta lancio (report 4–6)
-      console.log(`chargeReport: LAUNCH_PAID tier — launch_paid_used=${launchPaidUsed}`);
+      console.log(`chargeReport: LAUNCH_PAID tier — aggregatedLaunch=${aggregatedLaunchUsed}`);
 
       if ((credits.balance || 0) < LAUNCH_PRICE) {
         return Response.json({
@@ -156,20 +203,21 @@ Deno.serve(async (req) => {
         balance: parseFloat((credits.balance - LAUNCH_PRICE).toFixed(2)),
         total_spent: parseFloat(((credits.total_spent || 0) + LAUNCH_PRICE).toFixed(2)),
         total_queries: (credits.total_queries || 0) + 1,
-        beta_paid_reports_used: launchPaidUsed + 1,
+        beta_paid_reports_used: (credits.beta_paid_reports_used || 0) + 1,
+        normalized_email: normalizedEmail,
       });
       await base44.asServiceRole.entities.CadastralQuery.update(query_id, { paid: true, status: 'completed', cost: LAUNCH_PRICE });
       await generateAndSavePublicToken(base44, query_id, query.comune, query.foglio, query.particella);
       await base44.asServiceRole.entities.CreditTransaction.create({
         user_email: user.email, type: 'query_charge', amount: -LAUNCH_PRICE,
-        description: `Report lancio €2,99 #${launchPaidUsed + 1}/3 — ${query.comune || ''} F.${query.foglio} P.${query.particella}`,
+        description: `Report lancio €2,99 #${aggregatedLaunchUsed + 1}/3 — ${query.comune || ''} F.${query.foglio} P.${query.particella}`,
         query_id,
       });
       return Response.json({ ok: true, deducted: LAUNCH_PRICE, tier: 'launch_paid' });
 
     } else {
       // TIER 3 — €9,90 prezzo standard (report 7+)
-      console.log(`chargeReport: STANDARD tier — free=${freeUsed}, launch_paid=${launchPaidUsed}`);
+      console.log(`chargeReport: STANDARD tier — aggregatedFree=${aggregatedFreeUsed}, aggregatedLaunch=${aggregatedLaunchUsed}`);
 
       if ((credits.balance || 0) < STANDARD_PRICE) {
         return Response.json({
@@ -184,6 +232,7 @@ Deno.serve(async (req) => {
         balance: parseFloat((credits.balance - STANDARD_PRICE).toFixed(2)),
         total_spent: parseFloat(((credits.total_spent || 0) + STANDARD_PRICE).toFixed(2)),
         total_queries: (credits.total_queries || 0) + 1,
+        normalized_email: normalizedEmail,
       });
       await base44.asServiceRole.entities.CadastralQuery.update(query_id, { paid: true, status: 'completed', cost: STANDARD_PRICE });
       await generateAndSavePublicToken(base44, query_id, query.comune, query.foglio, query.particella);

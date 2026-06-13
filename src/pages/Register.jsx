@@ -78,7 +78,7 @@ export default function Register() {
       <AuthLayout
         icon={Mail}
         title="Verify your email"
-        subtitle={`We sent a code to ${email}`}
+        subtitle={`Abbiamo inviato un codice a ${email}. Controlla anche la cartella spam.`}
       >
         {error && (
           <div className="mb-4 p-3 rounded-lg bg-destructive/10 text-destructive text-sm">
@@ -118,9 +118,9 @@ export default function Register() {
           )}
         </Button>
         <p className="text-center text-sm text-muted-foreground mt-4">
-          Didn't receive the code?{" "}
+          Codice non arrivato? Controlla lo spam, poi{" "}
           <button onClick={handleResend} className="text-primary font-medium hover:underline">
-            Resend
+            Reinvia codice
           </button>
         </p>
       </AuthLayout>
