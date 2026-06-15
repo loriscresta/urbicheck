@@ -64,22 +64,27 @@ export default function ParcellaMap({ record, query, item }) {
     return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   }
 
-  // ── Gerarchia coordinate: indirizzo geocodificato > centroid_lat/lng DB > baricentro poligono ──
-  // L'indirizzo dell'immobile è il dato certo che fa fede.
+  // ── Gerarchia coordinate: geocoded_lat/lng > centroid_lat/lng DB > baricentro poligono ──
+  // geocoded_lat/lng = geocodifica Nominatim dell'indirizzo — è l'autorità primaria.
   let referenceLat = null;
   let referenceLng = null;
 
-  // 1) Preferenza: coordinate geocodificate dall'indirizzo (arrivano async)
-  if (addressCoords?.lat && addressCoords?.lng) {
+  // 1) PRIMA SCELTA: geocoded_lat/lng (salvato dal backend via Nominatim)
+  if (entity.geocoded_lat != null && entity.geocoded_lng != null) {
+    referenceLat = parseFloat(entity.geocoded_lat);
+    referenceLng = parseFloat(entity.geocoded_lng);
+  }
+  // 2) Fallback: coordinate geocodificate dall'indirizzo in tempo reale (arrivano async)
+  else if (addressCoords?.lat && addressCoords?.lng) {
     referenceLat = addressCoords.lat;
     referenceLng = addressCoords.lng;
   }
-  // 2) Fallback: centroid_lat/lng salvato sul record
+  // 3) Fallback: centroid_lat/lng salvato sul record
   else if (entity.centroid_lat && entity.centroid_lng) {
     referenceLat = parseFloat(entity.centroid_lat);
     referenceLng = parseFloat(entity.centroid_lng);
   }
-  // 3) Ultima risorsa: baricentro del poligono (solo se non abbiamo nient'altro)
+  // 4) Ultima risorsa: baricentro del poligono (solo se non abbiamo nient'altro)
   else if (geomJson?.geometry?.coordinates?.[0]?.length > 0) {
     const ring = geomJson.geometry.coordinates[0];
     referenceLat = ring.reduce((s, c) => s + c[1], 0) / ring.length;
