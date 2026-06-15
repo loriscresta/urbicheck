@@ -14,6 +14,7 @@ import { calculatePlanimetriaArea } from '@/functions/calculatePlanimetriaArea';
 import { fetchParcelFromAgent } from '@/functions/fetchParcelFromAgent';
 import PublicSearchPreview from "@/components/search/PublicSearchPreview";
 import { logSearch } from "@/functions/logSearch";
+import { chargeReport } from "@/functions/chargeReport";
 
 const BETA_REGIONS = ['piemonte', 'liguria', 'lombardia'];
 
@@ -21,6 +22,7 @@ export default function SearchPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [batchProgress, setBatchProgress] = useState(null);
   const [geoBlockError, setGeoBlockError] = useState(null);
+  const [paymentError, setPaymentError] = useState(null);
   const [publicPreview, setPublicPreview] = useState(null); // anteprima per utenti non loggati
   const [pendingFormData, setPendingFormData] = useState(null);
   const navigate = useNavigate();
@@ -61,6 +63,7 @@ export default function SearchPage() {
 
   const handleSearch = async (formData) => {
     setGeoBlockError(null);
+    setPaymentError(null);
     setPublicPreview(null);
     // Geographic block: beta only covers Piemonte, Liguria, Lombardia
     const regioneLower = (formData.regione || '').toLowerCase();
@@ -215,7 +218,24 @@ export default function SearchPage() {
       });
     }
 
-    // Chiama in parallelo: catasto_resolver (dati urbanistici) + fetchParcelFromAgent (mappale server-side)
+    // ── Pagamento immediato: crea la query SOLO se il pagamento va a buon fine ──
+    try {
+      await chargeReport({ query_id: query.id });
+    } catch (err) {
+      // Pagamento fallito — elimina la query e mostra errore
+      console.error('chargeReport failed, deleting query:', err);
+      await base44.entities.CadastralQuery.delete(query.id).catch(() => {});
+      const data = err?.response?.data;
+      const msg = data?.error === 'insufficient_credits'
+        ? `Credito insufficiente (€${(data.balance || 0).toFixed(2)} disponibili, servono €${(data.required || 9.90).toFixed(2)}). Ricarica il saldo e riprova.`
+        : 'Pagamento non riuscito. Riprova.';
+      setGeoBlockError(null); // clear any previous error
+      setPaymentError(msg);
+      setIsLoading(false);
+      return;
+    }
+
+    // Pagamento riuscito — avvia enrichments server-side in background
     logSearch({ comune: formData.comune, foglio: formData.foglio, particella: formData.particella, regione: formData.regione || '', esito: 'trovata', user_email: currentUser?.email || '' }).catch(() => {});
 
     catasto_resolver({
@@ -381,7 +401,7 @@ export default function SearchPage() {
       ...batchUpdateGeo,
     });
 
-    // ── Charge batch credits once + set paid=true on all queries ──────────
+    // ── Charge batch using tier system (same logic as chargeReport) ──────
     // Pertinenze (C/2, C/6, C/7) NON consumano report/crediti — solo unità residenziali
     const billableQueryIds = queryIds.filter((qid, i) => !units[i]?.is_pertinenza);
     const billableCount = billableQueryIds.length;
@@ -389,31 +409,79 @@ export default function SearchPage() {
       try {
         const user = await base44.auth.me();
         const creditsList = await base44.entities.UserCredits.filter({ user_email: user.email });
-        const credits = creditsList[0];
-        const totalCost = +(pricePerUnit * billableCount).toFixed(2);
+        let credits = creditsList[0];
 
-        if (credits && credits.balance >= totalCost) {
-          await base44.entities.UserCredits.update(credits.id, {
-            balance: +(credits.balance - totalCost).toFixed(2),
-            total_spent: +((credits.total_spent || 0) + totalCost).toFixed(2),
-            total_queries: (credits.total_queries || 0) + billableCount,
-          });
-          await base44.entities.CreditTransaction.create({
+        // Create UserCredits if missing (new user, no welcome credit)
+        if (!credits) {
+          credits = await base44.entities.UserCredits.create({
             user_email: user.email,
-            type: 'query_charge',
-            amount: -totalCost,
-            description: `Batch ${billableCount} unità${pertinenzaUnits.length > 0 ? ` (+${pertinenzaUnits.length} pertinenze)` : ''} — ${sharedCadastral.comune} (€${pricePerUnit.toFixed(2)}/ud)`,
+            balance: 0,
+            total_spent: 0,
+            total_queries: 0,
+            free_reports_used: 0,
+            beta_paid_reports_used: 0,
           });
-          // Set paid=true on all batch queries AND the batch itself
-          await Promise.all([
-            ...queryIds.map(qid =>
-              base44.entities.CadastralQuery.update(qid, { paid: true })
-            ),
-            base44.entities.BatchQuery.update(batchRecord.id, { paid: true }),
-          ]);
         }
+
+        const FREE_REPORTS = 3;
+        const LAUNCH_PAID_REPORTS = 3;
+        const LAUNCH_PRICE = 2.99;
+        const STANDARD_PRICE = 9.90;
+
+        let freeUsed = credits.free_reports_used || 0;
+        let launchUsed = credits.beta_paid_reports_used || 0;
+        let freeIncrements = 0;
+        let launchIncrements = 0;
+        let totalCost = 0;
+
+        // Assign tier to each billable query
+        for (let j = 0; j < billableCount; j++) {
+          if (freeUsed + freeIncrements < FREE_REPORTS) {
+            freeIncrements++;
+          } else if (launchUsed + launchIncrements < LAUNCH_PAID_REPORTS) {
+            launchIncrements++;
+            totalCost += LAUNCH_PRICE;
+          } else {
+            totalCost += STANDARD_PRICE;
+          }
+        }
+
+        if (totalCost > 0 && (credits.balance || 0) < totalCost) {
+          // Not enough balance — delete all queries and show error
+          await Promise.all(queryIds.map(qid => base44.entities.CadastralQuery.delete(qid).catch(() => {})));
+          await base44.entities.BatchQuery.delete(batchRecord.id).catch(() => {});
+          setPaymentError(`Credito insufficiente per il batch (€${(credits.balance || 0).toFixed(2)} disponibili, servono €${totalCost.toFixed(2)}). Ricarica il saldo e riprova.`);
+          setIsLoading(false);
+          setBatchProgress(null);
+          return;
+        }
+
+        // All good — update counters and set paid
+        await base44.entities.UserCredits.update(credits.id, {
+          free_reports_used: freeUsed + freeIncrements,
+          beta_paid_reports_used: launchUsed + launchIncrements,
+          balance: +((credits.balance || 0) - totalCost).toFixed(2),
+          total_spent: +((credits.total_spent || 0) + totalCost).toFixed(2),
+          total_queries: (credits.total_queries || 0) + billableCount,
+        });
+
+        await base44.entities.CreditTransaction.create({
+          user_email: user.email,
+          type: 'query_charge',
+          amount: -totalCost,
+          description: `Batch ${billableCount} unità${pertinenzaUnits.length > 0 ? ` (+${pertinenzaUnits.length} pertinenze)` : ''} — ${sharedCadastral.comune} (${freeIncrements} gratis, ${launchIncrements} a €${LAUNCH_PRICE.toFixed(2)}, ${billableCount - freeIncrements - launchIncrements} a €${STANDARD_PRICE.toFixed(2)})`,
+        });
+
+        await Promise.all([
+          ...queryIds.map(qid => base44.entities.CadastralQuery.update(qid, { paid: true })),
+          base44.entities.BatchQuery.update(batchRecord.id, { paid: true }),
+        ]);
       } catch (e) {
         console.error('Batch charge error:', e);
+        setPaymentError('Errore durante il pagamento batch. Riprova.');
+        setIsLoading(false);
+        setBatchProgress(null);
+        return;
       }
     }
 
@@ -477,6 +545,14 @@ export default function SearchPage() {
         {!publicPreview && (
           <div className="mb-6 flex items-center gap-2 px-3 py-2 text-xs" style={{ background: '#f0fdf4', border: '1px solid #86efac', fontFamily: "'IBM Plex Mono', monospace", color: '#15803d' }}>
             🚀 <strong>Beta attiva</strong> — Prime 3 analisi gratuite · poi €2,99/report (offerta lancio, max 3) · poi €9,90 · Solo Piemonte, Liguria, Lombardia
+          </div>
+        )}
+        {paymentError && (
+          <div className="mb-5 p-4 flex flex-col gap-2" style={{ background: '#fef2f2', border: '2px solid #ef4444', fontFamily: "'IBM Plex Mono', monospace" }}>
+            <p className="text-sm font-semibold" style={{ color: '#991b1b' }}>
+              {paymentError}
+            </p>
+            <a href="/credits" className="text-xs underline font-semibold" style={{ color: '#991b1b' }}>Ricarica crediti →</a>
           </div>
         )}
         {geoBlockError && (

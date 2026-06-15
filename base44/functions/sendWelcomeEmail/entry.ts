@@ -15,23 +15,9 @@ Deno.serve(async (req) => {
     const user_email = user.email;
     const user_name = user.name || user.full_name || '';
 
-    // ── 3 report gratuiti di benvenuto (solo se non esistono già crediti) ──
-    const WELCOME_CREDITS = 29.70; // 3 × €9.90
-    const existingCredits = await base44.asServiceRole.entities.UserCredits.filter({ user_email });
-    if (existingCredits.length === 0) {
-      await base44.asServiceRole.entities.UserCredits.create({
-        user_email,
-        balance: WELCOME_CREDITS,
-        total_spent: 0,
-        total_queries: 0,
-      });
-      await base44.asServiceRole.entities.CreditTransaction.create({
-        user_email,
-        type: 'purchase',
-        amount: WELCOME_CREDITS,
-        description: '🎁 3 report gratuiti di benvenuto — periodo beta',
-      });
-    }
+    // ── Nessun credito di benvenuto — il funnel gratuito è gestito da chargeReport ──
+    // I primi 3 report sono gratis (€0), i successivi 3 a €2.99, poi €9.90 standard.
+    // Il saldo parte da 0 e i tier sono determinati dai counter free_reports_used / beta_paid_reports_used.
 
     if (!user_email) return Response.json({ error: 'user_email required' }, { status: 400 });
 
