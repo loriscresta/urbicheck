@@ -67,10 +67,23 @@ export default function ParcellaMap({ record, query, item }) {
 
   const PARCEL_STYLE = { color: "#FF6600", weight: 2.5, fillColor: "#FF6600", fillOpacity: 0.35 };
 
+// Validazione: scarta poligono se il suo baricentro dista >500m dal centroide del record
+function polygonCentroidDistance(polygonGeom, refLat, refLng) {
+  if (!polygonGeom?.coordinates?.[0]?.length || !refLat || !refLng) return null;
+  const ring = polygonGeom.coordinates[0];
+  const cLat = ring.reduce((s, c) => s + c[1], 0) / ring.length;
+  const cLon = ring.reduce((s, c) => s + c[0], 0) / ring.length;
+  const R = 6371000;
+  const dLat = (cLat - refLat) * Math.PI / 180;
+  const dLon = (cLon - refLng) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(refLat * Math.PI / 180) * Math.cos(cLat * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
   const addPolygonToMap = useCallback((feature) => {
     const L   = window.L;
     const map = leafletMapRef.current;
-    if (!L || !map) return;
+    if (!L || !map || !feature) return;
     try {
       // Rimuovi layer precedente se presente
       if (geojsonLayerRef.current) {
@@ -226,22 +239,38 @@ export default function ParcellaMap({ record, query, item }) {
         ? "✅ Particella catastale trovata (AdE INSPIRE WFS)"
         : "📐 Geometria approssimata (nearest centroid)");
 
-      addPolygonToMap(matched);
-      // Salva in DB: poligono + centroide REALE calcolato dal poligono WFS
-      // Questo corregge il centroide sbagliato da Catastomappe e fix Overpass/ferrovia
-      try {
-        const ring = matched?.geometry?.coordinates?.[0];
-        const updateData = { geometry_geojson: matched };
-        if (ring?.length > 2) {
-          const cLat = ring.reduce((s, c) => s + c[1], 0) / ring.length;
-          const cLon = ring.reduce((s, c) => s + c[0], 0) / ring.length;
-          updateData.centroid_lat = cLat;
-          updateData.centroid_lng = cLon;
-          console.log('[ParcellaMap] centroide corretto salvato in DB:', cLat, cLon);
+      // Validazione distanza centroide prima di salvare
+      const ringCheck = matched?.geometry?.coordinates?.[0];
+      let savePolygon = true;
+      if (ringCheck?.length > 2 && initLat && initLon) {
+        const dist = polygonCentroidDistance(matched.geometry, initLat, initLon);
+        if (dist !== null && dist > 500) {
+          console.warn(`[ParcellaMap] Poligono scartato — baricentro a ${dist.toFixed(0)}m dal centroide record`);
+          savePolygon = false;
+          setWfsStatus("⚠️ Poligono catastale non disponibile — posizione approssimativa da centroide");
         }
-        await base44.entities.CadastralQuery.update(entity.id, updateData);
-      } catch (e) {
-        console.warn("DB save geometry_geojson:", e);
+      }
+
+      if (savePolygon) {
+        addPolygonToMap(matched);
+        // Salva in DB: poligono + centroide REALE calcolato dal poligono WFS
+        // Questo corregge il centroide sbagliato da Catastomappe e fix Overpass/ferrovia
+        try {
+          const updateData = { geometry_geojson: matched };
+          if (ringCheck?.length > 2) {
+            const cLat = ringCheck.reduce((s, c) => s + c[1], 0) / ringCheck.length;
+            const cLon = ringCheck.reduce((s, c) => s + c[0], 0) / ringCheck.length;
+            updateData.centroid_lat = cLat;
+            updateData.centroid_lng = cLon;
+            console.log('[ParcellaMap] centroide corretto salvato in DB:', cLat, cLon);
+          }
+          await base44.entities.CadastralQuery.update(entity.id, updateData);
+        } catch (e) {
+          console.warn("DB save geometry_geojson:", e);
+        }
+      } else {
+        // Non salvare il poligono sbagliato — mostra solo marker
+        addPolygonToMap(null);
       }
     };
 
@@ -295,7 +324,25 @@ export default function ParcellaMap({ record, query, item }) {
         }
       ).addTo(map);
 
-      if (hasPolygon) {
+      // Validazione poligono: scarta se baricentro poligono dista >500m dal centroide record
+      let validPolygon = false;
+      let polygonTooFar = false;
+      if (hasPolygon && geomJson?.geometry) {
+        const refLat = parseFloat(entity.centroid_lat);
+        const refLng = parseFloat(entity.centroid_lng);
+        if (refLat && refLng) {
+          const dist = polygonCentroidDistance(geomJson.geometry, refLat, refLng);
+          if (dist !== null && dist <= 500) {
+            validPolygon = true;
+          } else if (dist !== null) {
+            polygonTooFar = true;
+          }
+        } else {
+          validPolygon = true; // no reference to compare
+        }
+      }
+
+      if (validPolygon) {
         // Poligono ufficiale: arancione pieno 35% — fitBounds sul poligono reale
         // CRITICO: usare padding piccolo e maxZoom alto per particelle piccole (~20m)
         const layer = L.geoJSON(geomJson, { style: PARCEL_STYLE }).addTo(map);
@@ -306,7 +353,7 @@ export default function ParcellaMap({ record, query, item }) {
         map.fitBounds(layer.getBounds(), { padding: [20, 20], maxZoom: 19 });
         setPolygonLoaded(true);
       } else {
-        // Nessun poligono: cerchio rosso tratteggiato come posizione approssimativa
+        // Nessun poligono (o scartato): cerchio rosso tratteggiato come posizione approssimativa
         L.circle([initLat, initLon], {
           radius: 25,
           color: "#c0392b",
@@ -316,15 +363,17 @@ export default function ParcellaMap({ record, query, item }) {
           dashArray: "6 4",
         }).addTo(map);
         const addrLabel = entity.indirizzo_immobile || entity.comune || '';
-        L.circleMarker([initLat, initLon], {
+        const marker = L.circleMarker([initLat, initLon], {
           radius: 7,
           color: "#c0392b",
           fillColor: "#e74c3c",
           fillOpacity: 0.95,
           weight: 2,
-        }).addTo(map).bindPopup(
-          `<strong>📍 ${addrLabel}</strong><br/>Foglio ${foglio}, Particella ${particella}${entity.subalterno ? `, Sub. ${entity.subalterno}` : ''}`
-        ).openPopup();
+        }).addTo(map);
+        const popupContent = polygonTooFar
+          ? `<strong>⚠️ Poligono catastale non disponibile</strong><br/>Posizione approssimativa da centroide<br/><small style="color:#666">Foglio ${foglio}, Particella ${particella}${entity.subalterno ? `, Sub. ${entity.subalterno}` : ''}</small>`
+          : `<strong>📍 ${addrLabel}</strong><br/>Foglio ${foglio}, Particella ${particella}${entity.subalterno ? `, Sub. ${entity.subalterno}` : ''}`;
+        marker.bindPopup(popupContent).openPopup();
       }
     };
 
@@ -438,19 +487,32 @@ export default function ParcellaMap({ record, query, item }) {
                    (lbl.includes(`${foglioNum}/`) || lbl.includes(`${foglioNum.padStart(4,"0")}/`));
           });
           if (exact) {
-            addPolygonToMap(exact);
-            try {
-              const ring = exact?.geometry?.coordinates?.[0];
-              const updateData = { geometry_geojson: exact };
-              if (ring?.length > 2) {
-                const cLat = ring.reduce((s,c) => s+c[1], 0) / ring.length;
-                const cLon = ring.reduce((s,c) => s+c[0], 0) / ring.length;
-                updateData.centroid_lat = cLat;
-                updateData.centroid_lng = cLon;
+            // Validazione distanza
+            const exRing = exact?.geometry?.coordinates?.[0];
+            let saveExact = true;
+            if (exRing?.length > 2 && initLat && initLon) {
+              const dist = polygonCentroidDistance(exact.geometry, initLat, initLon);
+              if (dist !== null && dist > 500) {
+                console.warn(`[ParcellaMap] address WFS polygon rejected — ${dist.toFixed(0)}m from centroid`);
+                saveExact = false;
+                setWfsStatus("⚠️ Poligono catastale non disponibile — posizione approssimativa da centroide");
               }
-              await base44.entities.CadastralQuery.update(entity.id, updateData);
-            } catch (e) { console.warn("DB update from address WFS:", e); }
-            setWfsStatus("✅ Particella trovata via geocoding indirizzo");
+            }
+            if (saveExact) {
+              addPolygonToMap(exact);
+              try {
+                const ring = exact?.geometry?.coordinates?.[0];
+                const updateData = { geometry_geojson: exact };
+                if (ring?.length > 2) {
+                  const cLat = ring.reduce((s,c) => s+c[1], 0) / ring.length;
+                  const cLon = ring.reduce((s,c) => s+c[0], 0) / ring.length;
+                  updateData.centroid_lat = cLat;
+                  updateData.centroid_lng = cLon;
+                }
+                await base44.entities.CadastralQuery.update(entity.id, updateData);
+              } catch (e) { console.warn("DB update from address WFS:", e); }
+              setWfsStatus("✅ Particella trovata via geocoding indirizzo");
+            }
             return;
           }
         }

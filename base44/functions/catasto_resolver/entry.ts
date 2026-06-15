@@ -644,8 +644,25 @@ Deno.serve(async (req) => {
         const wfsAttempt = await searchWfsAde(dbLat, dbLon, codiceBelfiore, foglio, particella, '');
         if (wfsAttempt?.geojson_polygon) {
           const centroid = calculatePolygonCentroid(wfsAttempt.geojson_polygon);
-          const finalLat2 = centroid?.lat ?? dbLat;
-          const finalLon2 = centroid?.lon ?? dbLon;
+          const polyLat = centroid?.lat ?? dbLat;
+          const polyLon = centroid?.lon ?? dbLon;
+          const polyDist = haversineM(polyLat, polyLon, dbLat, dbLon);
+          if (polyDist > 500) {
+            console.log(`[catasto_resolver] WFS diretto scartato — baricentro a ${polyDist.toFixed(0)}m dal centroide`);
+            // Salva solo coordinate senza poligono
+            try {
+              await base44.entities.CadastralQuery.update(query_id, {
+                centroid_lat: polyLat,
+                centroid_lng: polyLon,
+                codice_comune_catasto: codiceBelfiore,
+                fonte_dati_catastali: 'wfs_direct_validated',
+              });
+            } catch (_e) {}
+            return Response.json({ success: true, lat: polyLat, lon: polyLon,
+              fonte: 'wfs_direct', wfs_polygon: false, polygon_rejected: true });
+          }
+          const finalLat2 = polyLat;
+          const finalLon2 = polyLon;
           console.log(`WFS diretto OK: centroide=${finalLat2},${finalLon2}`);
           try {
             await base44.entities.CadastralQuery.update(query_id, {
@@ -862,8 +879,21 @@ Deno.serve(async (req) => {
             if (p.comune_code) agentUpdate.codice_comune_catasto = p.comune_code;
             await base44.entities.CadastralQuery.update(query_id, agentUpdate);
             console.log(`[catasto_resolver] catasto_agent OK: comune_code=${p.comune_code}`);
-            // aggiorna catasto_data con geometria agent
-            catasto_data.geojson_polygon = p.geometry;
+            // Validazione distanza poligono agente
+            const agentRing = p.geometry?.coordinates?.[0];
+            let agentPolyOk = false;
+            if (agentRing?.length > 2 && finalLat && finalLon) {
+              const aLat = agentRing.reduce((s, c) => s + c[1], 0) / agentRing.length;
+              const aLon = agentRing.reduce((s, c) => s + c[0], 0) / agentRing.length;
+              const aDist = haversineM(aLat, aLon, finalLat, finalLon);
+              if (aDist <= 500) agentPolyOk = true;
+              else console.log(`[catasto_resolver] catasto_agent polygon rejected — ${aDist.toFixed(0)}m from centroid`);
+            } else {
+              agentPolyOk = true; // no reference to validate
+            }
+            if (agentPolyOk) {
+              catasto_data.geojson_polygon = p.geometry;
+            }
           }
         } else {
           console.log(`[catasto_resolver] catasto_agent: found=false`);

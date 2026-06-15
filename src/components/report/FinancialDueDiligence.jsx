@@ -111,8 +111,8 @@ export default function FinancialDueDiligence({ query, finData, onSnapshotReady 
   const [mqOverride, setMqOverride] = useState(null);
   const [inputMq, setInputMq] = useState('');
 
-  // ── Superficie: cat. reale > input manuale > fallback null ─────────────────
-  const mqRaw = query.superficie_mq || null;
+  // ── Superficie: visura > planimetria > input utente > fallback null ────────
+  const mqRaw = query.superficie_mq || r.planimetria_data?.superficie_mq || parseFloat(fd.superficie) || null;
   const mq    = (mqRaw ? parseFloat(mqRaw) : null) || mqOverride;
 
   // Use per-unit allocated price (batch) if available, else fin_data price

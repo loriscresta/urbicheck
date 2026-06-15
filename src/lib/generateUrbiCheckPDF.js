@@ -602,8 +602,8 @@ export async function generatePDF(query, financialSnapshot, staticMapUrl = null)
   }
 
   // ── SEZ 7 — ANALISI FINANZIARIA ───────────────────────────────────────────
-  // BUG2: usa superficie reale dall'entità (visura/catasto resolver), poi fin_data, poi default 80
-  const mqRaw = query.superficie_mq || parseFloat(fd.superficie) || null;
+  // BUG2 fix: superficie da visura > planimetria > input utente > default 80
+  const mqRaw = query.superficie_mq || r.planimetria_data?.superficie_mq || parseFloat(fd.superficie) || null;
   const mq = mqRaw ? parseFloat(mqRaw) : 80;
   const prezzoAcquisto = parseFloat(fd.prezzo_acquisto) || 0;
   const spesePerc = parseFloat(fd.spese_accessorie) || 10;
