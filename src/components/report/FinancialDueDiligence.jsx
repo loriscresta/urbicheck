@@ -240,7 +240,7 @@ Fornisci punteggio e analisi sintetica.`,
         if (current) {
           const updatedFinData = { ...(current.report_data?.fin_data || {}), score_snapshot: score };
           await base44.entities.CadastralQuery.update(query.id, {
-            report_data: { ...current.report_data, fin_data: updatedFinData }
+            report_data: { ...(current.report_data || {}), fin_data: updatedFinData }
           });
         }
       } catch (_e) { /* non bloccante */ }
@@ -289,7 +289,7 @@ Fornisci punteggio e analisi sintetica.`,
                       if (current) {
                         await base44.entities.CadastralQuery.update(query.id, {
                           report_data: {
-                            ...current.report_data,
+                            ...(current.report_data || {}),
                             fin_data: { ...(current.report_data?.fin_data || {}), superficie: String(v) },
                           },
                         });

@@ -173,7 +173,7 @@ export default function CadastralSearchForm({ onSubmit, isLoading, submitLabel =
 
   // ── Visura pre-fill ─────────────────────────────────────────────────────────
   const handleVisuraData = async (dati) => {
-    if (!Object.keys(dati).length) { setVisuraDati(null); setPrezzoBaseAsta(""); return; }
+    if (!dati || !Object.keys(dati).length) { setVisuraDati(null); setPrezzoBaseAsta(""); return; }
     // Pre-fill prezzo base asta
     if (dati.prezzo_base_asta) setPrezzoBaseAsta(String(dati.prezzo_base_asta));
     // Auto-select comune by name

@@ -135,8 +135,8 @@ export default function VisuraUploader({ onDataExtracted }) {
       setPertinenzaSelections(prev => ({ ...prev, [idx]: choice }));
     };
 
-    const allPertinenzeResolved = !hasMixedAC || Object.values(pertinenzaSelections).every(v => v !== 'unknown');
-    const hasPertinenzeYes = hasMixedAC && Object.values(pertinenzaSelections).some(v => v === 'si');
+    const allPertinenzeResolved = !hasMixedAC || (pertinenzaSelections && Object.values(pertinenzaSelections).every(v => v !== 'unknown'));
+    const hasPertinenzeYes = hasMixedAC && pertinenzaSelections && Object.values(pertinenzaSelections).some(v => v === 'si');
 
     const handleAnalizzaTuttiWithPertinenze = () => {
       const taggedSubs = subs.map((s, i) => ({
@@ -237,7 +237,7 @@ export default function VisuraUploader({ onDataExtracted }) {
             >
               <Users className="w-4 h-4" />
               {hasPertinenzeYes
-                ? `Analizza — ${subs.length - Object.values(pertinenzaSelections).filter(v => v === 'si').length} unità (+ pertinenze)`
+                ? `Analizza — ${subs.length - (pertinenzaSelections ? Object.values(pertinenzaSelections).filter(v => v === 'si').length : 0)} unità (+ pertinenze)`
                 : `Analizza tutti ${subs.length} subalterni`}
             </Button>
             <Button type="button" variant="outline" onClick={handleAnalizzaSolo} className="flex-1">
@@ -257,7 +257,7 @@ export default function VisuraUploader({ onDataExtracted }) {
             <p className="font-bold text-sm" style={{ color: '#1A3A6B' }}>Trovati {subs.length} subalterni nella visura</p>
             <p className="text-xs text-muted-foreground mt-0.5">
               F.{multiSubData.foglio} P.{multiSubData.particella}
-              {hasMixedAC && hasPertinenzeYes ? ` — ${Object.values(pertinenzaSelections).filter(v => v === 'si').length} pertinenze rilevate` : ''}
+              {hasMixedAC && hasPertinenzeYes && pertinenzaSelections ? ` — ${Object.values(pertinenzaSelections).filter(v => v === 'si').length} pertinenze rilevate` : ''}
               — Come vuoi procedere?
             </p>
           </div>
