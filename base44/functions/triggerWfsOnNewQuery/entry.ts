@@ -47,13 +47,7 @@ Deno.serve(async (req) => {
     const q = queries[0];
     if (!q) return Response.json({ skipped: true, reason: 'query not found' });
 
-    // Se abbiamo geocoded_lat/lng, usali come centroid (nel caso non siano già stati impostati)
-    if (q.geocoded_lat != null && q.geocoded_lng != null && (q.centroid_lat == null || q.centroid_lng == null)) {
-      await base44.asServiceRole.entities.CadastralQuery.update(entityId, {
-        centroid_lat: q.geocoded_lat,
-        centroid_lng: q.geocoded_lng,
-      });
-    }
+    // geocoded_lat/lng non sovrascrivono più centroid_lat/lng — la geocodifica Nominatim è disabilitata
 
     let regioneLower = (q.regione || '').toLowerCase();
 
