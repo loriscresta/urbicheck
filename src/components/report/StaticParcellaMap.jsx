@@ -25,8 +25,10 @@ export default function StaticParcellaMap({ query, onImageReady, width = 800, he
     }
 
     const rawGeom = query.geometry_geojson || null;
-    const lat = query.centroid_lat ? parseFloat(query.centroid_lat) : null;
-    const lng = query.centroid_lng ? parseFloat(query.centroid_lng) : null;
+    const centroidLat = query.centroid_lat != null && Number(query.centroid_lat) !== 0 ? parseFloat(query.centroid_lat) : null;
+    const centroidLng = query.centroid_lng != null && Number(query.centroid_lng) !== 0 ? parseFloat(query.centroid_lng) : null;
+    const lat = centroidLat != null ? centroidLat : (query.geocoded_lat ? parseFloat(query.geocoded_lat) : null);
+    const lng = centroidLng != null ? centroidLng : (query.geocoded_lng ? parseFloat(query.geocoded_lng) : null);
 
     if (!lat || !lng) {
       setLoading(false);
@@ -133,8 +135,10 @@ function buildGeoapifyUrl({ centerLat, centerLng, zoom, polygonCoords, width, he
  * Usata come fallback nel PDF se il servizio esterno non risponde.
  */
 export function getStaticMapUrlForPdf(query) {
-  const lat = query.centroid_lat ? parseFloat(query.centroid_lat) : null;
-  const lng = query.centroid_lng ? parseFloat(query.centroid_lng) : null;
+  const centroidLat = query.centroid_lat != null && Number(query.centroid_lat) !== 0 ? parseFloat(query.centroid_lat) : null;
+  const centroidLng = query.centroid_lng != null && Number(query.centroid_lng) !== 0 ? parseFloat(query.centroid_lng) : null;
+  const lat = centroidLat != null ? centroidLat : (query.geocoded_lat ? parseFloat(query.geocoded_lat) : null);
+  const lng = centroidLng != null ? centroidLng : (query.geocoded_lng ? parseFloat(query.geocoded_lng) : null);
   if (!lat || !lng) return null;
 
   const rawGeom = query.geometry_geojson || null;

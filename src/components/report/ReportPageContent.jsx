@@ -229,10 +229,11 @@ export default function ReportPageContent({ query, refetch = () => {}, isPublicV
 
   // Generate static map URL for PDF (from buildStaticMapUrl)
   useEffect(() => {
-    if (!query.centroid_lat || !query.centroid_lng) return;
-    const lat = parseFloat(query.centroid_lat);
-    const lng = parseFloat(query.centroid_lng);
-    if (isNaN(lat) || isNaN(lng)) return;
+    const centroidLat = query.centroid_lat != null && Number(query.centroid_lat) !== 0 ? parseFloat(query.centroid_lat) : null;
+    const centroidLng = query.centroid_lng != null && Number(query.centroid_lng) !== 0 ? parseFloat(query.centroid_lng) : null;
+    const lat = centroidLat != null ? centroidLat : (query.geocoded_lat ? parseFloat(query.geocoded_lat) : null);
+    const lng = centroidLng != null ? centroidLng : (query.geocoded_lng ? parseFloat(query.geocoded_lng) : null);
+    if (!lat || !lng) return;
     const rawGeom = query.geometry_geojson || null;
     let polygonCoords = null;
     if (rawGeom) {
