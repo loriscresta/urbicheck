@@ -199,6 +199,21 @@ export default function ReportPageContent({ query, refetch = () => {}, isPublicV
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [isDownloadingPDF, setIsDownloadingPDF] = useState(false);
+  const [autoRefreshCount, setAutoRefreshCount] = useState(0);
+
+  // Auto-refresh while query is processing (codice_comune_catasto not yet populated)
+  const isProcessing = query.status === 'pending' || query.status === 'processing';
+  const missingCriticalData = isProcessing && !query.codice_comune_catasto;
+  useEffect(() => {
+    if (!missingCriticalData) return;
+    const timer = setInterval(() => {
+      if (autoRefreshCount < 20) { // max 60s polling
+        refetch();
+        setAutoRefreshCount(c => c + 1);
+      }
+    }, 3000);
+    return () => clearInterval(timer);
+  }, [missingCriticalData, autoRefreshCount, refetch]);
   const [showAttiForm, setShowAttiForm] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
   const [resolvedNta, setResolvedNta] = useState(null);
@@ -401,6 +416,38 @@ export default function ReportPageContent({ query, refetch = () => {}, isPublicV
     await refetch();
     toast({ title: `Sezione ${sezione} selezionata ✓` });
   };
+
+  // ── Loading state: query in elaborazione, dati non ancora popolati ──
+  if (isProcessing) {
+    return (
+      <div className="p-6 lg:p-10 max-w-5xl mx-auto text-center space-y-6">
+        <div className="w-16 h-16 mx-auto rounded-full flex items-center justify-center" style={{ background: '#1A3A6B' }}>
+          <Loader2 className="w-8 h-8 text-white animate-spin" />
+        </div>
+        <div>
+          <h2 className="text-xl font-bold" style={{ color: '#1A3A6B', fontFamily: "'Libre Baskerville', serif" }}>
+            {query.status === 'pending' ? 'Elaborazione in corso...' : 'Analisi dati catastali in corso...'}
+          </h2>
+          <p className="text-sm text-muted-foreground mt-2" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
+            {missingCriticalData
+              ? 'Il sistema sta recuperando i dati catastali (codice Belfiore, coordinate, geometria). L\'elaborazione richiede 30-60 secondi.'
+              : 'I dati catastali sono stati recuperati — completamento analisi in corso.'}
+          </p>
+        </div>
+        <div className="w-full max-w-md mx-auto bg-muted rounded-full h-2">
+          <div className="h-2 rounded-full animate-pulse" style={{ width: query.status === 'processing' ? '70%' : '30%', background: '#1A3A6B' }} />
+        </div>
+        <div className="space-y-3 mt-6 max-w-md mx-auto">
+          <div className="h-4 bg-muted rounded animate-pulse w-3/4 mx-auto" />
+          <div className="h-4 bg-muted rounded animate-pulse w-1/2 mx-auto" />
+          <div className="h-4 bg-muted rounded animate-pulse w-5/6 mx-auto" />
+        </div>
+        <p className="text-xs text-muted-foreground" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
+          Aggiornamento automatico in corso · {autoRefreshCount * 3}s
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 lg:p-10 max-w-5xl mx-auto pb-20">
