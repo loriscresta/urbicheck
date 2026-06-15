@@ -59,21 +59,11 @@ export default function ParcellaMap({ record, query, item }) {
     return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   }
 
-  // ── Gerarchia coordinate: geocoded_lat/lng > centroid_lat/lng > baricentro poligono ──
-  let referenceLat = null;
-  let referenceLng = null;
-
-  if (entity.geocoded_lat != null && entity.geocoded_lng != null) {
-    referenceLat = parseFloat(entity.geocoded_lat);
-    referenceLng = parseFloat(entity.geocoded_lng);
-  } else if (entity.centroid_lat && entity.centroid_lng) {
-    referenceLat = parseFloat(entity.centroid_lat);
-    referenceLng = parseFloat(entity.centroid_lng);
-  } else if (geomJson?.geometry?.coordinates?.[0]?.length > 0) {
-    const ring = geomJson.geometry.coordinates[0];
-    referenceLat = ring.reduce((s, c) => s + c[1], 0) / ring.length;
-    referenceLng = ring.reduce((s, c) => s + c[0], 0) / ring.length;
-  }
+  // ── Logica pin: SOLO geocoded_lat/lng || centroid_lat/lng ──
+  const mapLat = entity.geocoded_lat != null ? parseFloat(entity.geocoded_lat) : (entity.centroid_lat ? parseFloat(entity.centroid_lat) : null);
+  const mapLng = entity.geocoded_lng != null ? parseFloat(entity.geocoded_lng) : (entity.centroid_lng ? parseFloat(entity.centroid_lng) : null);
+  const referenceLat = mapLat;
+  const referenceLng = mapLng;
 
   const hasPosition = !!(referenceLat && referenceLng && !isNaN(referenceLat) && !isNaN(referenceLng));
 
@@ -451,6 +441,10 @@ export default function ParcellaMap({ record, query, item }) {
           ? "📐 Poligono catastale AdE INSPIRE WFS | "
           : `Foglio ${foglio}, Part. ${particella} | `}
         © Leaflet | © OpenStreetMap | © Agenzia delle Entrate
+      </div>
+
+      <div className="text-[10px] font-mono text-red-600 bg-red-50 border border-red-200 rounded px-2 py-1">
+        DEBUG: centroid={entity.centroid_lat},{entity.centroid_lng} | geocoded={entity.geocoded_lat},{entity.geocoded_lng} | mapLat,mapLng={referenceLat},{referenceLng}
       </div>
 
       <a
