@@ -52,7 +52,18 @@ export default function ParcellaMap({ record, query, item }) {
   }
 
   const hasPosition = !!(initLat && initLon && !isNaN(initLat) && !isNaN(initLon));
-  const hasPolygon  = !!(geomJson?.geometry?.coordinates);
+
+  // Validazione poligono: baricentro del poligono deve essere entro 500m dal centroide record
+  const validGeometry = (() => {
+    if (!geomJson?.geometry?.coordinates) return null;
+    const refLat = parseFloat(entity.centroid_lat);
+    const refLng = parseFloat(entity.centroid_lng);
+    if (!refLat || !refLng) return geomJson; // no ref = assume valid
+    const dist = polygonCentroidDistance(geomJson.geometry, refLat, refLng);
+    if (dist !== null && dist > 500) return null; // scarta
+    return geomJson;
+  })();
+  const hasPolygon  = !!validGeometry;
 
   const mapDivRef       = useRef(null);
   const leafletMapRef   = useRef(null);
@@ -324,28 +335,10 @@ function polygonCentroidDistance(polygonGeom, refLat, refLng) {
         }
       ).addTo(map);
 
-      // Validazione poligono: scarta se baricentro poligono dista >500m dal centroide record
-      let validPolygon = false;
-      let polygonTooFar = false;
-      if (hasPolygon && geomJson?.geometry) {
-        const refLat = parseFloat(entity.centroid_lat);
-        const refLng = parseFloat(entity.centroid_lng);
-        if (refLat && refLng) {
-          const dist = polygonCentroidDistance(geomJson.geometry, refLat, refLng);
-          if (dist !== null && dist <= 500) {
-            validPolygon = true;
-          } else if (dist !== null) {
-            polygonTooFar = true;
-          }
-        } else {
-          validPolygon = true; // no reference to compare
-        }
-      }
-
-      if (validPolygon) {
+      if (validGeometry) {
         // Poligono ufficiale: arancione pieno 35% — fitBounds sul poligono reale
         // CRITICO: usare padding piccolo e maxZoom alto per particelle piccole (~20m)
-        const layer = L.geoJSON(geomJson, { style: PARCEL_STYLE }).addTo(map);
+        const layer = L.geoJSON(validGeometry, { style: PARCEL_STYLE }).addTo(map);
         geojsonLayerRef.current = layer;
         layer.bindPopup(
           `<strong>📐 Mappale catastale</strong><br/>Foglio ${foglio}, Particella ${particella}${entity.subalterno ? `, Sub. ${entity.subalterno}` : ''}<br/><small style="color:#666">Confine catastale ufficiale</small>`
@@ -370,7 +363,8 @@ function polygonCentroidDistance(polygonGeom, refLat, refLng) {
           fillOpacity: 0.95,
           weight: 2,
         }).addTo(map);
-        const popupContent = polygonTooFar
+        const hasDbGeom = !!(geomJson?.geometry?.coordinates);
+        const popupContent = hasDbGeom
           ? `<strong>⚠️ Poligono catastale non disponibile</strong><br/>Posizione approssimativa da centroide<br/><small style="color:#666">Foglio ${foglio}, Particella ${particella}${entity.subalterno ? `, Sub. ${entity.subalterno}` : ''}</small>`
           : `<strong>📍 ${addrLabel}</strong><br/>Foglio ${foglio}, Particella ${particella}${entity.subalterno ? `, Sub. ${entity.subalterno}` : ''}`;
         marker.bindPopup(popupContent).openPopup();
@@ -389,24 +383,25 @@ function polygonCentroidDistance(polygonGeom, refLat, refLng) {
 
 
 
-  // ── Aggiorna layer GeoJSON quando geometry_geojson cambia (es. dopo fetch API interna) ──
+  // ── Aggiorna layer GeoJSON quando geometry_geojson cambia (validato) ──
   useEffect(() => {
     const L = window.L;
     const map = leafletMapRef.current;
-    if (!L || !map || !geomJson) return;
+    if (!L || !map) return;
     if (geojsonLayerRef.current) {
       map.removeLayer(geojsonLayerRef.current);
       geojsonLayerRef.current = null;
     }
+    if (!validGeometry) return; // poligono scartato — nessun layer
     try {
-      const layer = L.geoJSON(geomJson, { style: PARCEL_STYLE }).addTo(map);
+      const layer = L.geoJSON(validGeometry, { style: PARCEL_STYLE }).addTo(map);
       geojsonLayerRef.current = layer;
       map.fitBounds(layer.getBounds(), { padding: [20, 20], maxZoom: 19 });
       setPolygonLoaded(true);
     } catch (err) {
       console.error("geomJson update layer error", err);
     }
-  }, [geomJson]);
+  }, [validGeometry]);
 
   // ── Geocoding indirizzo immobile (priorità su centroid GIS per frazioni/rurali) ──
   useEffect(() => {
