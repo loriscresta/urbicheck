@@ -227,6 +227,7 @@ export default function CadastralSearchForm({ onSubmit, isLoading, submitLabel =
         rendita_catastale: visuraDati.rendita_catastale,
         vani: visuraDati.vani,
         indirizzo_catastale: visuraDati.indirizzo_catastale,
+        codice_comune_catasto: visuraDati.codice_comune_catasto,
         visura_uploaded: true,
         intestatari_visura: visuraDati.intestatari,
       } : {}),

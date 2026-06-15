@@ -33,7 +33,7 @@ export default function VisuraUploader({ onDataExtracted }) {
       const [res, multiRes] = await Promise.all([
         parseVisuraCatastale({ file_url }),
         base44.integrations.Core.InvokeLLM({
-          prompt: `Sei un esperto di visure catastali italiane. Analizza questo documento ed estrai TUTTI i subalterni presenti (potrebbero essere da 1 a 20+). Per ogni subalterno estrai: numero subalterno, categoria catastale (es. A/2, C/6), piano (es. "piano 1", "piano terra"), superficie in mq (numero), numero vani (numero), rendita catastale in euro (numero). Se non trovi un valore lascia null.`,
+          prompt: `Sei un esperto di visure catastali italiane. Analizza questo documento ed estrai TUTTI i subalterni presenti (potrebbero essere da 1 a 20+).\n\nSe il documento è una "visura sintetica per soggetto" con più unità, estrai TUTTI i subalterni dalla tabella immobili.\n\nPer ogni subalterno estrai: numero subalterno, categoria catastale (es. A/2, C/6), piano (es. "piano 1", "piano terra"), superficie in mq (numero), numero vani (numero), rendita catastale in euro (numero).\n\nSe non trovi un valore lascia null.`,
           file_urls: [file_url],
           response_json_schema: {
             type: "object",
@@ -58,17 +58,32 @@ export default function VisuraUploader({ onDataExtracted }) {
       ]);
 
       const dati = res?.data?.dati || res?.dati || {};
-      const allSubs = multiRes?.subalterns || [];
+      const allSubs = Array.isArray(multiRes?.subalterns) ? multiRes.subalterns : [];
 
-      if (allSubs.length > 1) {
-        // Multi-sub: ask user what to do
+      // Rileva visura sintetica per soggetto
+      const isSintetica = dati.tipo_visura === 'sintetica_per_soggetto';
+      const numUnita = dati.num_unita_totali || allSubs.length;
+
+      if (isSintetica && allSubs.length > 1) {
+        setMultiSubData({ subs: allSubs, ...dati, _isSintetica: true });
+      } else if (allSubs.length > 1) {
+        // Multi-sub standard
         setMultiSubData({ subs: allSubs, ...dati });
-      } else {
+      } else if (dati.foglio && dati.particella && dati.comune) {
+        // Singola unità trovata
         setExtracted(dati);
         onDataExtracted(dati);
+      } else if (allSubs.length === 1) {
+        // Un solo subalterno trovato da AI — unisci con dati principali
+        const merged = { ...dati, subalterno: dati.subalterno || allSubs[0]?.subalterno };
+        setExtracted(merged);
+        onDataExtracted(merged);
+      } else {
+        // Nessun dato estrattibile
+        setError("Formato visura non riconosciuto — inserisci i dati manualmente.");
       }
     } catch (err) {
-      console.warn("Visura parsing failed:", err.message);
+      console.warn("Visura parsing failed:", err?.message || err);
       setError("Non sono riuscito a leggere la visura — inserisci i dati manualmente qui sotto.");
     } finally {
       setIsAnalyzing(false);
@@ -127,6 +142,7 @@ export default function VisuraUploader({ onDataExtracted }) {
   // Multi-subalterno confirm UI
   if (multiSubData) {
     const subs = multiSubData.subs;
+    const isSintetica = multiSubData._isSintetica === true;
     const hasResidential = subs.some(s => /^A\//i.test(s.categoria || ''));
     const hasAccessory = subs.some(s => /^(C\/2|C\/6|C\/7)/i.test(s.categoria || ''));
     const hasMixedAC = hasResidential && hasAccessory;
@@ -157,12 +173,13 @@ export default function VisuraUploader({ onDataExtracted }) {
             <Building2 className="w-6 h-6 text-amber-600 shrink-0 mt-0.5" />
             <div>
               <p className="font-bold text-sm" style={{ color: '#92400e' }}>
-                Trovati {subs.length} subalterni — alcuni potrebbero essere pertinenze
+                {isSintetica ? `Visura sintetica — ${subs.length} unità immobiliari rilevate` : `Trovati ${subs.length} subalterni — alcuni potrebbero essere pertinenze`}
               </p>
               <p className="text-xs text-amber-800 mt-0.5">
-                F.{multiSubData.foglio} P.{multiSubData.particella} — 
-                Le categorie C/2 (cantina), C/6 (box/garage), C/7 (tettoia) sono spesso pertinenze di un'abitazione.
-                Una pertinenza non consuma crediti aggiuntivi.
+                F.{multiSubData.foglio} P.{multiSubData.particella} — {multiSubData.comune || '—'}
+                {isSintetica
+                  ? ' · Visura sintetica per soggetto: elenca tutte le unità intestate.'
+                  : ' · Le categorie C/2 (cantina), C/6 (box/garage), C/7 (tettoia) sono spesso pertinenze di un\'abitazione. Una pertinenza non consuma crediti aggiuntivi.'}
               </p>
             </div>
           </div>
@@ -254,9 +271,12 @@ export default function VisuraUploader({ onDataExtracted }) {
         <div className="flex items-start gap-3 mb-4">
           <Building2 className="w-6 h-6 text-primary shrink-0 mt-0.5" />
           <div>
-            <p className="font-bold text-sm" style={{ color: '#1A3A6B' }}>Trovati {subs.length} subalterni nella visura</p>
+            <p className="font-bold text-sm" style={{ color: '#1A3A6B' }}>
+              {isSintetica ? `Visura sintetica — ${subs.length} unità immobiliari` : `Trovati ${subs.length} subalterni nella visura`}
+            </p>
             <p className="text-xs text-muted-foreground mt-0.5">
-              F.{multiSubData.foglio} P.{multiSubData.particella}
+              F.{multiSubData.foglio} P.{multiSubData.particella} — {multiSubData.comune || '—'}
+              {isSintetica ? ' · Visura sintetica per soggetto: tutte le unità intestate' : ''}
               {hasMixedAC && hasPertinenzeYes && pertinenzaSelections ? ` — ${Object.values(pertinenzaSelections).filter(v => v === 'si').length} pertinenze rilevate` : ''}
               — Come vuoi procedere?
             </p>

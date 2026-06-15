@@ -78,18 +78,21 @@ Deno.serve(async (req) => {
 
   // ── STEP 3: Fallback / arricchimento AI ──
   const campiMancanti = !dati.foglio || !dati.particella || !dati.comune;
-  const needsAI = campiMancanti || file_url;
+  const needsAI = campiMancanti || !!file_url;
 
   if (needsAI) {
     try {
+      // Costruisci prompt con testo se disponibile, altrimenti solo vision
+      const promptText = file_url ? buildAIPrompt(testo) : (testo ? buildAIPrompt(testo) : 'Analizza il file allegato (visura catastale immagine/PDF).');
       const aiResult = await base44.integrations.Core.InvokeLLM({
-        prompt: buildAIPrompt(testo),
+        prompt: promptText,
         file_urls: file_url ? [file_url] : undefined,
         response_json_schema: {
           type: "object",
           properties: {
             comune: { type: "string" },
             provincia: { type: "string" },
+            codice_comune_catasto: { type: "string", description: "Codice catastale del comune (es. L304, A182_ — 4 o 5 caratteri)" },
             sezione_visura: { type: "string", description: "Codice sezione dalla visura (può essere 1-3 chars come A, PL, RM)" },
             sezione_inspire: { type: "string", description: "Sezione INSPIRE estratta dal campo Mappali Correlati (1 char: A, B, C...)" },
             foglio: { type: "string" },
@@ -104,6 +107,8 @@ Deno.serve(async (req) => {
             indirizzo_catastale: { type: "string" },
             classe_catastale: { type: "string", description: "Classe catastale (es. 1, 2, 3, 4, 5, 6, 7)" },
             zona_censuaria: { type: "string", description: "Zona Censuaria (es. 1, 2A, 3B)" },
+            tipo_visura: { type: "string", enum: ["unità_singola", "sintetica_per_soggetto", "multi_unità"], description: "Tipo di visura rilevato" },
+            num_unita_totali: { type: "number", description: "Numero totale di unità immobiliari nella visura (se visura sintetica per soggetto)" },
             intestatari: {
               type: "array",
               items: {
@@ -120,9 +125,12 @@ Deno.serve(async (req) => {
       });
 
       // Merge: AI sovrascrive solo i campi mancanti dal regex
-      if (aiResult) {
+      if (aiResult && typeof aiResult === 'object') {
         if (!dati.comune && aiResult.comune) dati.comune = aiResult.comune;
         if (!dati.provincia && aiResult.provincia) dati.provincia = aiResult.provincia;
+        if (!dati.codice_comune_catasto && aiResult.codice_comune_catasto) {
+          dati.codice_comune_catasto = String(aiResult.codice_comune_catasto).replace(/[_\s]/g, '').toUpperCase();
+        }
         if (!dati.sezione_visura && aiResult.sezione_visura) dati.sezione_visura = aiResult.sezione_visura;
         if (!dati.sezione_inspire && aiResult.sezione_inspire) dati.sezione_inspire = aiResult.sezione_inspire;
         if (!dati.foglio && aiResult.foglio) dati.foglio = aiResult.foglio;
@@ -138,9 +146,11 @@ Deno.serve(async (req) => {
         if (!dati.vani && aiResult.vani) dati.vani = aiResult.vani;
         if (!dati.indirizzo_catastale && aiResult.indirizzo_catastale) dati.indirizzo_catastale = aiResult.indirizzo_catastale;
         if (!dati.intestatari && aiResult.intestatari) dati.intestatari = aiResult.intestatari;
-        // ── FIX 2: merge esplicito con coercizione a stringa per evitare null passthrough ──
         if (!dati.classe_catastale && aiResult.classe_catastale != null) dati.classe_catastale = String(aiResult.classe_catastale);
         if (!dati.zona_censuaria && aiResult.zona_censuaria != null) dati.zona_censuaria = String(aiResult.zona_censuaria);
+        // Flag per tipo visura — usato dal frontend per mostrare avvisi
+        if (aiResult.tipo_visura) dati.tipo_visura = aiResult.tipo_visura;
+        if (aiResult.num_unita_totali) dati.num_unita_totali = aiResult.num_unita_totali;
       }
     } catch (aiErr) {
       console.warn('AI parsing error:', aiErr.message);
@@ -156,37 +166,46 @@ Deno.serve(async (req) => {
 // ── Regex parser ──
 function parseRegex(testo) {
   const dati = {};
+  if (!testo || typeof testo !== 'string') return dati;
 
   // INSPIRE: "G605 - Sezione A - Foglio 8 - Particella 507"
-  const mappaliRe = /[A-Z]\d{3,4}\s*[-–]\s*Sezione\s+([A-Z])\s*[-–]\s*Foglio\s+(\d+)\s*[-–]\s*Particella\s+(\d+)/gi;
+  // Supporta codici Belfiore da 4 o 5 caratteri (es. "L304" o "B042_")
+  const mappaliRe = /[A-Z]\d{3,4}[_\s]?\s*[-–]\s*Sezione\s+([A-Z])\s*[-–]\s*Foglio\s+(\d+)\s*[-–]\s*Particella\s+(\d+)/gi;
   const mappaliMatch = mappaliRe.exec(testo);
   if (mappaliMatch) {
     dati.sezione_inspire = mappaliMatch[1].toUpperCase();
     // Non sovrascrivere foglio/particella da questo — la particella nei Mappali può essere quella del terreno
   }
 
-  // Sezione visura
+  // Estrai codice Belfiore dall'intestazione visura (es. "L304", "B042_")
+  const belfioreRe = /(?:Comune\s+(?:di\s+)?[A-Z]{2,}[\s\S]{0,20}?Codice\s+(?:Catastale\s+)?|Cod(?:\.|ice)\s+(?:Catastale|Comune)\s*:?\s*)\b([A-Z]\d{3,4}[_\s]?)\b/i;
+  const belfioreM = belfioreRe.exec(testo);
+  if (belfioreM) {
+    dati.codice_comune_catasto = belfioreM[1].replace(/[_\s]/g, '').toUpperCase();
+  }
+
+  // Sezione visura — gestisce sia "Sezione A" che "Sez. PL"
   const sezRe = /(?:Sezione|Sez\.?)\s+([A-Z]{1,3})/i;
   const sezM = sezRe.exec(testo);
   if (sezM) dati.sezione_visura = sezM[1].toUpperCase();
 
-  // Foglio
-  const foglioRe = /Foglio\s+(\d+)/i;
+  // Foglio — supporta formati "Foglio 40" e "Fg. 40"
+  const foglioRe = /(?:Foglio|Fg\.?)\s+(\d+)/i;
   const foglioM = foglioRe.exec(testo);
   if (foglioM) dati.foglio = foglioM[1];
 
-  // Particella
-  const partRe = /(?:Particella|Part\.)\s+(\d+)/i;
+  // Particella — supporta "Particella 473" e "Part. 473"
+  const partRe = /(?:Particella|Part\.?|Mappale|Map\.?)\s+(\d+)/i;
   const partM = partRe.exec(testo);
   if (partM) dati.particella = partM[1];
 
   // Subalterno
-  const subRe = /Sub(?:alterno)?\s+(\d+)/i;
+  const subRe = /Sub(?:alterno)?[\s.:]+(\d+)/i;
   const subM = subRe.exec(testo);
   if (subM) dati.subalterno = subM[1];
 
-  // Categoria catastale (es. A/3, C/6)
-  const catRe = /Categoria\s+([A-Z]\/\d+)/i;
+  // Categoria catastale (es. A/3, C/6, A/2)
+  const catRe = /Cat(?:egoria|\.)\s+([A-Z]\/\d+)/i;
   const catM = catRe.exec(testo);
   if (catM) dati.categoria_catastale = catM[1];
 
@@ -200,19 +219,17 @@ function parseRegex(testo) {
   const surfM = surfRe.exec(testo);
   if (surfM) dati.superficie_mq = parseInt(surfM[1], 10);
 
-  // ── FIX 2: Classe catastale — pattern robusto per tabella INTESTAZIONE IMMOBILE ──
-  // Gestisce: "Classe 2", "Classe: 2", "Classe\n2", "Classe  2  Consistenza" (cattura il primo numero dopo il header)
+  // Classe catastale — pattern robusto per tabella INTESTAZIONE IMMOBILE
   const classeRe = /Classe[\s:\n]+(\d+|\/\/)/i;
   const classeM = classeRe.exec(testo);
   if (classeM) dati.classe_catastale = classeM[1];
 
-  // ── FIX 2: Zona censuaria — pattern robusto per tabella INTESTAZIONE IMMOBILE ──
-  // Gestisce: "Zona Censuaria 2", "Zona Censuaria: 2A", "Zona\nCensuaria\n2"
+  // Zona censuaria
   const zonaRe = /Zona\s*Censuaria[\s:\n]+([\dA-Za-z]+)/i;
   const zonaM = zonaRe.exec(testo);
   if (zonaM) dati.zona_censuaria = zonaM[1];
 
-  // Vani
+  // Vani / Consistenza
   const vaniRe = /(?:Vani|Consistenza)\s+([\d.,]+)\s*(?:vani)?/i;
   const vaniM = vaniRe.exec(testo);
   if (vaniM) dati.vani = parseFloat(vaniM[1].replace(',', '.'));
@@ -221,6 +238,15 @@ function parseRegex(testo) {
   const indirizzoRe = /(?:Via|Corso|Piazza|Largo|Vicolo|Viale|Strada)\s+[A-Za-zÀ-ÿ\s]+\d+/i;
   const indirizzoM = indirizzoRe.exec(testo);
   if (indirizzoM) dati.indirizzo_catastale = indirizzoM[0].trim();
+
+  // ── Visura sintetica per soggetto: estrai COMUNE e PROVINCIA dall'intestazione ──
+  // Pattern: "Comune di TORTONA (AL)" o "Comune: TORTONA"
+  const comuneProvRe = /Comune\s+(?:di\s+)?([A-ZÀ-ÿ][A-ZÀ-ÿ\s'’]+?)(?:\s*\(([A-Z]{2})\))?(?:\s*(?:\n|$|Cod|Foglio|Sez|Prov))/i;
+  const comuneProvM = comuneProvRe.exec(testo);
+  if (comuneProvM) {
+    if (!dati.comune) dati.comune = comuneProvM[1].trim();
+    if (!dati.provincia && comuneProvM[2]) dati.provincia = comuneProvM[2].toUpperCase();
+  }
 
   return dati;
 }
@@ -270,33 +296,40 @@ ${testo ? `TESTO VISURA:\n${testo.slice(0, 8000)}` : 'Analizza il file allegato 
 
 ISTRUZIONI CRITICHE:
 
+IDENTIFICA IL TIPO DI VISURA:
+- "Visura per immobile" / "Visura ordinaria" → UN solo immobile → tipo_visura: "unità_singola"
+- "Visura sintetica per soggetto" / "Elenco immobili" / "Visura per soggetto" → MULTIPLE unità → tipo_visura: "sintetica_per_soggetto"
+
 La visura AdE ha una sezione chiamata "INTESTAZIONE IMMOBILE" o "DATI IDENTIFICATIVI DELL'UNITA' IMMOBILIARE" con una tabella che contiene queste colonne:
 Foglio | Particella | Subalterno | Categoria | Classe | Consistenza | Superficie | Zona Censuaria | Microzona
 
-Devi estrarre TUTTI questi campi dalla tabella:
-- foglio: numero del foglio catastale (es. "268")
-- particella: numero della particella (es. "5206")
-- subalterno: numero subalterno (es. "3"), null se assente
+CAMPIO OBBLIGATORI da estrarre:
+- comune: nome del comune dall'intestazione (es. "TORTONA", "ROMA")
+- provincia: sigla provincia (es. "AL", "RM")
+- codice_comune_catasto: il codice catastale del comune — può essere 4 caratteri (es. "L304" per TORTONA) o 5 con underscore (es. "A182_" per Alessandria). Cercalo nell'intestazione visura vicino al nome comune.
+- foglio: numero del foglio catastale (es. "40", "268")
+- particella: numero della particella (es. "473", "5206")
+- subalterno: numero subalterno (es. "5"), null se assente. Nelle visure sintetiche, prendi il PRIMO subalterno come default.
 - categoria_catastale: es. "A/3", "C/6", "D/1"
-- classe_catastale: il valore nella colonna "Classe" — OBBLIGATORIO estrarlo. È tipicamente un numero intero ("1","2","3") o può essere "//" o una lettera. Mettilo come stringa.
-- zona_censuaria: il valore nella colonna "Zona Censuaria" — OBBLIGATORIO estrarlo. È tipicamente un numero ("1","2","3") o codice alfanumerico ("2A","3B"). Mettilo come stringa.
-- superficie_mq: numero in mq dalla colonna "Superficie" della tabella (valore per la singola unità). Non confonderla con la "Superficie Catastale Totale" che è un campo SEPARATO nella parte bassa della visura.
-- superficie_catastale_totale: il campo "Superficie Catastale Totale" (es. "Totale: 245 m²" o "Totale: 300 m² Totale escluse aree scoperte**: 280 m²"). Cerca nella parte finale della visura. Estrai il numero del "Totale" generale. Se presente anche "Totale escluse aree scoperte", metti quel valore in superficie_catastale_escluse_aree_scoperte.
-- rendita_catastale: importo in € (solo il numero, senza simbolo), null se assente
-- vani: numero di vani dalla colonna Consistenza, null se assente
-- indirizzo_catastale: indirizzo dell'immobile riportato nella visura
+- classe_catastale: numero nella colonna "Classe" — metti stringa ("2", "3")
+- zona_censuaria: numero o codice nella colonna "Zona Censuaria" — metti stringa ("2", "2A")
+- superficie_mq: dalla colonna "Superficie" (NON il Totale in fondo)
+- superficie_catastale_totale: campo "Totale: X m²" in fondo alla visura
+- superficie_catastale_escluse_aree_scoperte: se presente
+- rendita_catastale: importo in € (solo numero), null se assente
+- vani: dalla colonna Consistenza, null se assente
+- indirizzo_catastale: indirizzo dell'immobile
+- sezione_visura: "A", "B", "PL", "RM", ecc.
+- sezione_inspire: lettera dalla sezione "Mappali Terreni Correlati" (1 char)
+- tipo_visura: "unità_singola" o "sintetica_per_soggetto"
+- num_unita_totali: conteggio totale unità (solo per visure sintetiche)
+- intestatari: lista {nome, quota, data_inizio}
 
-Campi aggiuntivi:
-1. sezione_inspire: dalla sezione "Mappali Terreni Correlati" — righe tipo "[CODICE] - Sezione [LETTERA] - Foglio [N] - Particella [N]". La LETTERA è la sezione INSPIRE (1 char: A, B, C...).
-2. sezione_visura: la sezione principale della visura (es. "PL", "RM", "A").
-3. comune: nome del comune dall'intestazione.
-4. provincia: sigla provincia.
-5. intestatari: lista oggetti {nome, quota, data_inizio} dalla sezione intestatari.
+IMPORTANTE PER VISURE SINTETICHE PER SOGGETTO:
+Se la visura è di tipo "sintetica per soggetto" con più unità, estrai i dati della PRIMA unità come default (foglio, particella, subalterno), ma imposta tipo_visura="sintetica_per_soggetto" e num_unita_totali al conteggio totale di righe nella tabella immobili.
+NON cercare di estrarre tutti i subalterni qui — verranno estratti separatamente.
 
-IMPORTANTE: classe_catastale e zona_censuaria sono campi PRIORITARI estratti dalla tabella "INTESTAZIONE IMMOBILE".
-Cerca la riga dati immediatamente sotto l'intestazione della tabella: la colonna "Classe" contiene un singolo numero (es. "2") e la colonna "Zona Censuaria" contiene un numero o codice (es. "2" o "2A").
-Non lasciarli null se sono visibili nel documento — restituisci SEMPRE una stringa non vuota per questi campi se il documento li mostra.
-Se un campo non è presente nella visura, lascia null (non inventare valori).
+Se un campo non è presente, lascialo null (non inventare valori).
 
 Restituisci JSON con tutti i campi richiesti.`;
 }

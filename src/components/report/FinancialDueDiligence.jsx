@@ -129,7 +129,9 @@ export default function FinancialDueDiligence({ query, finData, onSnapshotReady 
   // ── Dati OMI reali (statici, nessuna chiamata AI) ─────────────────────────
   // Pulizia codice Belfiore: rimuovi underscore e spazi (es "A182_" → "A182")
   const codiceBelfioreRaw = query.codice_comune_catasto || null;
-  const codiceBelfiore = codiceBelfioreRaw ? codiceBelfioreRaw.replace(/[_\s]/g, '').toUpperCase() : null;
+  const codiceBelfiore = (codiceBelfioreRaw && typeof codiceBelfioreRaw === 'string')
+    ? codiceBelfioreRaw.replace(/[_\s]/g, '').toUpperCase()
+    : null;
   const isZonaCentrale  = false; // default: fascia B/C periferica
   const indirizzo = query.indirizzo_immobile || query.indirizzo_catastale || null;
   const rurale = isIndirizzoRurale(indirizzo);
@@ -137,7 +139,6 @@ export default function FinancialDueDiligence({ query, finData, onSnapshotReady 
   const omi = codiceBelfiore
     ? getOMIData(codiceBelfiore, query.categoria_catastale, isZonaCentrale, rurale)
     : getOMIDataByNome(query.comune, isZonaCentrale, sigla_prov, indirizzo);
-  console.log('OMI lookup:', query.comune, '| belfiore:', codiceBelfiore, '| is_default:', omi.is_default);
 
   // ── Calcoli investimento (solo se superficie disponibile) ─────────────────
   const spese     = mq ? prezzoAcquisto * (spesePerc / 100) : null;

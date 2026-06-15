@@ -57,6 +57,12 @@ const OMI_DB = {
     zona_centrale: { valore_min: 900,  valore_max: 1500, loc_min: 4.5, loc_max: 7.5 },
     anno_sem: "2024-II", is_costiero: false,
   },
+  "L304": { // Tortona (AL) — OMI AdE 2025-II Zona B1
+    residenziale:  { valore_min: 650,  valore_max: 1050, loc_min: 3.5, loc_max: 5.5 },
+    zona_centrale: { valore_min: 850,  valore_max: 1350, loc_min: 4.5, loc_max: 7.0 },
+    anno_sem: "2025-II", is_costiero: false,
+    zona_omi: "B1", fascia: "Centro Abitato",
+  },
 
   // ── LIGURIA — SAVONA ──────────────────────────────────────────────────────
   "G605": { // Pietra Ligure
@@ -311,6 +317,7 @@ const NOME_TO_BELFIORE = {
   "santa margherita ligure": "H025", "sestri levante": "I693",
   "calamandrana": "B376",
   "incisa scapaccino": "E295",
+  "tortona": "L304",
   "casale monferrato": "B990", "pietra ligure": "G605", "bergeggi": "A796",
   "loano": "E290", "borghetto santo spirito": "B126", "noli": "F351",
   "albenga": "A345", "finale ligure": "C621", "spotorno": "H927",
