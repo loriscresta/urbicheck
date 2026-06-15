@@ -836,23 +836,40 @@ Deno.serve(async (req) => {
   // ── STEP 3: Salva ──
   if (queryRecord) {
     try {
-      // Aggiorna centroid_lat/lng SE:
-      //   1. il dato viene dal poligono WFS (baricentro accurato) — sovrascrive sempre
-      //   2. il record non ha ancora coordinate impostate
-      // NON sovrascrivere coordinate esistenti con dati OnData-only (meno precisi)
-      // OnData ha trovato la particella → salva sempre il centroide corretto (sovrascrive coords errate del microservizio)
       await base44.entities.CadastralQuery.update(query_id, {
         centroid_lat: finalLat,
         centroid_lng: finalLon,
         geometry_geojson: wfsResult?.geojson_polygon || undefined,
         codice_comune_catasto: codiceBelfiore,
         fonte_dati_catastali: 'catastomappe',
-        // scrivi regione su DB se mancante (es. flusso visura) — serve a wfsLiguria
         ...(regioneName && !queryRecord.regione ? { regione: regioneName } : {}),
         report_data: { ...(queryRecord.report_data || {}), catasto_data },
       });
     } catch (saveErr) {
       console.error('CadastralQuery update error:', saveErr.message);
+    }
+
+    // ── Nominatim geocoding dell'indirizzo reale — SEMPRE (FIX 1) ──
+    // geocoded_lat/lng = posizione reale dell'indirizzo (autorità primaria per la mappa)
+    // centroid_lat/lng = centroide catastale da OnData/WFS (fallback)
+    const indirizzoGeocode = queryRecord.indirizzo_immobile || queryRecord.indirizzo_catastale || null;
+    const siglaProv = queryRecord.sigla_provincia || null;
+    const provinciaGeo = siglaProv || queryRecord.provincia || null;
+    if (indirizzoGeocode && queryRecord.comune) {
+      try {
+        const geoResult = await geocodeAddress(indirizzoGeocode, queryRecord.comune, provinciaGeo);
+        if (geoResult) {
+          await base44.entities.CadastralQuery.update(query_id, {
+            geocoded_lat: geoResult.lat,
+            geocoded_lng: geoResult.lon,
+          });
+          console.log(`[catasto_resolver] Nominatim geocoded: lat=${geoResult.lat} lon=${geoResult.lon} tipo=${geoResult.tipo}`);
+        } else {
+          console.log('[catasto_resolver] Nominatim geocoding failed — indirizzo non trovato');
+        }
+      } catch (geoErr) {
+        console.warn('[catasto_resolver] Nominatim geocoding error:', geoErr.message);
+      }
     }
   }
 

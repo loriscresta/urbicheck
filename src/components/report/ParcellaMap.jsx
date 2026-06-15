@@ -59,14 +59,16 @@ export default function ParcellaMap({ record, query, item }) {
     return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   }
 
-  // ── Logica pin: centroid_lat/lng (Catastomappe) PRIORITY, geocoded_lat/lng (Nominatim) fallback ──
+  // ── Logica pin: geocoded_lat/lng (Nominatim, indirizzo reale) PRIORITY, centroid_lat/lng (Catastomappe) fallback ──
+  const geocodedLat = entity.geocoded_lat != null && Number(entity.geocoded_lat) !== 0 ? parseFloat(entity.geocoded_lat) : null;
+  const geocodedLng = entity.geocoded_lng != null && Number(entity.geocoded_lng) !== 0 ? parseFloat(entity.geocoded_lng) : null;
   const centroidLat = entity.centroid_lat != null && Number(entity.centroid_lat) !== 0 ? parseFloat(entity.centroid_lat) : null;
   const centroidLng = entity.centroid_lng != null && Number(entity.centroid_lng) !== 0 ? parseFloat(entity.centroid_lng) : null;
-  const mapLat = centroidLat != null ? centroidLat : (entity.geocoded_lat != null ? parseFloat(entity.geocoded_lat) : null);
-  const mapLng = centroidLng != null ? centroidLng : (entity.geocoded_lng != null ? parseFloat(entity.geocoded_lng) : null);
+  const mapLat = geocodedLat != null ? geocodedLat : centroidLat;
+  const mapLng = geocodedLng != null ? geocodedLng : centroidLng;
   const referenceLat = mapLat;
   const referenceLng = mapLng;
-  const usingCentroid = !!(centroidLat && centroidLng);
+  const usingGeocoded = !!(geocodedLat && geocodedLng);
 
   const hasPosition = !!(referenceLat && referenceLng && !isNaN(referenceLat) && !isNaN(referenceLng));
 
@@ -314,11 +316,11 @@ export default function ParcellaMap({ record, query, item }) {
         }
       ).addTo(map);
 
-      // ═══ PIN PRINCIPALE: centroid Catastomappe (primario), geocoding Nominatim (fallback) ═══
+      // ═══ PIN PRINCIPALE: geocoding Nominatim (primario, indirizzo reale), centroid Catastomappe (fallback) ═══
       const addrLabel = entity.indirizzo_immobile || entity.indirizzo_catastale || entity.comune || '';
-      const coordSource = usingCentroid
-        ? '<small style="color:#666">Coordinate da centroide catastale (Catastomappe API)</small>'
-        : (entity.geocoded_lat ? '<small style="color:#666">Coordinate da geocoding indirizzo (Nominatim)</small>' : '');
+      const coordSource = usingGeocoded
+        ? '<small style="color:#666">Coordinate geocodificate da indirizzo (Nominatim)</small>'
+        : (centroidLat && centroidLng ? '<small style="color:#666">Coordinate da centroide catastale (Catastomappe API)</small>' : '');
       const pinPopup = `<strong>📍 ${entity.indirizzo_immobile || addrLabel}</strong><br/>Foglio ${foglio}, Particella ${particella}${entity.subalterno ? `, Sub. ${entity.subalterno}` : ''}<br/>${coordSource}`;
       L.circleMarker([referenceLat, referenceLng], {
         radius: 8,
