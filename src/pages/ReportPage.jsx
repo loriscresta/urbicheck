@@ -1,15 +1,48 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useParams, Link } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 import PaymentGate from "@/components/report/PaymentGate";
 import ReportPageContent from "@/components/report/ReportPageContent";
+import { useToast } from "@/components/ui/use-toast";
 
 export default function ReportPage() {
   const { id } = useParams();
   const queryClient = useQueryClient();
   const [comuneRecord, setComuneRecord] = useState(null);
+  const { toast } = useToast();
+
+  // Show credit tier toast after successful charge (carried via sessionStorage)
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem('urbicheck_last_charge');
+      if (!raw) return;
+      sessionStorage.removeItem('urbicheck_last_charge');
+      const cr = JSON.parse(raw);
+
+      let title = '', desc = '';
+      if (cr?.tier === 'free') {
+        const used = cr.free_reports_used || 1;
+        const total = cr.free_reports_total || 3;
+        const remaining = total - used;
+        title = '🎁 Report gratuito utilizzato';
+        desc = `Report gratuito #${used}/${total} — ne hai ancora ${remaining} gratuiti`;
+      } else if (cr?.tier === 'launch_paid') {
+        const used = cr.launch_reports_used || 1;
+        const total = cr.launch_reports_total || 3;
+        title = '🚀 Report beta €2,99';
+        desc = `€2,99 scalati dal tuo credito (report lancio #${used}/${total})`;
+      } else if (cr?.tier === 'standard') {
+        title = '💳 Report €9,90';
+        desc = '€9,90 scalati dal tuo credito';
+      }
+
+      if (title) {
+        toast({ title, description: desc });
+      }
+    } catch (_e) {}
+  }, []);
 
   const { data: query, isLoading, refetch } = useQuery({
     queryKey: ["query", id],

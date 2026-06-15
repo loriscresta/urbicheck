@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import StatsCard from "@/components/dashboard/StatsCard";
 import RecentQueries from "@/components/dashboard/RecentQueries";
+import CreditTierBanner from "@/components/credits/CreditTierBanner";
 import { motion } from "framer-motion";
 import { format } from "date-fns";
 import { it } from "date-fns/locale";
@@ -81,12 +82,18 @@ export default function Dashboard() {
       </motion.div>
 
       {/* Stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-10">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         <StatsCard icon={CreditCard} label="SALDO CREDITI" value={`€${(credits?.balance || 0).toFixed(2)}`} highlight />
         <StatsCard icon={Search} label="ANALISI EFFETTUATE" value={credits?.total_queries || 0} />
         <StatsCard icon={TrendingUp} label="CREDITI UTILIZZATI" value={`€${(credits?.total_spent || 0).toFixed(2)}`} />
         <StatsCard icon={FileCheck} label="REPORT DISPONIBILI" value={recentQueries.filter(q => q.status === "completed").length} />
       </div>
+
+      {/* Tier Status */}
+      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mb-10">
+        <p className="text-[10px] font-semibold uppercase tracking-[2px] mb-3" style={{ color: '#B33A2A', fontFamily: "'IBM Plex Mono', monospace" }}>Stato Tier Crediti</p>
+        <CreditTierBanner variant="dashboard" />
+      </motion.div>
 
       {/* Quick Actions + Recent */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

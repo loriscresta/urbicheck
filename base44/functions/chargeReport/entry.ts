@@ -184,7 +184,7 @@ Deno.serve(async (req) => {
         description: `Report gratuito #${aggregatedFreeUsed + 1}/3 — ${query.comune || ''} F.${query.foglio} P.${query.particella}`,
         query_id,
       });
-      return Response.json({ ok: true, deducted: 0, tier: 'free' });
+      return Response.json({ ok: true, deducted: 0, tier: 'free', free_reports_used: aggregatedFreeUsed + 1, free_reports_total: FREE_REPORTS, launch_reports_total: LAUNCH_PAID_REPORTS });
 
     } else if (aggregatedLaunchUsed < LAUNCH_PAID_REPORTS) {
       // TIER 2 — €2,99 offerta lancio (report 4–6)
@@ -213,7 +213,7 @@ Deno.serve(async (req) => {
         description: `Report lancio €2,99 #${aggregatedLaunchUsed + 1}/3 — ${query.comune || ''} F.${query.foglio} P.${query.particella}`,
         query_id,
       });
-      return Response.json({ ok: true, deducted: LAUNCH_PRICE, tier: 'launch_paid' });
+      return Response.json({ ok: true, deducted: LAUNCH_PRICE, tier: 'launch_paid', free_reports_used: aggregatedFreeUsed, free_reports_total: FREE_REPORTS, launch_reports_used: aggregatedLaunchUsed + 1, launch_reports_total: LAUNCH_PAID_REPORTS });
 
     } else {
       // TIER 3 — €9,90 prezzo standard (report 7+)
@@ -241,7 +241,7 @@ Deno.serve(async (req) => {
         description: `Report standard €9,90 — ${query.comune || ''} F.${query.foglio} P.${query.particella}`,
         query_id,
       });
-      return Response.json({ ok: true, deducted: STANDARD_PRICE, tier: 'standard' });
+      return Response.json({ ok: true, deducted: STANDARD_PRICE, tier: 'standard', free_reports_used: aggregatedFreeUsed, free_reports_total: FREE_REPORTS });
     }
 
   } catch (error) {

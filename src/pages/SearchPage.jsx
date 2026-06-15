@@ -13,6 +13,7 @@ import { useQuery } from "@tanstack/react-query";
 import { calculatePlanimetriaArea } from '@/functions/calculatePlanimetriaArea';
 import { fetchParcelFromAgent } from '@/functions/fetchParcelFromAgent';
 import PublicSearchPreview from "@/components/search/PublicSearchPreview";
+import CreditTierBanner from "@/components/credits/CreditTierBanner";
 import { logSearch } from "@/functions/logSearch";
 import { chargeReport } from "@/functions/chargeReport";
 
@@ -219,8 +220,10 @@ export default function SearchPage() {
     }
 
     // ── Pagamento immediato: crea la query SOLO se il pagamento va a buon fine ──
+    let chargeResult = null;
     try {
-      await chargeReport({ query_id: query.id });
+      const cr = await chargeReport({ query_id: query.id });
+      chargeResult = cr.data;
     } catch (err) {
       // Pagamento fallito — elimina la query e mostra errore
       console.error('chargeReport failed, deleting query:', err);
@@ -252,6 +255,11 @@ export default function SearchPage() {
       foglio: formData.foglio,
       particella: formData.particella,
     }).catch(() => {});
+
+    // Store charge result for toast on report page
+    if (chargeResult) {
+      sessionStorage.setItem('urbicheck_last_charge', JSON.stringify(chargeResult));
+    }
 
     navigate(`/report/${query.id}`);
   };
@@ -542,7 +550,8 @@ export default function SearchPage() {
         <h1 className="text-2xl lg:text-3xl font-bold tracking-tight mb-1" style={{ color: '#1A3A6B', fontFamily: "'Libre Baskerville', serif", fontStyle: 'italic' }}>
           {publicPreview ? "Anteprima risultato" : "Analisi Urbanistica"}
         </h1>
-        {!publicPreview && (
+        {!publicPreview && isAuthenticated && <CreditTierBanner variant="search" />}
+        {!publicPreview && !isAuthenticated && (
           <div className="mb-6 flex items-center gap-2 px-3 py-2 text-xs" style={{ background: '#f0fdf4', border: '1px solid #86efac', fontFamily: "'IBM Plex Mono', monospace", color: '#15803d' }}>
             🚀 <strong>Beta attiva</strong> — Prime 3 analisi gratuite · poi €2,99/report (offerta lancio, max 3) · poi €9,90 · Solo Piemonte, Liguria, Lombardia
           </div>

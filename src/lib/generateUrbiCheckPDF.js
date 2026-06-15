@@ -176,6 +176,23 @@ export async function generatePDF(query, financialSnapshot, staticMapUrl = null)
   doc.text(new Date().toLocaleDateString("it-IT"), 140, 18);
   doc.text("urbicheck.it", 140, 24);
 
+  // Tier info — cost-based
+  const queryCost = query.cost ?? 0;
+  let tierLabel = '';
+  if (queryCost === 0 || (query.paid && queryCost < 1)) {
+    tierLabel = 'Report gratuito — incluso in beta (max 3)';
+  } else if (queryCost <= 3) {
+    tierLabel = 'Report lancio €2,99';
+  } else {
+    tierLabel = 'Report standard €9,90';
+  }
+  if (tierLabel) {
+    doc.setTextColor(179, 58, 42);
+    doc.setFontSize(8);
+    doc.setFont("helvetica", "bold");
+    doc.text(tierLabel, margin, 32);
+  }
+
   // Watermark p1
   doc.saveGraphicsState();
   doc.setGState(new doc.GState({ opacity: 0.05 }));
