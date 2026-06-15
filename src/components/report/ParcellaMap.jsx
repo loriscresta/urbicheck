@@ -415,7 +415,7 @@ export default function ParcellaMap({ record, query, item }) {
       <p className="text-sm text-gray-500">
         {hasPolygon
           ? <>📐 Confine catastale ufficiale della particella (fonte: catasto)</>
-          : <>📍 Posizione da centroide catastale — i confini ufficiali sono visibili nel layer WMS dell'Agenzia delle Entrate zoomando sulla mappa.</>
+          : <>📍 Posizione geocodificata da indirizzo — i confini ufficiali sono visibili nel layer WMS dell'Agenzia delle Entrate zoomando sulla mappa.</>
         }
       </p>
 
