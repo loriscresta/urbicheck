@@ -1,9 +1,9 @@
 import React, { useState } from "react";
-import { base44 } from "@/api/base44Client";
 import { trackEvent } from "@/lib/metaPixel";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { CheckCircle2 } from "lucide-react";
+import { submitWaitlist } from "@/functions/submitWaitlist";
 
 const P  = "#1A3A6B";
 const AC = "#B33A2A";
@@ -66,25 +66,23 @@ export default function WaitlistPage() {
     if (!email) { setError("Inserisci la tua email."); return; }
     setLoading(true);
     setError("");
-    const existing = await base44.entities.WaitlistSubscriber.filter({ email });
-    if (existing && existing.length > 0) {
-      setDuplicate(true);
-      setSubmitted(true);
+    try {
+      const result = await submitWaitlist({
+        email,
+        ruolo: ruolo || "altro",
+        regione_interesse: regioneInteresse || "",
+      });
+      if (result?.data?.duplicate) {
+        setDuplicate(true);
+        setSubmitted(true);
+        setLoading(false);
+        return;
+      }
+    } catch (err) {
+      setError("Errore durante l'iscrizione. Riprova.");
       setLoading(false);
       return;
     }
-    await base44.entities.WaitlistSubscriber.create({
-      email,
-      ruolo: ruolo || "altro",
-      regione_interesse: regioneInteresse || undefined,
-    });
-    try {
-      await fetch("https://hook.eu1.make.com/9y4ovjnzlf75udlawp6q2c5co3vaxt7o", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, ruolo: ruolo || "altro", regione_interesse: regioneInteresse || "" }),
-      });
-    } catch (err) { console.error("Make webhook error", err); }
     trackEvent("Lead", { customData: { content_name: "waitlist" }, email });
     setSubmitted(true);
     setLoading(false);

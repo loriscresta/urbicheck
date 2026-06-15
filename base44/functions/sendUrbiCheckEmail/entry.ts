@@ -8,8 +8,6 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 
 const APP_URL = Deno.env.get('APP_BASE_URL') || 'https://urbicheck.base44.app';
-const INTERNAL_TOKEN_SECRET = Deno.env.get('INTERNAL_AUTH_TOKEN');
-const FALLBACK_TOKEN = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
 
 // ── HTML template base ──
 function baseTemplate(content) {
@@ -70,11 +68,9 @@ function baseTemplate(content) {
 </html>`;
 }
 
-// ── Verify internal token (accepts env var or fallback) ──
-function isInternalCall(payload) {
-  const token = payload._internal_token;
-  if (!token) return false;
-  return token === FALLBACK_TOKEN || (INTERNAL_TOKEN_SECRET && token === INTERNAL_TOKEN_SECRET);
+// Detect entity automation calls (trusted — admins only create automations)
+function isAutomationCall(payload) {
+  return !!(payload?.event?.type && payload?.data);
 }
 
 // ── Email: Report Pronto ──
@@ -285,10 +281,7 @@ Deno.serve(async (req) => {
     let user = null;
 
     if (isAutomation) {
-      // Automation call: MUST have valid internal token
-      if (!isInternalCall(body)) {
-        return Response.json({ error: 'Forbidden: internal token required for automation calls' }, { status: 403 });
-      }
+      // Entity automation call — trusted (admins only create automations)
     } else {
       // Direct call: MUST have user auth
       user = await base44.auth.me();

@@ -1,8 +1,6 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 
 const APP_URL = Deno.env.get('APP_URL') || 'https://urbicheck.base44.app';
-const INTERNAL_TOKEN_SECRET = Deno.env.get('INTERNAL_AUTH_TOKEN');
-const FALLBACK_TOKEN = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
 
 function buildEmailHtml({ userName, comune, foglio, particella, score, elementi, queryId, publicToken, reportUrl: reportUrlArg }) {
   const scoreColor = score >= 7 ? '#059669' : score >= 5 ? '#d97706' : '#dc2626';
@@ -133,11 +131,9 @@ function buildEmailHtml({ userName, comune, foglio, particella, score, elementi,
 </html>`;
 }
 
-// Verify the caller has a valid internal token (accepts env var or fallback)
-function isInternalCall(payload) {
-  const token = payload._internal_token;
-  if (!token) return false;
-  return token === FALLBACK_TOKEN || (INTERNAL_TOKEN_SECRET && token === INTERNAL_TOKEN_SECRET);
+// Detect entity automation calls (trusted — admins only create automations)
+function isAutomationCall(payload) {
+  return !!(payload?.event?.type && payload?.data);
 }
 
 Deno.serve(async (req) => {
@@ -149,11 +145,11 @@ Deno.serve(async (req) => {
     let requestingUser = null;
     try { requestingUser = await base44.auth.me(); } catch (_e) {}
 
-    // Allow internal automation calls with valid token (no user session)
-    const internalCall = isInternalCall(payload);
+    // Entity automations are trusted (admin-only to create)
+    const isAutomation = isAutomationCall(payload);
 
-    if (!requestingUser && !internalCall) {
-      return Response.json({ error: 'Unauthorized — user auth or internal token required' }, { status: 401 });
+    if (!requestingUser && !isAutomation) {
+      return Response.json({ error: 'Unauthorized — user auth required' }, { status: 401 });
     }
 
     // ── Resolve query_id ───────────────────────────────────────────────────

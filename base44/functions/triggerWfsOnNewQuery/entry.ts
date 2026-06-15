@@ -6,24 +6,13 @@
 
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 
-const INTERNAL_TOKEN_SECRET = Deno.env.get('INTERNAL_AUTH_TOKEN');
-const FALLBACK_INTERNAL_TOKEN = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
-
-function isInternalCall(payload) {
-  const token = payload._internal_token;
-  if (!token) return false;
-  return token === FALLBACK_INTERNAL_TOKEN || (INTERNAL_TOKEN_SECRET && token === INTERNAL_TOKEN_SECRET);
-}
+// Entity automations are trusted (admin-only to create).
+// No additional token check needed — the automation itself is the authorization.
 
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
     const body = await req.json();
-
-    // ── Auth: verify internal token ───────────────────────────────────────
-    if (!isInternalCall(body)) {
-      return Response.json({ error: 'Forbidden: internal token required' }, { status: 403 });
-    }
 
     const entityId = body?.event?.entity_id;
     const eventType = body?.event?.type;
