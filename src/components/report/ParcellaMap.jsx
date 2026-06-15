@@ -38,33 +38,7 @@ export default function ParcellaMap({ record, query, item }) {
     ? (rawGeom.type === "Feature" ? rawGeom : { type: "Feature", geometry: rawGeom, properties: {} })
     : null;
 
-  // ── Centroide: da poligono DB oppure da centroid_lat/lng DB — MAI geocoding ──
-  let initLat = null;
-  let initLon = null;
-
-  if (geomJson?.geometry?.coordinates?.[0]?.length > 0) {
-    const ring = geomJson.geometry.coordinates[0];
-    initLat = ring.reduce((s, c) => s + c[1], 0) / ring.length;
-    initLon = ring.reduce((s, c) => s + c[0], 0) / ring.length;
-  } else if (entity.centroid_lat && entity.centroid_lng) {
-    initLat = parseFloat(entity.centroid_lat);
-    initLon = parseFloat(entity.centroid_lng);
-  }
-
-  const hasPosition = !!(initLat && initLon && !isNaN(initLat) && !isNaN(initLon));
-
-  // Validazione poligono: baricentro del poligono deve essere entro 500m dal centroide record
-  const validGeometry = (() => {
-    if (!geomJson?.geometry?.coordinates) return null;
-    const refLat = parseFloat(entity.centroid_lat);
-    const refLng = parseFloat(entity.centroid_lng);
-    if (!refLat || !refLng) return geomJson; // no ref = assume valid
-    const dist = polygonCentroidDistance(geomJson.geometry, refLat, refLng);
-    if (dist !== null && dist > 500) return null; // scarta
-    return geomJson;
-  })();
-  const hasPolygon  = !!validGeometry;
-
+  // ── State e refs ──────────────────────────────────────────────────────────
   const mapDivRef       = useRef(null);
   const leafletMapRef   = useRef(null);
   const munMapDivRef    = useRef(null);
@@ -72,24 +46,57 @@ export default function ParcellaMap({ record, query, item }) {
   const [polygonLoaded, setPolygonLoaded] = useState(false);
   const [wfsStatus,     setWfsStatus]     = useState("");
   const [geocodedMunPos, setGeocodedMunPos] = useState(null);
-  // Coordinate geocodificate dall'indirizzo reale (priorità su centroid GIS)
+  // Coordinate geocodificate dall'indirizzo reale — fonte primaria per la posizione del pin
   const [addressCoords, setAddressCoords] = useState(null);
-  const addressMarkerRef = useRef(null);
 
   const PARCEL_STYLE = { color: "#FF6600", weight: 2.5, fillColor: "#FF6600", fillOpacity: 0.35 };
 
-// Validazione: scarta poligono se il suo baricentro dista >500m dal centroide del record
-function polygonCentroidDistance(polygonGeom, refLat, refLng) {
-  if (!polygonGeom?.coordinates?.[0]?.length || !refLat || !refLng) return null;
-  const ring = polygonGeom.coordinates[0];
-  const cLat = ring.reduce((s, c) => s + c[1], 0) / ring.length;
-  const cLon = ring.reduce((s, c) => s + c[0], 0) / ring.length;
-  const R = 6371000;
-  const dLat = (cLat - refLat) * Math.PI / 180;
-  const dLon = (cLon - refLng) * Math.PI / 180;
-  const a = Math.sin(dLat / 2) ** 2 + Math.cos(refLat * Math.PI / 180) * Math.cos(cLat * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-}
+  // ── Validazione poligono: calcola distanza Haversine baricentro → riferimento ──
+  function polygonCentroidDistance(polygonGeom, refLat, refLng) {
+    if (!polygonGeom?.coordinates?.[0]?.length || !refLat || !refLng) return null;
+    const ring = polygonGeom.coordinates[0];
+    const cLat = ring.reduce((s, c) => s + c[1], 0) / ring.length;
+    const cLon = ring.reduce((s, c) => s + c[0], 0) / ring.length;
+    const R = 6371000;
+    const dLat = (cLat - refLat) * Math.PI / 180;
+    const dLon = (cLon - refLng) * Math.PI / 180;
+    const a = Math.sin(dLat / 2) ** 2 + Math.cos(refLat * Math.PI / 180) * Math.cos(cLat * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  }
+
+  // ── Gerarchia coordinate: indirizzo geocodificato > centroid_lat/lng DB > baricentro poligono ──
+  // L'indirizzo dell'immobile è il dato certo che fa fede.
+  let referenceLat = null;
+  let referenceLng = null;
+
+  // 1) Preferenza: coordinate geocodificate dall'indirizzo (arrivano async)
+  if (addressCoords?.lat && addressCoords?.lng) {
+    referenceLat = addressCoords.lat;
+    referenceLng = addressCoords.lng;
+  }
+  // 2) Fallback: centroid_lat/lng salvato sul record
+  else if (entity.centroid_lat && entity.centroid_lng) {
+    referenceLat = parseFloat(entity.centroid_lat);
+    referenceLng = parseFloat(entity.centroid_lng);
+  }
+  // 3) Ultima risorsa: baricentro del poligono (solo se non abbiamo nient'altro)
+  else if (geomJson?.geometry?.coordinates?.[0]?.length > 0) {
+    const ring = geomJson.geometry.coordinates[0];
+    referenceLat = ring.reduce((s, c) => s + c[1], 0) / ring.length;
+    referenceLng = ring.reduce((s, c) => s + c[0], 0) / ring.length;
+  }
+
+  const hasPosition = !!(referenceLat && referenceLng && !isNaN(referenceLat) && !isNaN(referenceLng));
+
+  // Validazione poligono: baricentro del poligono deve essere entro 500m dall'indirizzo reale
+  const validGeometry = (() => {
+    if (!geomJson?.geometry?.coordinates) return null;
+    if (!hasPosition) return geomJson; // no ref = assume valid
+    const dist = polygonCentroidDistance(geomJson.geometry, referenceLat, referenceLng);
+    if (dist !== null && dist > 500) return null; // scarta — poligono troppo lontano dall'indirizzo
+    return geomJson;
+  })();
+  const hasPolygon  = !!validGeometry;
 
   const addPolygonToMap = useCallback((feature) => {
     const L   = window.L;
@@ -131,7 +138,7 @@ function polygonCentroidDistance(polygonGeom, refLat, refLng) {
         if (pMatch && fMatch) { matched = f; break; }
         if (!matched && pMatch) matched = f;
       }
-      // Fallback: feature più vicina al centroide
+      // Fallback: feature più vicina al punto di riferimento
       if (!matched) {
         let minDist = Infinity;
         for (const f of features) {
@@ -139,7 +146,7 @@ function polygonCentroidDistance(polygonGeom, refLat, refLng) {
           if (!ring?.length) continue;
           const cLat = ring.reduce((s, c) => s + c[1], 0) / ring.length;
           const cLon = ring.reduce((s, c) => s + c[0], 0) / ring.length;
-          const d = Math.hypot(cLat - initLat, cLon - initLon);
+          const d = Math.hypot(cLat - referenceLat, cLon - referenceLng);
           if (d < minDist) { minDist = d; matched = f; }
         }
       }
@@ -149,8 +156,7 @@ function polygonCentroidDistance(polygonGeom, refLat, refLng) {
     const fetchWfs = async () => {
       setWfsStatus("🔍 Recupero geometria catastale...");
 
-      // Cascading BBOX: parte piccolo, cresce finché non trova foglio+particella ESATTI
-      // BUG FIX: non interrompe al primo risultato generico — allarga finché trova match esatto
+      // Cascading BBOX: centrato sull'indirizzo reale, cresce finché non trova foglio+particella ESATTI
       const deltas = [0.002, 0.01, 0.03, 0.06];
       let data = null;
       let exactMatchFound = false;
@@ -170,10 +176,10 @@ function polygonCentroidDistance(polygonGeom, refLat, refLng) {
 
       for (const delta of deltas) {
         if (exactMatchFound) break;
-        const minLon = (initLon - delta).toFixed(7);
-        const minLat = (initLat - delta).toFixed(7);
-        const maxLon = (initLon + delta).toFixed(7);
-        const maxLat = (initLat + delta).toFixed(7);
+        const minLon = (referenceLng - delta).toFixed(7);
+        const minLat = (referenceLat - delta).toFixed(7);
+        const maxLon = (referenceLng + delta).toFixed(7);
+        const maxLat = (referenceLat + delta).toFixed(7);
         const wfsUrl = `${WFS_URL}?service=WFS&version=2.0.0&request=GetFeature` +
           `&typeNames=CP:CadastralParcel&outputFormat=application%2Fjson` +
           `&BBOX=${minLon},${minLat},${maxLon},${maxLat},EPSG:4326`;
@@ -250,32 +256,23 @@ function polygonCentroidDistance(polygonGeom, refLat, refLng) {
         ? "✅ Particella catastale trovata (AdE INSPIRE WFS)"
         : "📐 Geometria approssimata (nearest centroid)");
 
-      // Validazione distanza centroide prima di salvare
+      // Validazione distanza dall'indirizzo reale prima di salvare
       const ringCheck = matched?.geometry?.coordinates?.[0];
       let savePolygon = true;
-      if (ringCheck?.length > 2 && initLat && initLon) {
-        const dist = polygonCentroidDistance(matched.geometry, initLat, initLon);
+      if (ringCheck?.length > 2 && referenceLat && referenceLng) {
+        const dist = polygonCentroidDistance(matched.geometry, referenceLat, referenceLng);
         if (dist !== null && dist > 500) {
-          console.warn(`[ParcellaMap] Poligono scartato — baricentro a ${dist.toFixed(0)}m dal centroide record`);
+          console.warn(`[ParcellaMap] Poligono scartato — baricentro a ${dist.toFixed(0)}m dall'indirizzo`);
           savePolygon = false;
-          setWfsStatus("⚠️ Poligono catastale non disponibile — posizione approssimativa da centroide");
+          setWfsStatus("⚠️ Poligono catastale non disponibile — posizione approssimativa da indirizzo");
         }
       }
 
       if (savePolygon) {
         addPolygonToMap(matched);
-        // Salva in DB: poligono + centroide REALE calcolato dal poligono WFS
-        // Questo corregge il centroide sbagliato da Catastomappe e fix Overpass/ferrovia
+        // Salva solo geometry_geojson — NON sovrascrivere centroid_lat/lng (l'autorità è l'indirizzo)
         try {
-          const updateData = { geometry_geojson: matched };
-          if (ringCheck?.length > 2) {
-            const cLat = ringCheck.reduce((s, c) => s + c[1], 0) / ringCheck.length;
-            const cLon = ringCheck.reduce((s, c) => s + c[0], 0) / ringCheck.length;
-            updateData.centroid_lat = cLat;
-            updateData.centroid_lng = cLon;
-            console.log('[ParcellaMap] centroide corretto salvato in DB:', cLat, cLon);
-          }
-          await base44.entities.CadastralQuery.update(entity.id, updateData);
+          await base44.entities.CadastralQuery.update(entity.id, { geometry_geojson: matched });
         } catch (e) {
           console.warn("DB save geometry_geojson:", e);
         }
@@ -287,7 +284,7 @@ function polygonCentroidDistance(polygonGeom, refLat, refLng) {
 
     fetchWfs();
     return () => { cancelled = true; };
-  }, [hasPosition, hasPolygon, entity.id, initLat, initLon, foglio, particella, addPolygonToMap]);
+  }, [hasPosition, hasPolygon, entity.id, referenceLat, referenceLng, foglio, particella, addPolygonToMap]);
 
   // ── Inizializzazione Leaflet ──────────────────────────────────────────────
   useEffect(() => {
@@ -307,7 +304,7 @@ function polygonCentroidDistance(polygonGeom, refLat, refLng) {
       const map = L.map(mapDivRef.current, {
         zoomControl: true,
         attributionControl: true,
-      }).setView([initLat, initLon], 15);
+      }).setView([referenceLat, referenceLng], 15);
       leafletMapRef.current = map;
 
       const osmLayer = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
@@ -335,9 +332,21 @@ function polygonCentroidDistance(polygonGeom, refLat, refLng) {
         }
       ).addTo(map);
 
+      // ═══ PIN PRINCIPALE: sempre sull'indirizzo reale ═══
+      const addrLabel = entity.indirizzo_immobile || entity.indirizzo_catastale || entity.comune || '';
+      const pinPopup = entity.indirizzo_immobile
+        ? `<strong>📍 ${entity.indirizzo_immobile}</strong><br/>Foglio ${foglio}, Particella ${particella}${entity.subalterno ? `, Sub. ${entity.subalterno}` : ''}<br/><small style="color:#666">Posizione geocodificata da indirizzo</small>`
+        : `<strong>📍 ${addrLabel}</strong><br/>Foglio ${foglio}, Particella ${particella}${entity.subalterno ? `, Sub. ${entity.subalterno}` : ''}`;
+      L.circleMarker([referenceLat, referenceLng], {
+        radius: 8,
+        color: '#1A3A6B',
+        fillColor: '#2563eb',
+        fillOpacity: 0.9,
+        weight: 2,
+      }).addTo(map).bindPopup(pinPopup).openPopup();
+
       if (validGeometry) {
         // Poligono ufficiale: arancione pieno 35% — fitBounds sul poligono reale
-        // CRITICO: usare padding piccolo e maxZoom alto per particelle piccole (~20m)
         const layer = L.geoJSON(validGeometry, { style: PARCEL_STYLE }).addTo(map);
         geojsonLayerRef.current = layer;
         layer.bindPopup(
@@ -346,28 +355,27 @@ function polygonCentroidDistance(polygonGeom, refLat, refLng) {
         map.fitBounds(layer.getBounds(), { padding: [20, 20], maxZoom: 19 });
         setPolygonLoaded(true);
       } else {
-        // Nessun poligono (o scartato): cerchio rosso tratteggiato come posizione approssimativa
-        L.circle([initLat, initLon], {
+        // Poligono scartato o assente: cerchio tratteggiato intorno al pin
+        L.circle([referenceLat, referenceLng], {
           radius: 25,
           color: "#c0392b",
           fillColor: "#e74c3c",
-          fillOpacity: 0.20,
+          fillOpacity: 0.15,
           weight: 2,
           dashArray: "6 4",
         }).addTo(map);
-        const addrLabel = entity.indirizzo_immobile || entity.comune || '';
-        const marker = L.circleMarker([initLat, initLon], {
-          radius: 7,
-          color: "#c0392b",
-          fillColor: "#e74c3c",
-          fillOpacity: 0.95,
-          weight: 2,
-        }).addTo(map);
-        const hasDbGeom = !!(geomJson?.geometry?.coordinates);
-        const popupContent = hasDbGeom
-          ? `<strong>⚠️ Poligono catastale non disponibile</strong><br/>Posizione approssimativa da centroide<br/><small style="color:#666">Foglio ${foglio}, Particella ${particella}${entity.subalterno ? `, Sub. ${entity.subalterno}` : ''}</small>`
-          : `<strong>📍 ${addrLabel}</strong><br/>Foglio ${foglio}, Particella ${particella}${entity.subalterno ? `, Sub. ${entity.subalterno}` : ''}`;
-        marker.bindPopup(popupContent).openPopup();
+        if (geomJson?.geometry?.coordinates) {
+          // C'è un poligono ma è stato scartato — nota esplicativa
+          L.circleMarker([referenceLat, referenceLng], {
+            radius: 9,
+            color: "#c0392b",
+            fillColor: "#e74c3c",
+            fillOpacity: 0.85,
+            weight: 2.5,
+          }).addTo(map).bindPopup(
+            `<strong>⚠️ Poligono catastale non disponibile</strong><br/>Il poligono WFS è troppo distante dall'indirizzo<br/><small style="color:#666">Foglio ${foglio}, Particella ${particella}${entity.subalterno ? `, Sub. ${entity.subalterno}` : ''}</small>`
+          );
+        }
       }
     };
 
@@ -379,7 +387,7 @@ function polygonCentroidDistance(polygonGeom, refLat, refLng) {
         leafletMapRef.current = null;
       }
     };
-  }, [initLat, initLon, hasPolygon]);
+  }, [referenceLat, referenceLng, hasPolygon]);
 
 
 
@@ -403,47 +411,32 @@ function polygonCentroidDistance(polygonGeom, refLat, refLng) {
     }
   }, [validGeometry]);
 
-  // ── Geocoding indirizzo immobile (priorità su centroid GIS per frazioni/rurali) ──
+  // ── Geocoding indirizzo immobile — fonte primaria per la posizione del pin ──
   useEffect(() => {
-    if (!entity.indirizzo_immobile) return;
+    const indirizzo = entity.indirizzo_immobile || entity.indirizzo_catastale;
+    if (!indirizzo) return;
     let cancelled = false;
     geocodeAddress({
-      indirizzo: entity.indirizzo_immobile,
+      indirizzo: indirizzo,
       comune: entity.comune || '',
       provincia: entity.provincia || entity.sigla_provincia || '',
     }).then(res => {
       if (cancelled) return;
       const d = res?.data;
       if (!d?.lat || !d?.lng || isNaN(d.lat) || isNaN(d.lng)) return;
-      // FIX v3: scarta fallback comunali E risultati Nominatim troppo generici
-      // Il vecchio geocodeAddress usava "Calamandrana, AT" come fallback Nominatim → ritorna 44.737
-      // ma è il centroide del comune, non l'indirizzo specifico.
-      // Se il DB ha già un centroid valido (da enrichment API) e il geocoding ritorna source:nominatim
-      // con coordinate VICINE al centroide DB (< 2km), non sovrascrivere — è già nella posizione giusta.
       const isComuneFallback = d.location_type === 'COMUNE_CENTROID' || d.location_type === 'COMUNE_FALLBACK';
-      const hasValidCoords = d.lat && d.lng && !isNaN(d.lat) && !isNaN(d.lng);
       const inItaly = d.lat > 35 && d.lat < 48 && d.lng > 6 && d.lng < 19;
-      // Se DB ha già un centroid e il geocoding source è nominatim, verifica che non sia un "retrocesso"
-      // (es. Nominatim ritorna il centroide comunale che è più lontano dal centroide DB)
-      const dbLat = initLat ? parseFloat(String(initLat)) : null;
-      const dbLng = initLon ? parseFloat(String(initLon)) : null;
-      const isNominatimComune = d.source === 'nominatim' && dbLat && dbLng;
-      const distFromDb = isNominatimComune ? Math.hypot(d.lat - dbLat, d.lng - dbLng) : 0;
-      // Se nominatim ritorna qualcosa di più di 0.5° lontano dal DB centroid, è quasi certamente sbagliato
-      // Se nominatim ritorna qualcosa più vicino al centroide DB che non, accettalo — è miglioramento
-      const isNominatimWorserethan = isNominatimComune && distFromDb > 0.015; // >~1.5km — probabile fallback comunale
-      if (hasValidCoords && inItaly && !isComuneFallback && !isNominatimWorserethan) {
-        setAddressCoords({ lat: d.lat, lng: d.lng, formatted: d.formatted_address, source: 'rooftop' });
-        console.log('[ParcellaMap] geocoded OK:', d.lat, d.lng, d.location_type);
-        // NON sovrascrivere mai centroid_lat/lng con il geocoding — il centroide catastale è l'autorità
+      if (inItaly && !isComuneFallback) {
+        setAddressCoords({ lat: d.lat, lng: d.lng, formatted: d.formatted_address, source: d.source || 'geocode' });
+        console.log('[ParcellaMap] geocodifica indirizzo OK:', d.lat, d.lng, d.location_type);
       } else {
-        console.log('[ParcellaMap] geocoding scartato:', d.location_type, '— uso centroide da DB');
+        console.log('[ParcellaMap] geocoding scartato (fallback comunale):', d.location_type);
       }
     }).catch(() => {});
     return () => { cancelled = true; };
-  }, [entity.indirizzo_immobile, entity.comune]);
+  }, [entity.indirizzo_immobile, entity.indirizzo_catastale, entity.comune]);
 
-  // ── Re-lancia WFS dalle coordinate geocodificate (fix centroide DB sbagliato) ──
+  // ── Re-lancia WFS dalle coordinate geocodificate ──
   // Quando il geocoding trova l'indirizzo, ri-cerca la particella da quelle coordinate
   useEffect(() => {
     if (!addressCoords || hasPolygon || !entity.id || !foglio || !particella) return;
@@ -451,7 +444,7 @@ function polygonCentroidDistance(polygonGeom, refLat, refLng) {
     const { foglio: foglioNum } = parseFoglio(foglio);
 
     const retryWfsFromAddress = async () => {
-      setWfsStatus("🔍 Ri-cerco geometria dall'indirizzo geocodificato…");
+      setWfsStatus("🔍 Cerco geometria dall'indirizzo geocodificato…");
       const deltas = [0.003, 0.01, 0.04];
       for (const delta of deltas) {
         if (cancelled) return;
@@ -475,38 +468,28 @@ function polygonCentroidDistance(polygonGeom, refLat, refLng) {
           } catch (_e) {}
         }
         if (fetched?.features?.length && !cancelled) {
-          // Cerca match esatto foglio+particella
           const exact = fetched.features.find(f => {
             const lbl = String(f.properties?.label || f.properties?.nationalCadastralReference || "").toUpperCase();
             return (lbl.includes(`/${particella}`) || lbl.includes(`/${particella.padStart(5,"0")}`)) &&
                    (lbl.includes(`${foglioNum}/`) || lbl.includes(`${foglioNum.padStart(4,"0")}/`));
           });
           if (exact) {
-            // Validazione distanza
             const exRing = exact?.geometry?.coordinates?.[0];
             let saveExact = true;
-            if (exRing?.length > 2 && initLat && initLon) {
-              const dist = polygonCentroidDistance(exact.geometry, initLat, initLon);
+            if (exRing?.length > 2 && addressCoords) {
+              const dist = polygonCentroidDistance(exact.geometry, addressCoords.lat, addressCoords.lng);
               if (dist !== null && dist > 500) {
-                console.warn(`[ParcellaMap] address WFS polygon rejected — ${dist.toFixed(0)}m from centroid`);
+                console.warn(`[ParcellaMap] address WFS polygon rejected — ${dist.toFixed(0)}m from address`);
                 saveExact = false;
-                setWfsStatus("⚠️ Poligono catastale non disponibile — posizione approssimativa da centroide");
+                setWfsStatus("⚠️ Poligono catastale non disponibile — troppo distante dall'indirizzo");
               }
             }
             if (saveExact) {
               addPolygonToMap(exact);
               try {
-                const ring = exact?.geometry?.coordinates?.[0];
-                const updateData = { geometry_geojson: exact };
-                if (ring?.length > 2) {
-                  const cLat = ring.reduce((s,c) => s+c[1], 0) / ring.length;
-                  const cLon = ring.reduce((s,c) => s+c[0], 0) / ring.length;
-                  updateData.centroid_lat = cLat;
-                  updateData.centroid_lng = cLon;
-                }
-                await base44.entities.CadastralQuery.update(entity.id, updateData);
+                await base44.entities.CadastralQuery.update(entity.id, { geometry_geojson: exact });
               } catch (e) { console.warn("DB update from address WFS:", e); }
-              setWfsStatus("✅ Particella trovata via geocoding indirizzo");
+              setWfsStatus("✅ Particella trovata via indirizzo geocodificato");
             }
             return;
           }
@@ -518,28 +501,7 @@ function polygonCentroidDistance(polygonGeom, refLat, refLng) {
     return () => { cancelled = true; };
   }, [addressCoords, hasPolygon, entity.id, foglio, particella, addPolygonToMap]);
 
-  // ── Pan mappa all'indirizzo reale quando arriva il geocoding ──
-  useEffect(() => {
-    if (!addressCoords || !leafletMapRef.current) return;
-    const L = window.L;
-    const map = leafletMapRef.current;
-    if (!L || !map) return;
-
-    // Se non c'è già un poligono preciso, pan all'indirizzo e aggiorna marker
-    if (!hasPolygon) {
-      map.setView([addressCoords.lat, addressCoords.lng], 15); // zoom 15: contesto ampio
-      // Rimuovi eventuale marker precedente
-      if (addressMarkerRef.current) {
-        map.removeLayer(addressMarkerRef.current);
-      }
-      // Aggiungi marker all'indirizzo reale
-      addressMarkerRef.current = L.circleMarker([addressCoords.lat, addressCoords.lng], {
-        radius: 8, color: '#1A3A6B', fillColor: '#2563eb', fillOpacity: 0.9, weight: 2,
-      }).addTo(map).bindPopup(
-        `<strong>📍 ${entity.indirizzo_immobile}</strong><br/>${addressCoords.formatted || entity.comune}<br/><small style="color:#666">Posizione geocodificata da indirizzo</small>`
-      ).openPopup();
-    }
-  }, [addressCoords, hasPolygon]);
+  // ── Rimuovo effetto pan mappa: la mappa si ricentra automaticamente quando referenceLat/Lng cambia ──
 
   // Geocode address (preferred) or municipality when no cadastral position available
   useEffect(() => {
@@ -626,10 +588,6 @@ function polygonCentroidDistance(polygonGeom, refLat, refLng) {
       </div>
     );
   }
-
-  // Coordinate effettive per la visualizzazione
-  const displayLat = addressCoords?.lat ?? initLat;
-  const displayLon = addressCoords?.lng ?? initLon;
 
   return (
     <div className="space-y-2">
