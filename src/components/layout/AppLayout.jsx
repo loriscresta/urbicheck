@@ -69,7 +69,7 @@ export default function AppLayout() {
     queryFn: async () => {
       const user = await base44.auth.me();
       const list = await base44.entities.UserCredits.filter({ user_email: user.email });
-      return list[0] || { balance: 0 };
+      return list?.[0] || { balance: 0 };
     },
   });
 

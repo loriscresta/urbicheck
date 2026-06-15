@@ -236,7 +236,7 @@ Fornisci punteggio e analisi sintetica.`,
       // Salva snapshot
       try {
         const currentData = await base44.entities.CadastralQuery.filter({ id: query.id });
-        const current = currentData[0];
+        const current = currentData?.[0];
         if (current) {
           const updatedFinData = { ...(current.report_data?.fin_data || {}), score_snapshot: score };
           await base44.entities.CadastralQuery.update(query.id, {
@@ -285,7 +285,7 @@ Fornisci punteggio e analisi sintetica.`,
                     setMqOverride(v);
                     try {
                       const records = await base44.entities.CadastralQuery.filter({ id: query.id });
-                      const current = records[0];
+                      const current = records?.[0];
                       if (current) {
                         await base44.entities.CadastralQuery.update(query.id, {
                           report_data: {

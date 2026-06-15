@@ -417,7 +417,7 @@ export default function SearchPage() {
       try {
         const user = await base44.auth.me();
         const creditsList = await base44.entities.UserCredits.filter({ user_email: user.email });
-        let credits = creditsList[0];
+        let credits = creditsList?.[0];
 
         // Create UserCredits if missing (new user, no welcome credit)
         if (!credits) {

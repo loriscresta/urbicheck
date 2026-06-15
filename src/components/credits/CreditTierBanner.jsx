@@ -17,7 +17,7 @@ export default function CreditTierBanner({ variant = "search" }) {
     queryFn: async () => {
       const user = await base44.auth.me();
       const list = await base44.entities.UserCredits.filter({ user_email: user.email });
-      return list[0] || { balance: 0, free_reports_used: 0, beta_paid_reports_used: 0, total_queries: 0, total_spent: 0 };
+      return list?.[0] || { balance: 0, free_reports_used: 0, beta_paid_reports_used: 0, total_queries: 0, total_spent: 0 };
     },
   });
 
