@@ -443,9 +443,7 @@ export default function ParcellaMap({ record, query, item }) {
         © Leaflet | © OpenStreetMap | © Agenzia delle Entrate
       </div>
 
-      <div className="text-[10px] font-mono text-red-600 bg-red-50 border border-red-200 rounded px-2 py-1">
-        DEBUG: centroid={entity.centroid_lat},{entity.centroid_lng} | geocoded={entity.geocoded_lat},{entity.geocoded_lng} | mapLat,mapLng={referenceLat},{referenceLng}
-      </div>
+
 
       <a
         href="https://geoportale.cartografia.agenziaentrate.gov.it/age-inspire/srv/ita/catalog.search"
