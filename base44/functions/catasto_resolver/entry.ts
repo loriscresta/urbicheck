@@ -695,9 +695,9 @@ Deno.serve(async (req) => {
         try {
           await base44.entities.CadastralQuery.update(query_id, {
             centroid_lat: geoResult.lat,
-            centroid_lng: geoResult.lon,
+            centroid_lng: geoResult.lng,
           });
-          console.log(`Nominatim fallback saved: lat=${geoResult.lat} lon=${geoResult.lon} tipo=${geoResult.tipo}`);
+          console.log(`Google Maps fallback saved: lat=${geoResult.lat} lng=${geoResult.lng} tipo=${geoResult.tipo}`);
         } catch (_e) {}
       }
     }

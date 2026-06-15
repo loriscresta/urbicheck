@@ -86,13 +86,8 @@ Deno.serve(async (req) => {
         if (candidates.length) {
           const best = candidates[0];
           const loc = best.geometry.location;
-          const isComuneFallback = best.types?.includes('locality') && !best.types?.includes('street_address');
-          if (!isComuneFallback) {
-            geocoded = { lat: loc.lat, lng: loc.lng };
-            console.log('[geocodeQueryAddress] Google Maps OK:', geocoded.lat, geocoded.lng, best.formatted_address);
-          } else {
-            console.log('[geocodeQueryAddress] Google Maps risultato troppo generico (prob. centroide comune), scartato');
-          }
+          geocoded = { lat: loc.lat, lng: loc.lng };
+          console.log('[geocodeQueryAddress] Google Maps OK:', geocoded.lat, geocoded.lng, best.formatted_address, best.types);
         }
       } else {
         console.log('[geocodeQueryAddress] Google Maps status:', data.status);

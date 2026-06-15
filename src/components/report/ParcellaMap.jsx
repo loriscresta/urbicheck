@@ -59,7 +59,7 @@ export default function ParcellaMap({ record, query, item }) {
     return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   }
 
-  // ── Logica pin: geocoded_lat/lng (Nominatim, indirizzo reale) PRIORITY, centroid_lat/lng (Catastomappe) fallback ──
+  // ── Logica pin: geocoded_lat/lng (Google Maps, indirizzo reale) PRIORITY, centroid_lat/lng (Catastomappe) fallback ──
   const geocodedLat = entity.geocoded_lat != null && Number(entity.geocoded_lat) !== 0 ? parseFloat(entity.geocoded_lat) : null;
   const geocodedLng = entity.geocoded_lng != null && Number(entity.geocoded_lng) !== 0 ? parseFloat(entity.geocoded_lng) : null;
   const centroidLat = entity.centroid_lat != null && Number(entity.centroid_lat) !== 0 ? parseFloat(entity.centroid_lat) : null;
@@ -402,7 +402,7 @@ export default function ParcellaMap({ record, query, item }) {
     }
   }, [validGeometry]);
 
-  // Il geocoding Nominatim dell'indirizzo è disabilitato — le coordinate provengono solo da geocoded_lat/lng (se già salvate) o centroid_lat/lng
+  // Il geocoding dell'indirizzo è gestito dal backend (Google Maps) — le coordinate provengono da geocoded_lat/lng (se già salvate) o centroid_lat/lng
 
   // ── Render ────────────────────────────────────────────────────────────────
 
