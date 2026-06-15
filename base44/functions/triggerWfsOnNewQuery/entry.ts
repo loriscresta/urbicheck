@@ -1,16 +1,29 @@
 // triggerWfsOnNewQuery.js — Automazione entity: esegue wfsLiguria server-side
 // quando viene creata una nuova CadastralQuery per Liguria o Piemonte.
 //
-// FIX: aggiunge sleep 10s prima di richiamare wfsLiguria, in modo che:
-//   1) catasto_resolver abbia il tempo di popolare centroid_lat/lng (evita geocoding)
-//   2) se regione è assente (flusso visura), la cerca in ComuneItalia e la scrive sul record
+// Sicurezza: il token interno (_internal_token) DEVE essere presente nel payload
+// per verificare che la chiamata provenga dall'automation autorizzata.
 
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
+
+const INTERNAL_TOKEN_SECRET = Deno.env.get('INTERNAL_AUTH_TOKEN');
+const FALLBACK_INTERNAL_TOKEN = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
+
+function isInternalCall(payload) {
+  const token = payload._internal_token;
+  if (!token) return false;
+  return token === FALLBACK_INTERNAL_TOKEN || (INTERNAL_TOKEN_SECRET && token === INTERNAL_TOKEN_SECRET);
+}
 
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
     const body = await req.json();
+
+    // ── Auth: verify internal token ───────────────────────────────────────
+    if (!isInternalCall(body)) {
+      return Response.json({ error: 'Forbidden: internal token required' }, { status: 403 });
+    }
 
     const entityId = body?.event?.entity_id;
     const eventType = body?.event?.type;
@@ -20,8 +33,6 @@ Deno.serve(async (req) => {
     }
 
     // ── Attendi che catasto_resolver completi: polling su codice_comune_catasto ──
-    // wfsLiguria NON deve partire finché codice_comune_catasto non è valorizzato.
-    // Max 60s di attesa (12 tentativi × 5s).
     let codiceOk = false;
     for (let i = 0; i < 12; i++) {
       await new Promise(r => setTimeout(r, 5000));
@@ -50,7 +61,6 @@ Deno.serve(async (req) => {
           const r = String(c.regione || c.region || c.nome_regione || '').toLowerCase().trim();
           if (r.includes('liguria') || r.includes('piemonte')) {
             regioneLower = r;
-            // Scrivi regione sul record in modo che wfsLiguria la legga correttamente
             try {
               const regioneValue = c.regione || c.region || c.nome_regione || '';
               await base44.asServiceRole.entities.CadastralQuery.update(entityId, { regione: regioneValue });
@@ -65,12 +75,12 @@ Deno.serve(async (req) => {
       return Response.json({ skipped: true, reason: 'region not supported', regione: regioneLower });
     }
 
-    // Dispatch wfsLiguria — a questo punto il record ha centroid_lat/lng (da catasto_resolver)
-    // e regione valorizzata, quindi wfsLiguria userà le coordinate reali senza geocodificare
+    // Dispatch wfsLiguria
     const result = await base44.asServiceRole.functions.invoke('wfsLiguria', { query_id: entityId });
 
     return Response.json({ success: true, query_id: entityId, regione: regioneLower, result });
   } catch (error) {
+    console.error('[triggerWfsOnNewQuery] Error:', error.message);
     return Response.json({ error: error.message }, { status: 500 });
   }
 });

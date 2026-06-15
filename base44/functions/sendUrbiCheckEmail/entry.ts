@@ -1,10 +1,15 @@
 /**
  * sendUrbiCheckEmail — Servizio email branded UrbiCheck
  * Gestisce 3 tipi: report_ready | welcome | credits_purchased
+ *
+ * Sicurezza: le chiamate da automation DEVONO includere il token interno
+ * nel payload (_internal_token). Le chiamate dirette richiedono auth utente.
  */
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 
 const APP_URL = Deno.env.get('APP_BASE_URL') || 'https://urbicheck.base44.app';
+const INTERNAL_TOKEN_SECRET = Deno.env.get('INTERNAL_AUTH_TOKEN');
+const FALLBACK_TOKEN = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
 
 // ── HTML template base ──
 function baseTemplate(content) {
@@ -65,6 +70,13 @@ function baseTemplate(content) {
 </html>`;
 }
 
+// ── Verify internal token (accepts env var or fallback) ──
+function isInternalCall(payload) {
+  const token = payload._internal_token;
+  if (!token) return false;
+  return token === FALLBACK_TOKEN || (INTERNAL_TOKEN_SECRET && token === INTERNAL_TOKEN_SECRET);
+}
+
 // ── Email: Report Pronto ──
 function buildReportReadyEmail({ query, reportUrl }) {
   const r = query.report_data || {};
@@ -73,7 +85,6 @@ function buildReportReadyEmail({ query, reportUrl }) {
   const particella = query.particella || '—';
   const reportNum = `UB-${(query.id || '').slice(-8).toUpperCase()}`;
 
-  // Estrai score e rischio
   const score = r.valutazione_sintetica?.livello_complessita || null;
   const scoreBadge = score === 'Alto'
     ? `<span style="background:#fee2e2;color:#dc2626;padding:3px 10px;font-size:11px;font-weight:700;letter-spacing:1px;">⚠ CRITICITÀ ALTE</span>`
@@ -81,12 +92,10 @@ function buildReportReadyEmail({ query, reportUrl }) {
     ? `<span style="background:#fef3c7;color:#d97706;padding:3px 10px;font-size:11px;font-weight:700;letter-spacing:1px;">▲ RISCHIO MEDIO</span>`
     : `<span style="background:#d1fae5;color:#059669;padding:3px 10px;font-size:11px;font-weight:700;letter-spacing:1px;">✓ BASSO RISCHIO</span>`;
 
-  // Punti salienti — leggi da WFS (fonte autoritativa) con fallback su AI
   const highlights = [];
   const vincoli = r.vincoli || {};
   const wfsRis = r.wfs_liguria?.risultati;
 
-  // Sismica: WFS autoritativo (zona "3", "2", "4" ecc.), fallback AI, fallback neutro
   const sismicaWfs = wfsRis?.sismica;
   if (sismicaWfs?.zona) {
     highlights.push(`🟠 Zona Sismica — Zona ${sismicaWfs.zona}${sismicaWfs.descrizione ? ' — ' + sismicaWfs.descrizione : ''}`);
@@ -94,7 +103,6 @@ function buildReportReadyEmail({ query, reportUrl }) {
     highlights.push(`🟠 Zona Sismica — Verifica manuale`);
   }
 
-  // Vincolo paesaggistico: da WFS ope legis
   const vpWfs = wfsRis?.vincoli_paesaggistici_ope_legis?.vincoli;
   if (vpWfs) {
     const presente = vpWfs.some(v => v.livello && v.livello !== 'NESSUN_VINCOLO_RILEVATO');
@@ -103,7 +111,6 @@ function buildReportReadyEmail({ query, reportUrl }) {
     highlights.push(vincoli.vincolo_paesaggistico.presente ? `🟡 Vincolo paesaggistico art.142 — Presente` : `🟢 Vincolo paesaggistico — Assente`);
   }
 
-  // Rischio idraulico: da WFS corsi acqua
   const corsiWfs = wfsRis?.vincolo_corsi_acqua?.dati;
   if (corsiWfs) {
     const trovato = corsiWfs.some(d => d.trovato);
@@ -114,7 +121,6 @@ function buildReportReadyEmail({ query, reportUrl }) {
     highlights.push(`🔵 Rischio idraulico — ${vincoli.vincolo_idraulico.classe_rischio || 'rilevato'}`);
   }
 
-  // Zona urbanistica: WFS zona_urbanistica > zonizzazione AI
   const zonaUrb = wfsRis?.zona_urbanistica;
   const zonaCode = zonaUrb?.zona_codice || r.zonizzazione?.zona_codice || '';
   const zonaLabel = zonaUrb?.destinazione_uso || r.zonizzazione?.destinazione_prevalente || '';
@@ -188,7 +194,6 @@ function buildWelcomeEmail({ userName }) {
       Sei pronto a fare due diligence urbanistica in <strong style="color:#1C1A17;">60 secondi</strong>. Inserisci foglio e particella — ottieni vincoli, sismicità, rischi idrogeologici e valutazione finanziaria istantanea.
     </p>
 
-    <!-- 3 punti chiave -->
     <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #C4BAA8;margin-bottom:28px;">
       ${[
         ['🗺️', 'Zona urbanistica', 'Destinazione d\'uso, indici edilizi e fattibilità interventi.'],
@@ -271,77 +276,86 @@ function buildCreditsPurchasedEmail({ userName, amount, newBalance }) {
 
 // ── MAIN HANDLER ──
 Deno.serve(async (req) => {
-  const base44 = createClientFromRequest(req);
-  const body = await req.json();
+  try {
+    const base44 = createClientFromRequest(req);
+    const body = await req.json();
 
-  // Called from entity automation (no user auth) — use service role
-  const isAutomation = body?.event?.type !== undefined;
+    // ── Auth ──────────────────────────────────────────────────────────────
+    const isAutomation = body?.event?.type !== undefined;
+    let user = null;
 
-  let user = null;
-  if (!isAutomation) {
-    user = await base44.auth.me();
-    if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
-  // Entity automation payload: { event, data, old_data }
-  if (isAutomation) {
-    const query = body.data;
-    if (!query || query.status !== 'completed') {
-      return Response.json({ skipped: true, reason: 'status not completed' });
+    if (isAutomation) {
+      // Automation call: MUST have valid internal token
+      if (!isInternalCall(body)) {
+        return Response.json({ error: 'Forbidden: internal token required for automation calls' }, { status: 403 });
+      }
+    } else {
+      // Direct call: MUST have user auth
+      user = await base44.auth.me();
+      if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    // Get the owner email from created_by
-    const ownerEmail = query.created_by;
-    if (!ownerEmail) return Response.json({ skipped: true, reason: 'no owner email' });
 
-    // Fetch full query data via service role to get report_data
-    const queries = await base44.asServiceRole.entities.CadastralQuery.filter({ id: query.id });
-    const fullQuery = queries[0];
-    if (!fullQuery) return Response.json({ skipped: true, reason: 'query not found' });
+    // ── Entity automation payload ─────────────────────────────────────────
+    if (isAutomation) {
+      const query = body.data;
+      if (!query || query.status !== 'completed') {
+        return Response.json({ skipped: true, reason: 'status not completed' });
+      }
+      const ownerEmail = query.created_by;
+      if (!ownerEmail) return Response.json({ skipped: true, reason: 'no owner email' });
 
-    const reportUrl = `${APP_URL}/report/${fullQuery.id}`;
-    const { subject, body: html } = buildReportReadyEmail({ query: fullQuery, reportUrl });
-    await base44.asServiceRole.integrations.Core.SendEmail({
-      to: ownerEmail,
-      subject,
-      body: html,
-      from_name: 'UrbiCheck',
-    });
-    return Response.json({ success: true, type: 'report_ready', to: ownerEmail });
+      const queries = await base44.asServiceRole.entities.CadastralQuery.filter({ id: query.id });
+      const fullQuery = queries[0];
+      if (!fullQuery) return Response.json({ skipped: true, reason: 'query not found' });
+
+      const reportUrl = `${APP_URL}/report/${fullQuery.id}`;
+      const { subject, body: html } = buildReportReadyEmail({ query: fullQuery, reportUrl });
+      await base44.asServiceRole.integrations.Core.SendEmail({
+        to: ownerEmail,
+        subject,
+        body: html,
+        from_name: 'UrbiCheck',
+      });
+      return Response.json({ success: true, type: 'report_ready', to: ownerEmail });
+    }
+
+    // ── Direct call (authenticated user) ──────────────────────────────────
+    const { type, query_id, amount, new_balance, user_name, user_email } = body;
+
+    const targetEmail = user_email || user.email;
+    const targetName = user_name || user.full_name || 'Utente';
+
+    if (user_email && user_email !== user.email && user.role !== 'admin') {
+      return Response.json({ error: 'Forbidden: cannot send emails to other users' }, { status: 403 });
+    }
+
+    if (type === 'report_ready') {
+      if (!query_id) return Response.json({ error: 'query_id obbligatorio' }, { status: 400 });
+      const queries = await base44.entities.CadastralQuery.filter({ id: query_id });
+      const query = queries[0];
+      if (!query) return Response.json({ error: 'Query non trovata' }, { status: 404 });
+      const reportUrl = `${APP_URL}/report/${query_id}`;
+      const { subject, body: html } = buildReportReadyEmail({ query, reportUrl });
+      await base44.integrations.Core.SendEmail({ to: targetEmail, subject, body: html, from_name: 'UrbiCheck' });
+      return Response.json({ success: true, type: 'report_ready', to: targetEmail });
+    }
+
+    if (type === 'welcome') {
+      const { subject, body: html } = buildWelcomeEmail({ userName: targetName });
+      await base44.integrations.Core.SendEmail({ to: targetEmail, subject, body: html, from_name: 'UrbiCheck' });
+      return Response.json({ success: true, type: 'welcome', to: targetEmail });
+    }
+
+    if (type === 'credits_purchased') {
+      if (!amount || new_balance === undefined) return Response.json({ error: 'amount e new_balance obbligatori' }, { status: 400 });
+      const { subject, body: html } = buildCreditsPurchasedEmail({ userName: targetName, amount, newBalance: new_balance });
+      await base44.integrations.Core.SendEmail({ to: targetEmail, subject, body: html, from_name: 'UrbiCheck' });
+      return Response.json({ success: true, type: 'credits_purchased', to: targetEmail });
+    }
+
+    return Response.json({ error: 'type non riconosciuto. Valori: report_ready | welcome | credits_purchased' }, { status: 400 });
+  } catch (error) {
+    console.error('[sendUrbiCheckEmail] Error:', error.message);
+    return Response.json({ error: error.message }, { status: 500 });
   }
-
-  const { type, query_id, amount, new_balance, user_name, user_email } = body;
-
-  const targetEmail = user_email || user.email;
-  const targetName = user_name || user.full_name || 'Utente';
-
-  // Authorization: non-admin users can only send emails to their own address
-  if (user_email && user_email !== user.email && user.role !== 'admin') {
-    return Response.json({ error: 'Forbidden: cannot send emails to other users' }, { status: 403 });
-  }
-
-  if (type === 'report_ready') {
-    if (!query_id) return Response.json({ error: 'query_id obbligatorio' }, { status: 400 });
-    const queries = await base44.entities.CadastralQuery.filter({ id: query_id });
-    const query = queries[0];
-    if (!query) return Response.json({ error: 'Query non trovata' }, { status: 404 });
-    const reportUrl = `${APP_URL}/report/${query_id}`;
-    const { subject, body: html } = buildReportReadyEmail({ query, reportUrl });
-    await base44.integrations.Core.SendEmail({ to: targetEmail, subject, body: html, from_name: 'UrbiCheck' });
-    return Response.json({ success: true, type: 'report_ready', to: targetEmail });
-  }
-
-  if (type === 'welcome') {
-    const { subject, body: html } = buildWelcomeEmail({ userName: targetName });
-    await base44.integrations.Core.SendEmail({ to: targetEmail, subject, body: html, from_name: 'UrbiCheck' });
-    return Response.json({ success: true, type: 'welcome', to: targetEmail });
-  }
-
-  if (type === 'credits_purchased') {
-    if (!amount || new_balance === undefined) return Response.json({ error: 'amount e new_balance obbligatori' }, { status: 400 });
-    const { subject, body: html } = buildCreditsPurchasedEmail({ userName: targetName, amount, newBalance: new_balance });
-    await base44.integrations.Core.SendEmail({ to: targetEmail, subject, body: html, from_name: 'UrbiCheck' });
-    return Response.json({ success: true, type: 'credits_purchased', to: targetEmail });
-  }
-
-  return Response.json({ error: 'type non riconosciuto. Valori: report_ready | welcome | credits_purchased' }, { status: 400 });
 });

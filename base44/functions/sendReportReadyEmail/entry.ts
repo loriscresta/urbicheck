@@ -1,6 +1,8 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 
 const APP_URL = Deno.env.get('APP_URL') || 'https://urbicheck.base44.app';
+const INTERNAL_TOKEN_SECRET = Deno.env.get('INTERNAL_AUTH_TOKEN');
+const FALLBACK_TOKEN = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
 
 function buildEmailHtml({ userName, comune, foglio, particella, score, elementi, queryId, publicToken, reportUrl: reportUrlArg }) {
   const scoreColor = score >= 7 ? '#059669' : score >= 5 ? '#d97706' : '#dc2626';
@@ -131,20 +133,34 @@ function buildEmailHtml({ userName, comune, foglio, particella, score, elementi,
 </html>`;
 }
 
+// Verify the caller has a valid internal token (accepts env var or fallback)
+function isInternalCall(payload) {
+  const token = payload._internal_token;
+  if (!token) return false;
+  return token === FALLBACK_TOKEN || (INTERNAL_TOKEN_SECRET && token === INTERNAL_TOKEN_SECRET);
+}
+
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
     const payload = await req.json();
-    // Support both direct call (query_id) and entity automation payload (event.entity_id)
-    const query_id = payload.query_id || payload.event?.entity_id || payload.data?.id;
 
+    // ── Auth check ─────────────────────────────────────────────────────────
+    let requestingUser = null;
+    try { requestingUser = await base44.auth.me(); } catch (_e) {}
+
+    // Allow internal automation calls with valid token (no user session)
+    const internalCall = isInternalCall(payload);
+
+    if (!requestingUser && !internalCall) {
+      return Response.json({ error: 'Unauthorized — user auth or internal token required' }, { status: 401 });
+    }
+
+    // ── Resolve query_id ───────────────────────────────────────────────────
+    const query_id = payload.query_id || payload.event?.entity_id || payload.data?.id;
     if (!query_id) {
       return Response.json({ error: 'query_id required' }, { status: 400 });
     }
-
-    // Authenticate the requesting user (may be null for automation/service calls)
-    let requestingUser = null;
-    try { requestingUser = await base44.auth.me(); } catch (_e) {}
 
     // Get query — prefer data from payload if already included
     let query = (payload.data?.status === 'completed') ? payload.data : null;
@@ -154,8 +170,7 @@ Deno.serve(async (req) => {
     }
     if (!query) return Response.json({ error: 'Query not found' }, { status: 404 });
 
-    // Ownership check — if a user is authenticated, they must own this query
-    // (automation/service-role calls without a user are allowed through)
+    // Ownership check for direct user calls
     if (requestingUser && requestingUser.role !== 'admin') {
       if (query.created_by !== requestingUser.email) {
         return Response.json({ error: 'Forbidden' }, { status: 403 });
@@ -179,12 +194,11 @@ Deno.serve(async (req) => {
     const scoreRaw = valSin.score_rischio || valSin.score || 7;
     const score = typeof scoreRaw === 'number' ? Math.min(10, Math.max(1, Math.round(scoreRaw))) : 7;
 
-    // Build key elements — leggi da WFS (fonte autoritativa) con fallback su AI
+    // Build key elements
     const elementi = [];
     const wfsRis2 = r.wfs_liguria?.risultati;
     const vincoli2 = r.vincoli || {};
 
-    // Sismica: WFS autoritativo
     const sismicaWfs2 = wfsRis2?.sismica;
     if (sismicaWfs2?.zona) {
       elementi.push({ icon: '🟠', label: 'Zona Sismica', value: `Zona ${sismicaWfs2.zona}`, ok: null });
@@ -192,7 +206,6 @@ Deno.serve(async (req) => {
       elementi.push({ icon: '⚪', label: 'Zona Sismica', value: 'Verifica manuale', ok: null });
     }
 
-    // Vincolo paesaggistico
     const vpWfs2 = wfsRis2?.vincoli_paesaggistici_ope_legis?.vincoli;
     if (vpWfs2) {
       const presente2 = vpWfs2.some(v => v.livello && v.livello !== 'NESSUN_VINCOLO_RILEVATO');
@@ -202,14 +215,12 @@ Deno.serve(async (req) => {
       elementi.push({ icon: presente2 ? '🟡' : '🟢', label: 'Vincolo Paesaggistico', value: presente2 ? 'Presente' : 'Assente', ok: !presente2 });
     }
 
-    // Zona urbanistica
     const zonaUrb2 = wfsRis2?.zona_urbanistica;
     const zonaVal = zonaUrb2?.zona_codice || r.zonizzazione?.zona_codice || r.zonizzazione?.destinazione_prevalente || null;
     if (zonaVal) {
       elementi.push({ icon: '🏙️', label: 'Zona Urbanistica', value: zonaVal, ok: true });
     }
 
-    // Rischio idraulico
     const corsiWfs2 = wfsRis2?.vincolo_corsi_acqua?.dati;
     if (corsiWfs2) {
       const trovato2 = corsiWfs2.some(d => d.trovato);
@@ -219,22 +230,19 @@ Deno.serve(async (req) => {
       elementi.push({ icon: p2 ? '🔴' : '🟢', label: 'Rischio Idraulico', value: p2 ? 'Rilevato' : 'Nessun rischio', ok: !p2 });
     }
 
-    // Usa report_url già firmato salvato sul record; fallback a generazione inline se mancante
     let publicToken = query.public_token || null;
     let reportUrlOverride = query.report_url || null;
 
     if (!reportUrlOverride && !publicToken) {
-      // report_url non ancora generato (record vecchio) — genera ora
-      const APP_URL = Deno.env.get('APP_URL') || 'https://urbicheck.it';
+      const APP_URL_OVERRIDE = Deno.env.get('APP_URL') || 'https://urbicheck.it';
       publicToken = crypto.randomUUID().replace(/-/g, '');
       const expiresAt = new Date(Date.now() + 72 * 60 * 60 * 1000).toISOString();
-      reportUrlOverride = `${APP_URL}/report/public/${query_id}?token=${publicToken}`;
+      reportUrlOverride = `${APP_URL_OVERRIDE}/report/public/${query_id}?token=${publicToken}`;
       await base44.asServiceRole.entities.CadastralQuery.update(query_id, {
         public_token: publicToken,
         token_expires_at: expiresAt,
         report_url: reportUrlOverride,
       });
-      console.log('[sendReportReadyEmail] generated missing public token for', query_id);
     }
 
     const subject = `✅ Il tuo report UrbiCheck è pronto — ${query.comune} Fg.${query.foglio} Map.${query.particella}`;

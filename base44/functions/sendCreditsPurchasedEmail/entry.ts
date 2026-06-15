@@ -1,4 +1,4 @@
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 
 const APP_URL = Deno.env.get("APP_URL") ?? "https://urbicheck.it";
 
@@ -6,9 +6,10 @@ Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
 
-    // This function is called server-side from stripeCheckout (service role).
-    // We do NOT require user session auth here — it's an internal server-to-server call.
-    // We verify that the caller provides valid data instead of trusting a user session.
+    // Auth: require authenticated user (called server-side from stripeCheckout or stripe-webhook)
+    const user = await base44.auth.me();
+    if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
+
     const payload = await req.json();
     const { user_email, user_name, amount_purchased, new_balance } = payload;
 
