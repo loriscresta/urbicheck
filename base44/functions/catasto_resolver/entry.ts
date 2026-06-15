@@ -533,23 +533,26 @@ async function checkWaterwayVicinity(lat, lon, regione = '') {
   }
 }
 
-// ── Nominatim geocoding (fallback quando OnData non trova la particella) ────
+// ── Google Maps Geocoding API ────────────────────────────────────────────────
 async function geocodeAddress(indirizzo, comune, provincia) {
+  const apiKey = Deno.env.get('GOOGLE_MAPS_API_KEY');
+  if (!apiKey) {
+    console.warn('[catasto_resolver] GOOGLE_MAPS_API_KEY not set');
+    return null;
+  }
   const q = indirizzo
-    ? `${indirizzo}, ${comune}, ${provincia || ''}, Italy`
+    ? `${indirizzo}, ${comune}, Italy`
     : `${comune}, ${provincia || ''}, Italy`;
   try {
-    const res = await fetchWithTimeout(
-      `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=1&countrycodes=it`,
-      { headers: { 'User-Agent': 'UrbiCheck/1.0 (info@urbicheck.it)' } },
-      8000
-    );
+    const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(q)}&key=${apiKey}`;
+    const res = await fetchWithTimeout(url, {}, 8000);
     if (!res.ok) return null;
     const data = await res.json();
-    if (!data[0]) return null;
-    return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon), tipo: indirizzo ? 'indirizzo' : 'comune' };
+    if (data.status !== 'OK' || !data.results?.[0]) return null;
+    const loc = data.results[0].geometry.location;
+    return { lat: loc.lat, lng: loc.lng, tipo: indirizzo ? 'indirizzo' : 'comune' };
   } catch (e) {
-    console.warn('Nominatim error:', e.message);
+    console.warn('[catasto_resolver] Google Maps error:', e.message);
     return null;
   }
 }
@@ -849,7 +852,7 @@ Deno.serve(async (req) => {
       console.error('CadastralQuery update error:', saveErr.message);
     }
 
-    // ── Nominatim geocoding dell'indirizzo reale — SEMPRE (FIX 1) ──
+    // ── Google Maps geocoding dell'indirizzo reale — SEMPRE ──
     // geocoded_lat/lng = posizione reale dell'indirizzo (autorità primaria per la mappa)
     // centroid_lat/lng = centroide catastale da OnData/WFS (fallback)
     const indirizzoGeocode = queryRecord.indirizzo_immobile || queryRecord.indirizzo_catastale || null;
@@ -861,14 +864,14 @@ Deno.serve(async (req) => {
         if (geoResult) {
           await base44.entities.CadastralQuery.update(query_id, {
             geocoded_lat: geoResult.lat,
-            geocoded_lng: geoResult.lon,
+            geocoded_lng: geoResult.lng,
           });
-          console.log(`[catasto_resolver] Nominatim geocoded: lat=${geoResult.lat} lon=${geoResult.lon} tipo=${geoResult.tipo}`);
+          console.log(`[catasto_resolver] Google Maps geocoded: lat=${geoResult.lat} lng=${geoResult.lng} tipo=${geoResult.tipo}`);
         } else {
-          console.log('[catasto_resolver] Nominatim geocoding failed — indirizzo non trovato');
+          console.log('[catasto_resolver] Google Maps geocoding failed — indirizzo non trovato');
         }
       } catch (geoErr) {
-        console.warn('[catasto_resolver] Nominatim geocoding error:', geoErr.message);
+        console.warn('[catasto_resolver] Google Maps geocoding error:', geoErr.message);
       }
     }
   }
@@ -920,6 +923,40 @@ Deno.serve(async (req) => {
       }
     } catch (agentErr) {
       console.warn(`[catasto_resolver] catasto_agent error: ${agentErr.message}`);
+    }
+
+    // ── Retry geometria dopo 2s se ancora null ────────────────────────────────
+    if (!wfsResult?.geojson_polygon) {
+      await new Promise(r => setTimeout(r, 2000));
+      console.log('[catasto_resolver] Retry geometria dopo 2s...');
+      const retryWms = await searchWmsFeatureInfo(lat, lon);
+      if (retryWms?.geojson_polygon) {
+        wfsResult = retryWms;
+        catasto_data.geojson_polygon = retryWms.geojson_polygon;
+        await base44.entities.CadastralQuery.update(query_id, {
+          geometry_geojson: retryWms.geojson_polygon,
+          fonte_dati_catastali: 'catastomappe_retry',
+        });
+        console.log('[catasto_resolver] Retry WMS OK');
+      } else {
+        const retryWfs = await searchWfsAde(lat, lon, codiceBelfiore, foglio, particella, rigaScelta.sezione);
+        if (retryWfs?.geojson_polygon) {
+          wfsResult = retryWfs;
+          catasto_data.geojson_polygon = retryWfs.geojson_polygon;
+          await base44.entities.CadastralQuery.update(query_id, {
+            geometry_geojson: retryWfs.geojson_polygon,
+            fonte_dati_catastali: 'catastomappe_retry',
+          });
+          console.log('[catasto_resolver] Retry WFS OK');
+        } else {
+          // Secondo tentativo fallito — salva come completed con geometry_geojson null
+          console.log('[catasto_resolver] Geometria non disponibile dopo retry');
+          await base44.entities.CadastralQuery.update(query_id, {
+            geometry_geojson: null,
+            status: 'completed',
+          });
+        }
+      }
     }
   }
 

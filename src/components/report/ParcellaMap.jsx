@@ -316,10 +316,10 @@ export default function ParcellaMap({ record, query, item }) {
         }
       ).addTo(map);
 
-      // ═══ PIN PRINCIPALE: geocoding Nominatim (primario, indirizzo reale), centroid Catastomappe (fallback) ═══
+      // ═══ PIN PRINCIPALE: geocoding Google Maps (primario, indirizzo reale), centroid Catastomappe (fallback) ═══
       const addrLabel = entity.indirizzo_immobile || entity.indirizzo_catastale || entity.comune || '';
       const coordSource = usingGeocoded
-        ? '<small style="color:#666">Coordinate geocodificate da indirizzo (Nominatim)</small>'
+        ? '<small style="color:#666">Coordinate geocodificate da indirizzo (Google Maps)</small>'
         : (centroidLat && centroidLng ? '<small style="color:#666">Coordinate da centroide catastale (Catastomappe API)</small>' : '');
       const pinPopup = `<strong>📍 ${entity.indirizzo_immobile || addrLabel}</strong><br/>Foglio ${foglio}, Particella ${particella}${entity.subalterno ? `, Sub. ${entity.subalterno}` : ''}<br/>${coordSource}`;
       L.circleMarker([referenceLat, referenceLng], {
@@ -340,26 +340,32 @@ export default function ParcellaMap({ record, query, item }) {
         map.fitBounds(layer.getBounds(), { padding: [20, 20], maxZoom: 19 });
         setPolygonLoaded(true);
       } else {
-        // Poligono scartato o assente: cerchio tratteggiato intorno al pin
+        // Geometria assente o scartata: cerchio arancione pulsante intorno al pin
         L.circle([referenceLat, referenceLng], {
-          radius: 25,
-          color: "#c0392b",
-          fillColor: "#e74c3c",
-          fillOpacity: 0.15,
+          radius: 30,
+          color: "#FF6600",
+          fillColor: "#FF6600",
+          fillOpacity: 0.12,
           weight: 2,
-          dashArray: "6 4",
-        }).addTo(map);
-        if (geomJson?.geometry?.coordinates) {
-          // C'è un poligono ma è stato scartato — nota esplicativa
-          L.circleMarker([referenceLat, referenceLng], {
-            radius: 9,
-            color: "#c0392b",
-            fillColor: "#e74c3c",
-            fillOpacity: 0.85,
-            weight: 2.5,
-          }).addTo(map).bindPopup(
-            `<strong>⚠️ Poligono catastale non disponibile</strong><br/>Il poligono WFS è troppo distante dall'indirizzo<br/><small style="color:#666">Foglio ${foglio}, Particella ${particella}${entity.subalterno ? `, Sub. ${entity.subalterno}` : ''}</small>`
-          );
+          className: "geom-missing-pulse",
+        }).addTo(map).bindPopup(
+          `<strong>📍 Posizione approssimativa</strong><br/>Geometria particella non disponibile da Catastomappe<br/><small style="color:#666">Foglio ${foglio}, Particella ${particella}${entity.subalterno ? `, Sub. ${entity.subalterno}` : ''}<br/>L'indicatore arancione mostra la posizione stimata dall'indirizzo.</small>`
+        );
+        // Aggiungi CSS per pulsazione
+        const styleId = 'geom-pulse-css';
+        if (!document.getElementById(styleId)) {
+          const style = document.createElement('style');
+          style.id = styleId;
+          style.textContent = `
+            .geom-missing-pulse {
+              animation: geom-pulse-anim 2s ease-in-out infinite;
+            }
+            @keyframes geom-pulse-anim {
+              0%, 100% { opacity: 0.4; }
+              50% { opacity: 0.85; }
+            }
+          `;
+          document.head.appendChild(style);
         }
       }
     };

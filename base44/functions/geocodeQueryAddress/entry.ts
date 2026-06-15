@@ -1,10 +1,8 @@
-// geocodeQueryAddress.js — Geocodifica l'indirizzo immobile via Nominatim
-// e salva geocoded_lat/lng (+ centroid_lat/lng) sul record CadastralQuery.
-// Trigger: entity automation su CadastralQuery create/update (quando indirizzo_immobile cambia).
+// geocodeQueryAddress.js — Geocodifica l'indirizzo immobile via Google Maps
+// e salva geocoded_lat/lng sul record CadastralQuery.
+// Trigger: entity automation su CadastralQuery create/update.
 
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
-
-const NOMINATIM_HEADERS = { 'User-Agent': 'UrbiCheck/1.0 (info@urbicheck.it)' };
 
 function haversineKm(lat1, lon1, lat2, lon2) {
   const R = 6371;
@@ -15,13 +13,18 @@ function haversineKm(lat1, lon1, lat2, lon2) {
 }
 
 async function getComuneCentroid(comune, provincia) {
+  const apiKey = Deno.env.get('GOOGLE_MAPS_API_KEY');
+  if (!apiKey) return null;
   const sigla = (provincia || '').replace(/[^A-Za-z]/g, '').toUpperCase().slice(0, 2);
-  const q = sigla ? `${comune}, ${sigla}, Italia` : `${comune}, Italia`;
+  const q = sigla ? `${comune}, ${sigla}, Italy` : `${comune}, Italy`;
   try {
-    const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=1&countrycodes=it`;
-    const res = await fetch(url, { headers: NOMINATIM_HEADERS, signal: AbortSignal.timeout(5000) });
+    const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(q)}&key=${apiKey}`;
+    const res = await fetch(url, { signal: AbortSignal.timeout(5000) });
     const data = await res.json();
-    if (data?.[0]) return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
+    if (data?.results?.[0]) {
+      const loc = data.results[0].geometry.location;
+      return { lat: loc.lat, lng: loc.lng };
+    }
   } catch (_e) {}
   return null;
 }
@@ -32,10 +35,8 @@ Deno.serve(async (req) => {
     const body = await req.json();
 
     const entityId = body?.event?.entity_id;
-    const eventType = body?.event?.type;
     if (!entityId) return Response.json({ skipped: true, reason: 'no entity_id' });
 
-    // Leggi il record corrente
     const queries = await base44.asServiceRole.entities.CadastralQuery.filter({ id: entityId });
     const q = queries[0];
     if (!q) return Response.json({ skipped: true, reason: 'query not found' });
@@ -44,9 +45,8 @@ Deno.serve(async (req) => {
     const comune = q.comune || '';
     const provincia = q.provincia || q.sigla_provincia || '';
 
-    // Salta se già geocodificato con lo stesso indirizzo (evita loop infiniti su update)
+    // Salta se già geocodificato con lo stesso indirizzo
     if (q.geocoded_lat != null && q.geocoded_lng != null) {
-      // Ricontrolla solo se l'indirizzo è cambiato (evento update)
       const dataAfter = body?.data;
       if (!dataAfter || dataAfter.indirizzo_immobile === body?.old_data?.indirizzo_immobile) {
         return Response.json({ skipped: true, reason: 'already geocoded, same address' });
@@ -57,49 +57,54 @@ Deno.serve(async (req) => {
       return Response.json({ skipped: true, reason: 'no address or comune' });
     }
 
+    const apiKey = Deno.env.get('GOOGLE_MAPS_API_KEY');
+    if (!apiKey) {
+      console.error('[geocodeQueryAddress] GOOGLE_MAPS_API_KEY not set');
+      return Response.json({ skipped: true, reason: 'no API key' });
+    }
+
     // Ottieni centroide comune per validazione
     const comuneCentroid = await getComuneCentroid(comune, provincia);
 
-    // Geocodifica via Nominatim
+    // Geocodifica via Google Maps
     let geocoded = null;
-    const query = encodeURIComponent(`${indirizzo}, ${comune}, ${provincia || 'Italia'}, Italia`);
-    const nomUrl = `https://nominatim.openstreetmap.org/search?q=${query}&format=json&limit=5&countrycodes=it&addressdetails=1`;
+    const query = encodeURIComponent(`${indirizzo}, ${comune}, Italy`);
+    const gmUrl = `https://maps.googleapis.com/maps/api/geocode/json?address=${query}&key=${apiKey}`;
     try {
-      const res = await fetch(nomUrl, { headers: NOMINATIM_HEADERS, signal: AbortSignal.timeout(8000) });
+      const res = await fetch(gmUrl, { signal: AbortSignal.timeout(8000) });
       const data = await res.json();
-      if (data?.length) {
+      if (data.status === 'OK' && data.results?.length) {
         // Filtra per distanza dal comune
-        let candidates = data;
+        let candidates = data.results;
         if (comuneCentroid) {
-          candidates = data.filter(r => {
-            const d = haversineKm(comuneCentroid.lat, comuneCentroid.lng, parseFloat(r.lat), parseFloat(r.lon));
-            return d < 30; // entro 30km dal centroide comunale
+          candidates = data.results.filter(r => {
+            const loc = r.geometry.location;
+            const d = haversineKm(comuneCentroid.lat, comuneCentroid.lng, loc.lat, loc.lng);
+            return d < 30;
           });
         }
         if (candidates.length) {
           const best = candidates[0];
-          const lt = best.type || 'place';
-          const isComuneFallback = !['building','house','amenity','shop','school','apartments'].includes(lt) &&
-            best.display_name?.toLowerCase().split(',').length <= 3;
-
+          const loc = best.geometry.location;
+          const isComuneFallback = best.types?.includes('locality') && !best.types?.includes('street_address');
           if (!isComuneFallback) {
-            geocoded = { lat: parseFloat(best.lat), lng: parseFloat(best.lon) };
-            console.log('[geocodeQueryAddress] Nominatim OK:', geocoded.lat, geocoded.lng, best.display_name);
+            geocoded = { lat: loc.lat, lng: loc.lng };
+            console.log('[geocodeQueryAddress] Google Maps OK:', geocoded.lat, geocoded.lng, best.formatted_address);
           } else {
-            console.log('[geocodeQueryAddress] Nominatim risultato troppo generico (prob. centroide comune), scartato');
+            console.log('[geocodeQueryAddress] Google Maps risultato troppo generico (prob. centroide comune), scartato');
           }
         }
+      } else {
+        console.log('[geocodeQueryAddress] Google Maps status:', data.status);
       }
     } catch (e) {
-      console.error('[geocodeQueryAddress] Nominatim error:', e.message);
+      console.error('[geocodeQueryAddress] Google Maps error:', e.message);
     }
 
     if (geocoded) {
       await base44.asServiceRole.entities.CadastralQuery.update(entityId, {
         geocoded_lat: geocoded.lat,
         geocoded_lng: geocoded.lng,
-        centroid_lat: geocoded.lat,
-        centroid_lng: geocoded.lng,
       });
       return Response.json({ success: true, geocoded });
     }
@@ -110,8 +115,6 @@ Deno.serve(async (req) => {
       await base44.asServiceRole.entities.CadastralQuery.update(entityId, {
         geocoded_lat: comuneCentroid.lat,
         geocoded_lng: comuneCentroid.lng,
-        centroid_lat: comuneCentroid.lat,
-        centroid_lng: comuneCentroid.lng,
       });
       return Response.json({ success: true, fallback: 'comune_centroid', coords: comuneCentroid });
     }
