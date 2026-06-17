@@ -1,146 +1,158 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { MapPin, Loader2, X } from "lucide-react";
-import { getGoogleMapsKey } from "@/functions/getGoogleMapsKey";
-
-function getApiKey() {
-  // Try Vite env var first, fall back to backend function
-  if (import.meta.env.VITE_GOOGLE_MAPS_API_KEY) {
-    return Promise.resolve(import.meta.env.VITE_GOOGLE_MAPS_API_KEY);
-  }
-  return getGoogleMapsKey({}).then(res => {
-    const data = res?.data || res;
-    return data?.key || null;
-  }).catch(() => null);
-}
+import React, { useState, useRef } from "react";
+import { MapPin } from "lucide-react";
 
 export default function IndirizzoAutocomplete({ onComuneFound }) {
-  const [comuneValue, setComuneValue] = useState("");
-  const [mapAddress, setMapAddress] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const inputRef = useRef(null);
-  const autocompleteRef = useRef(null);
-  const onComuneFoundRef = useRef(onComuneFound);
-  onComuneFoundRef.current = onComuneFound;
+  const [addressQuery, setAddressQuery] = useState("");
+  const [addressSuggestions, setAddressSuggestions] = useState([]);
+  const [mapCoords, setMapCoords] = useState(null);
+  const [comuneTrovato, setComuneTrovato] = useState("");
+  const debounceRef = useRef(null);
 
-  const initAutocomplete = useCallback(() => {
-    if (!inputRef.current) return;
-    if (autocompleteRef.current) {
-      // Already initialized — clean up old listener before re-init
-      if (window.google?.maps?.event) {
-        window.google.maps.event.clearInstanceListeners(autocompleteRef.current);
-      }
-      autocompleteRef.current = null;
+  const handleAddressInput = (val) => {
+    setAddressQuery(val);
+    clearTimeout(debounceRef.current);
+    if (val.length < 3) {
+      setAddressSuggestions([]);
+      return;
     }
-
-    const autocomplete = new window.google.maps.places.Autocomplete(inputRef.current, {
-      componentRestrictions: { country: "it" },
-      types: ["address"],
-      fields: ["address_components", "formatted_address", "geometry"],
-    });
-    autocompleteRef.current = autocomplete;
-
-    autocomplete.addListener("place_changed", () => {
-      const place = autocomplete.getPlace();
-      if (!place?.formatted_address) return;
-
-      const locality =
-        place.address_components?.find(
-          c => c.types.includes("locality") || c.types.includes("administrative_area_level_3")
-        )?.long_name || "";
-
-      setComuneValue(locality);
-      setMapAddress(place.formatted_address);
-
-      if (locality && onComuneFoundRef.current) {
-        onComuneFoundRef.current(locality);
+    debounceRef.current = setTimeout(async () => {
+      try {
+        const res = await fetch(
+          `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(val)}&countrycodes=it&format=json&addressdetails=1&limit=6`,
+          { headers: { "Accept-Language": "it" } }
+        );
+        const data = await res.json();
+        setAddressSuggestions(Array.isArray(data) ? data : []);
+      } catch (_) {
+        setAddressSuggestions([]);
       }
-    });
-
-    setLoading(false);
-  }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    getApiKey().then(key => {
-      if (cancelled || !key) { if (!cancelled) setLoading(false); return; }
-
-      if (!window.google?.maps?.places) {
-        const s = document.createElement("script");
-        s.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&libraries=places&language=it&region=IT`;
-        s.async = true;
-        s.onload = () => { if (!cancelled) initAutocomplete(); };
-        document.head.appendChild(s);
-      } else {
-        initAutocomplete();
-      }
-    });
-
-    return () => {
-      cancelled = true;
-      if (autocompleteRef.current && window.google?.maps?.event) {
-        window.google.maps.event.clearInstanceListeners(autocompleteRef.current);
-        autocompleteRef.current = null;
-      }
-    };
-  }, [initAutocomplete]);
-
-  const handleClear = () => {
-    setComuneValue("");
-    setMapAddress(null);
-    if (inputRef.current) inputRef.current.value = "";
-    // Re-initialize autocomplete after clear
-    if (window.google?.maps?.places && inputRef.current) {
-      initAutocomplete();
-    }
+    }, 400);
   };
 
+  const handleSelectAddress = (item) => {
+    setAddressQuery(item.display_name);
+    setAddressSuggestions([]);
+
+    const comune =
+      item.address?.city ||
+      item.address?.town ||
+      item.address?.village ||
+      item.address?.municipality ||
+      "";
+
+    if (comune) {
+      setComuneTrovato(comune);
+      onComuneFound?.(comune);
+    }
+    setMapCoords({ lat: parseFloat(item.lat), lon: parseFloat(item.lon) });
+  };
+
+  const handleClear = () => {
+    setAddressQuery("");
+    setAddressSuggestions([]);
+    setMapCoords(null);
+    setComuneTrovato("");
+  };
+
+  const bbox =
+    mapCoords
+      ? `${mapCoords.lon - 0.003},${mapCoords.lat - 0.003},${mapCoords.lon + 0.003},${mapCoords.lat + 0.003}`
+      : "";
+
   return (
-    <div className="space-y-2">
-      <div className="space-y-1">
-        <div className="flex items-center gap-1.5">
+    <div className="space-y-2 mb-4">
+      <div style={{ position: "relative" }}>
+        <div className="flex items-center gap-1.5 mb-1">
           <MapPin className="w-3.5 h-3.5 text-primary" />
-          <Label className="text-xs">Cerca per indirizzo <span className="text-muted-foreground">(opzionale)</span></Label>
+          <label className="text-xs font-medium" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
+            Cerca per indirizzo <span style={{ color: "#888", fontSize: "0.85em" }}>(opzionale)</span>
+          </label>
         </div>
-        <div className="relative">
-          <Input
-            ref={inputRef}
-            type="text"
-            placeholder="Es: Via Roma 15, Torino"
-            className="pr-8 text-sm"
-            disabled={loading}
-          />
-          {loading && (
-            <div className="absolute right-3 top-1/2 -translate-y-1/2">
-              <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
-            </div>
-          )}
-          {!loading && mapAddress && (
-            <button
-              type="button"
-              onClick={handleClear}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-            >
-              <X className="w-3.5 h-3.5" />
-            </button>
-          )}
-        </div>
-        {comuneValue && (
-          <p className="text-[10px] text-emerald-700 font-semibold" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
-            Comune rilevato: {comuneValue}
-          </p>
+
+        <input
+          type="text"
+          value={addressQuery}
+          onChange={(e) => handleAddressInput(e.target.value)}
+          placeholder="Es: Via Roma 15, Torino"
+          style={{
+            width: "100%",
+            padding: "10px 12px",
+            border: "1px solid #C4BAA8",
+            borderRadius: "6px",
+            fontFamily: "'IBM Plex Mono', monospace",
+            fontSize: "0.875rem",
+            background: "#fff",
+            color: "#1C1A17",
+            outline: "none",
+          }}
+          onFocus={(e) => {
+            e.target.style.borderColor = "#1A3A6B";
+            e.target.style.boxShadow = "0 0 0 2px rgba(26,58,107,0.15)";
+          }}
+          onBlur={(e) => {
+            e.target.style.borderColor = "#C4BAA8";
+            e.target.style.boxShadow = "none";
+          }}
+        />
+
+        {addressSuggestions.length > 0 && (
+          <ul
+            style={{
+              position: "absolute",
+              zIndex: 1000,
+              background: "#fff",
+              border: "1px solid #C4BAA8",
+              borderRadius: "6px",
+              width: "100%",
+              maxHeight: "200px",
+              overflowY: "auto",
+              margin: 0,
+              marginTop: "2px",
+              padding: 0,
+              listStyle: "none",
+              boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
+            }}
+          >
+            {addressSuggestions.map((s, i) => (
+              <li
+                key={i}
+                onClick={() => handleSelectAddress(s)}
+                style={{
+                  padding: "10px 12px",
+                  cursor: "pointer",
+                  borderBottom: i < addressSuggestions.length - 1 ? "1px solid #f0f0f0" : "none",
+                  fontSize: "0.875em",
+                  fontFamily: "'IBM Plex Mono', monospace",
+                  color: "#1C1A17",
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = "#f4efe6"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = "#fff"; }}
+              >
+                <span style={{ fontSize: "0.85em" }}>{s.display_name}</span>
+              </li>
+            ))}
+          </ul>
         )}
       </div>
 
-      {mapAddress && (
+      {comuneTrovato && (
+        <p className="text-[10px] text-emerald-700 font-semibold" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
+          Comune rilevato: {comuneTrovato}
+        </p>
+      )}
+
+      {mapCoords && (
         <iframe
-          width="100%"
-          height="220"
-          style={{ borderRadius: "8px", border: "none", marginTop: "8px" }}
-          src={`https://maps.google.com/maps?q=${encodeURIComponent(mapAddress)}&z=17&output=embed`}
           title="Mappa dell'indirizzo"
+          width="100%"
+          height="200"
+          style={{
+            borderRadius: "8px",
+            border: "none",
+            marginTop: "8px",
+            display: "block",
+          }}
+          src={`https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik&marker=${mapCoords.lat},${mapCoords.lon}`}
           allowFullScreen
           loading="lazy"
         />
