@@ -95,6 +95,7 @@ export default function CadastralSearchForm({ onSubmit, isLoading, submitLabel =
   const [superficieMq, setSuperficieMq] = useState("");
   const [totalAcquisitionPrice, setTotalAcquisitionPrice] = useState("");
   const [prezzoBaseAsta, setPrezzoBaseAsta] = useState("");
+  const [batchPertinenze, setBatchPertinenze] = useState(null); // null=unasked, true=yes, false=no
 
   // Financial fields
   const [prezzoAcquisto, setPrezzoAcquisto] = useState("");
@@ -109,11 +110,12 @@ export default function CadastralSearchForm({ onSubmit, isLoading, submitLabel =
   const finDataFilled = !finDataRequired || (prezzoAcquisto && superficie);
 
   const totalUnits = parcels.reduce((sum, p) => sum + p.subs.length, 0);
-  const pricing = getBulkPricing(totalUnits, BETA_MODE);
+  const effectiveUnits = batchPertinenze === true ? 1 : totalUnits;
+  const pricing = getBulkPricing(effectiveUnits, BETA_MODE);
   const isBatch = totalUnits > 1;
   const hasSufficientBalance = userBalance === null || userBalance >= pricing.totalPrice;
 
-  const isValid = selectedComune && parcels.every(p => p.foglio && p.particella) && finalita && finDataFilled && totalUnits <= MAX_UNITS;
+  const isValid = selectedComune && parcels.every(p => p.foglio && p.particella) && finalita && finDataFilled && totalUnits <= MAX_UNITS && (!isBatch || batchPertinenze !== null);
 
   // ── Parcel helpers ──────────────────────────────────────────────────────────
   const updateParcel = (pid, field, value) =>
@@ -276,6 +278,7 @@ export default function CadastralSearchForm({ onSubmit, isLoading, submitLabel =
         bulkPricing: pricing,
         total_acquisition_price: parseFloat(totalAcquisitionPrice) || undefined,
         _hasPertinenze: visuraDati?._hasPertinenze || false,
+        _batchPertinenze: batchPertinenze === true,
       });
     }
   };
@@ -580,11 +583,11 @@ export default function CadastralSearchForm({ onSubmit, isLoading, submitLabel =
             <div className="flex-1">
               <div className="flex items-center gap-2 mb-2">
                 <p className="text-sm font-bold" style={{ color: hasSufficientBalance ? '#065f46' : '#92400e', fontFamily: "'IBM Plex Mono', monospace" }}>
-                  Analisi batch — {totalUnits} unità
+                  Analisi batch — {totalUnits} unità{batchPertinenze === true ? ' (1 report — pertinenze)' : ''}
                 </p>
                 {pricing.discount > 0 && (
                   <span className="text-[10px] font-bold px-1.5 py-0.5 rounded" style={{ background: '#1A3A6B', color: '#fff', fontFamily: "'IBM Plex Mono', monospace" }}>
-                    {discountLabel(totalUnits)}
+                    {discountLabel(effectiveUnits)}
                   </span>
                 )}
               </div>
@@ -597,7 +600,13 @@ export default function CadastralSearchForm({ onSubmit, isLoading, submitLabel =
                   <span>Totale:</span>
                   <span className="font-bold text-sm">€{pricing.totalPrice.toFixed(2)}</span>
                 </div>
-                {pricing.savings > 0 && (
+                {batchPertinenze === true && totalUnits > 1 && (
+                  <div className="flex justify-between text-emerald-700 italic">
+                    <span>Risparmio pertinenze:</span>
+                    <span>€{(getBulkPricing(totalUnits, BETA_MODE).totalPrice - pricing.totalPrice).toFixed(2)} (1 solo report)</span>
+                  </div>
+                )}
+                {pricing.savings > 0 && batchPertinenze !== true && (
                   <div className="flex justify-between opacity-80">
                     <span>Risparmio:</span>
                     <span>€{pricing.savings.toFixed(2)} vs ricerche singole</span>
@@ -638,6 +647,46 @@ export default function CadastralSearchForm({ onSubmit, isLoading, submitLabel =
         </div>
       )}
 
+      {/* Pertinenze question — batch only */}
+      {isBatch && (
+        <div className="rounded-lg border-2 border-primary bg-blue-50/30 p-4 space-y-3">
+          <p className="text-sm font-bold" style={{ color: '#1A3A6B', fontFamily: "'IBM Plex Mono', monospace" }}>
+            Alcune di queste unità sono pertinenze (garage, cantina, posto auto, ecc.) di un'unità principale inclusa in questa analisi?
+          </p>
+          <p className="text-[10px] text-muted-foreground" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
+            Se sì, l'analisi costa solo 1 report (l'unità principale) anziché {totalUnits}.
+          </p>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setBatchPertinenze(true)}
+              className={`flex-1 px-4 py-2 text-xs font-bold uppercase tracking-wide rounded border-2 transition-all ${
+                batchPertinenze === true
+                  ? 'border-emerald-600 bg-emerald-50 text-emerald-800'
+                  : 'border-border bg-white text-muted-foreground hover:border-emerald-300'
+              }`}
+              style={{ fontFamily: "'IBM Plex Mono', monospace" }}
+            >
+              {batchPertinenze === true && <CheckCircle2 className="w-3.5 h-3.5 inline mr-1" />}
+              Sì — 1 solo report
+            </button>
+            <button
+              type="button"
+              onClick={() => setBatchPertinenze(false)}
+              className={`flex-1 px-4 py-2 text-xs font-bold uppercase tracking-wide rounded border-2 transition-all ${
+                batchPertinenze === false
+                  ? 'border-primary bg-blue-100 text-primary'
+                  : 'border-border bg-white text-muted-foreground hover:border-primary/50'
+              }`}
+              style={{ fontFamily: "'IBM Plex Mono', monospace" }}
+            >
+              {batchPertinenze === false && <CheckCircle2 className="w-3.5 h-3.5 inline mr-1" />}
+              No — {totalUnits} report
+            </button>
+          </div>
+        </div>
+      )}
+
       <Button
         type="submit"
         disabled={!isValid || isLoading || (isBatch && !hasSufficientBalance)}
@@ -647,12 +696,14 @@ export default function CadastralSearchForm({ onSubmit, isLoading, submitLabel =
       >
         {isLoading ? (
           <><Loader2 className="w-4 h-4 animate-spin" /> Analisi in corso... (30–60s per unità)</>
-        ) : isBatch ? `Conferma e Analizza ${totalUnits} unità →` : submitLabel}
+        ) : isBatch ? `Conferma e Analizza ${batchPertinenze === true ? '1 report' : `${totalUnits} unità`} →` : submitLabel}
       </Button>
 
       {!isValid && (
         <p className="text-xs text-center" style={{ color: '#7A7268', fontFamily: "'IBM Plex Mono', monospace" }}>
-          {finDataRequired && !(prezzoAcquisto && superficie)
+          {isBatch && batchPertinenze === null
+            ? 'Rispondi alla domanda sulle pertinenze per procedere'
+            : finDataRequired && !(prezzoAcquisto && superficie)
             ? '* Per finalità "Investimento" inserisci prezzo di acquisto e superficie'
             : parcels.some(p => !p.foglio || !p.particella)
             ? "Inserisci foglio e particella per ogni immobile"

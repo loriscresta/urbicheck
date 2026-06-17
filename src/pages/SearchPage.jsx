@@ -411,8 +411,11 @@ export default function SearchPage() {
 
     // ── Charge batch using tier system (same logic as chargeReport) ──────
     // Pertinenze (C/2, C/6, C/7) NON consumano report/crediti — solo unità residenziali
-    const billableQueryIds = queryIds.filter((qid, i) => !units[i]?.is_pertinenza);
-    const billableCount = billableQueryIds.length;
+    // batchPertinenze flag: user answered "yes" on pertinenze question → charge only 1 report
+    const billableQueryIds = formData._batchPertinenze
+      ? queryIds.slice(0, 1)
+      : queryIds.filter((qid, i) => !units[i]?.is_pertinenza);
+    const billableCount = formData._batchPertinenze ? 1 : billableQueryIds.length;
     if (billableCount > 0) {
       try {
         const user = await base44.auth.me();
@@ -477,7 +480,9 @@ export default function SearchPage() {
           user_email: user.email,
           type: 'query_charge',
           amount: -totalCost,
-          description: `Batch ${billableCount} unità${pertinenzaUnits.length > 0 ? ` (+${pertinenzaUnits.length} pertinenze)` : ''} — ${sharedCadastral.comune} (${freeIncrements} gratis, ${launchIncrements} a €${LAUNCH_PRICE.toFixed(2)}, ${billableCount - freeIncrements - launchIncrements} a €${STANDARD_PRICE.toFixed(2)})`,
+          description: formData._batchPertinenze
+            ? `1 report (pertinenze incluse) — ${sharedCadastral.comune} — ${units.length} unità totali (${freeIncrements} gratis, ${launchIncrements} a €${LAUNCH_PRICE.toFixed(2)}, ${billableCount - freeIncrements - launchIncrements} a €${STANDARD_PRICE.toFixed(2)})`
+            : `Batch ${billableCount} unità${pertinenzaUnits.length > 0 ? ` (+${pertinenzaUnits.length} pertinenze)` : ''} — ${sharedCadastral.comune} (${freeIncrements} gratis, ${launchIncrements} a €${LAUNCH_PRICE.toFixed(2)}, ${billableCount - freeIncrements - launchIncrements} a €${STANDARD_PRICE.toFixed(2)})`,
         });
 
         await Promise.all([
