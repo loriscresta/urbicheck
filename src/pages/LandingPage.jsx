@@ -103,9 +103,14 @@ export default function LandingPage() {
       <section style={{ background: P, padding: "5rem 1.5rem 6rem", borderBottom: `4px solid ${AC}` }}>
         <div className="max-w-4xl mx-auto">
           <motion.div initial={{ opacity: 0, y: 28 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.55 }}>
-            <div className="inline-flex items-center gap-2 mb-6 px-3 py-1.5" style={{ border: `1px solid ${AC}50`, background: `${AC}18` }}>
-              <span style={{ width: 7, height: 7, borderRadius: "50%", background: AC, display: "inline-block" }} />
-              <span style={{ color: "rgba(244,239,230,0.9)", fontSize: "0.62rem", fontWeight: 700, letterSpacing: "2px", textTransform: "uppercase" }}>Beta · Piemonte e Liguria disponibili</span>
+            <div className="inline-flex flex-col gap-1 mb-6">
+              <div className="inline-flex items-center gap-2 px-3 py-1.5" style={{ border: `1px solid ${AC}50`, background: `${AC}18` }}>
+                <span style={{ width: 7, height: 7, borderRadius: "50%", background: AC, display: "inline-block" }} />
+                <span style={{ color: "rgba(244,239,230,0.9)", fontSize: "0.62rem", fontWeight: 700, letterSpacing: "2px", textTransform: "uppercase" }}>BETA — Piemonte, Liguria e Lombardia disponibili</span>
+              </div>
+              <a href="/waitlist" style={{ color: AC, fontSize: "0.6rem", fontWeight: 600, letterSpacing: "1px", textDecoration: "none", paddingLeft: "1rem" }} className="hover:underline">
+                Iscriviti alla waiting list per altre regioni →
+              </a>
             </div>
 
             <h1 style={{ color: W, fontFamily: MONO, fontWeight: 700, fontSize: "clamp(2rem, 5.5vw, 3.75rem)", lineHeight: 1.1, letterSpacing: "-0.02em", marginBottom: "1.5rem" }}>
