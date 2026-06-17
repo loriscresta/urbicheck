@@ -6,10 +6,6 @@ Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
 
-    // Auth: require authenticated user (called server-side from stripeCheckout or stripe-webhook)
-    const user = await base44.auth.me();
-    if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
-
     const payload = await req.json();
     const { user_email, user_name, amount_purchased, new_balance } = payload;
 
