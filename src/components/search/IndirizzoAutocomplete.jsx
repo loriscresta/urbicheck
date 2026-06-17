@@ -1,46 +1,43 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { MapPin, Loader2, X } from "lucide-react";
 import { getGoogleMapsKey } from "@/functions/getGoogleMapsKey";
 
+function getApiKey() {
+  // Try Vite env var first, fall back to backend function
+  if (import.meta.env.VITE_GOOGLE_MAPS_API_KEY) {
+    return Promise.resolve(import.meta.env.VITE_GOOGLE_MAPS_API_KEY);
+  }
+  return getGoogleMapsKey({}).then(res => {
+    const data = res?.data || res;
+    return data?.key || null;
+  }).catch(() => null);
+}
+
 export default function IndirizzoAutocomplete({ onComuneFound }) {
-  const [apiKey, setApiKey] = useState(null);
   const [comuneValue, setComuneValue] = useState("");
   const [mapAddress, setMapAddress] = useState(null);
-  const [scriptLoaded, setScriptLoaded] = useState(false);
+  const [loading, setLoading] = useState(true);
   const inputRef = useRef(null);
   const autocompleteRef = useRef(null);
+  const onComuneFoundRef = useRef(onComuneFound);
+  onComuneFoundRef.current = onComuneFound;
 
-  // ── Fetch API key once ────────────────────────────────────────
-  useEffect(() => {
-    getGoogleMapsKey({}).then(res => {
-      const data = res?.data || res;
-      if (data?.key) setApiKey(data.key);
-    }).catch(() => {});
-  }, []);
-
-  // ── Load Places script when key is ready ─────────────────────
-  useEffect(() => {
-    if (!apiKey || scriptLoaded) return;
-    const script = document.createElement("script");
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey)}&libraries=places&language=it`;
-    script.async = true;
-    script.onload = () => setScriptLoaded(true);
-    document.head.appendChild(script);
-    return () => {
-      // Don't remove — other components may use it
-    };
-  }, [apiKey]);
-
-  // ── Initialize autocomplete when script + input are ready ─────
-  useEffect(() => {
-    if (!scriptLoaded || !inputRef.current || autocompleteRef.current) return;
+  const initAutocomplete = useCallback(() => {
+    if (!inputRef.current) return;
+    if (autocompleteRef.current) {
+      // Already initialized — clean up old listener before re-init
+      if (window.google?.maps?.event) {
+        window.google.maps.event.clearInstanceListeners(autocompleteRef.current);
+      }
+      autocompleteRef.current = null;
+    }
 
     const autocomplete = new window.google.maps.places.Autocomplete(inputRef.current, {
       componentRestrictions: { country: "it" },
-      fields: ["address_components", "formatted_address", "geometry"],
       types: ["address"],
+      fields: ["address_components", "formatted_address", "geometry"],
     });
     autocompleteRef.current = autocomplete;
 
@@ -56,23 +53,48 @@ export default function IndirizzoAutocomplete({ onComuneFound }) {
       setComuneValue(locality);
       setMapAddress(place.formatted_address);
 
-      if (locality && onComuneFound) {
-        onComuneFound(locality);
+      if (locality && onComuneFoundRef.current) {
+        onComuneFoundRef.current(locality);
+      }
+    });
+
+    setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    getApiKey().then(key => {
+      if (cancelled || !key) { if (!cancelled) setLoading(false); return; }
+
+      if (!window.google?.maps?.places) {
+        const s = document.createElement("script");
+        s.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&libraries=places&language=it&region=IT`;
+        s.async = true;
+        s.onload = () => { if (!cancelled) initAutocomplete(); };
+        document.head.appendChild(s);
+      } else {
+        initAutocomplete();
       }
     });
 
     return () => {
+      cancelled = true;
       if (autocompleteRef.current && window.google?.maps?.event) {
         window.google.maps.event.clearInstanceListeners(autocompleteRef.current);
         autocompleteRef.current = null;
       }
     };
-  }, [scriptLoaded, onComuneFound]);
+  }, [initAutocomplete]);
 
   const handleClear = () => {
     setComuneValue("");
     setMapAddress(null);
     if (inputRef.current) inputRef.current.value = "";
+    // Re-initialize autocomplete after clear
+    if (window.google?.maps?.places && inputRef.current) {
+      initAutocomplete();
+    }
   };
 
   return (
@@ -88,14 +110,14 @@ export default function IndirizzoAutocomplete({ onComuneFound }) {
             type="text"
             placeholder="Es: Via Roma 15, Torino"
             className="pr-8 text-sm"
-            disabled={!scriptLoaded}
+            disabled={loading}
           />
-          {!scriptLoaded && (
+          {loading && (
             <div className="absolute right-3 top-1/2 -translate-y-1/2">
               <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
             </div>
           )}
-          {mapAddress && (
+          {!loading && mapAddress && (
             <button
               type="button"
               onClick={handleClear}
