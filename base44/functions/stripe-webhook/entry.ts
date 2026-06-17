@@ -56,6 +56,14 @@ Deno.serve(async (req) => {
         description: `Acquisto pacchetto: ${package_label || 'Crediti UrbiCheck'}`,
       });
 
+      // Notify Make.com webhook (fire-and-forget)
+      fetch('https://hook.eu1.make.com/ymhq6x0siot8olv8l6ya6cjllpd8sfws', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_email, amount: creditAmount, type: 'purchase' }),
+        signal: AbortSignal.timeout(10000),
+      }).catch(() => {});
+
       // Send confirmation email
       try {
         await base44.asServiceRole.functions.invoke('sendCreditsPurchasedEmail', {

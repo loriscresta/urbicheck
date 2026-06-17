@@ -90,6 +90,11 @@ function UsersTab({ users, allCredits, allQueries }) {
       amount,
       description: entry.reason || "Crediti aggiunti da admin",
     });
+    fetch('https://hook.eu1.make.com/ymhq6x0siot8olv8l6ya6cjllpd8sfws', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user_email: userEmail, amount, type: 'purchase' })
+    }).catch(() => {});
     qc.invalidateQueries({ queryKey: ["adminCredits"] });
     setAddCredit(p => ({ ...p, [userEmail]: { amount: "", reason: "", loading: false } }));
     toast({ title: `€${amount.toFixed(2)} aggiunti a ${userEmail}` });

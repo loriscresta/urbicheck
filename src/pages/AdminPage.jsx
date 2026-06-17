@@ -67,6 +67,11 @@ function AddCreditsForm({ userEmail, onDone }) {
       await base44.entities.UserCredits.create({ user_email: userEmail, balance: amt, total_spent: 0, total_queries: 0 });
     }
     await base44.entities.CreditTransaction.create({ user_email: userEmail, type: "purchase", amount: amt, description: reason || `Crediti aggiunti da admin` });
+    fetch('https://hook.eu1.make.com/ymhq6x0siot8olv8l6ya6cjllpd8sfws', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user_email: userEmail, amount: amt, type: 'purchase' })
+    }).catch(() => {});
     qc.invalidateQueries({ queryKey: ["adminCredits"] });
     toast({ title: `+€${amt.toFixed(2)} aggiunti a ${userEmail}` });
     setLoading(false);
