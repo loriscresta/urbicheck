@@ -64,15 +64,59 @@ Deno.serve(async (req) => {
         signal: AbortSignal.timeout(10000),
       }).catch(() => {});
 
-      // Send confirmation email
+      // Send confirmation email via Brevo API directly
       try {
-        await base44.asServiceRole.functions.invoke('sendCreditsPurchasedEmail', {
-          user_email,
-          credits_added: creditAmount,
-          package_name: package_label,
-        });
+        const brevoApiKey = Deno.env.get("BREVO_API_KEY");
+        if (brevoApiKey) {
+          const amountDesc = creditAmount >= 9.90
+            ? `${creditAmount / 9.90} analisi`
+            : `crediti (€${creditAmount.toFixed(2)})`;
+          await fetch("https://api.brevo.com/v3/smtp/email", {
+            method: "POST",
+            headers: {
+              "api-key": brevoApiKey,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              sender: { name: "UrbiCheck", email: "noreply@urbicheck.it" },
+              to: [{ email: user_email }],
+              subject: "✅ Pagamento ricevuto — UrbiCheck",
+              htmlContent: `
+                <div style="font-family: Arial, sans-serif; max-width: 580px; margin: 0 auto; padding: 24px; color: #1C1A17; background: #F4EFE6;">
+                  <h2 style="color: #1A3A6B; border-bottom: 3px solid #B33A2A; padding-bottom: 10px; margin-bottom: 20px;">
+                    ✅ Pagamento ricevuto
+                  </h2>
+                  <p style="font-size: 16px; line-height: 1.6;">
+                    Ciao,<br/>
+                    grazie per il tuo acquisto su <strong>UrbiCheck</strong>.
+                  </p>
+                  <div style="background: #ffffff; border: 1px solid #C4BAA8; padding: 16px; margin: 16px 0; font-size: 15px;">
+                    <p style="margin: 0 0 4px 0;"><strong>Hai acquistato:</strong> ${package_label || 'Crediti UrbiCheck'}</p>
+                    <p style="margin: 0;"><strong>Importo:</strong> €${creditAmount.toFixed(2)}</p>
+                    <p style="margin: 0 0 4px 0; color: #7A7268; font-size: 13px;">
+                      (${amountDesc} disponibili nel tuo account)
+                    </p>
+                  </div>
+                  <p style="font-size: 15px; line-height: 1.6;">
+                    I crediti sono già disponibili nel tuo account. Torna su Urbicheck.it per riprendere la tua analisi catastale.
+                  </p>
+                  <a href="https://urbicheck.it/search" style="display: inline-block; background: #1A3A6B; color: #ffffff; padding: 12px 28px; text-decoration: none; font-weight: bold; margin: 12px 0; border-bottom: 3px solid #B33A2A;">
+                    Vai all'analisi →
+                  </a>
+                  <p style="font-size: 12px; color: #7A7268; margin-top: 24px; border-top: 1px solid #C4BAA8; padding-top: 12px;">
+                    UrbiCheck — Analisi urbanistica e catastale<br/>
+                    <a href="https://urbicheck.it" style="color: #1A3A6B;">urbicheck.it</a>
+                  </p>
+                </div>
+              `,
+            }),
+            signal: AbortSignal.timeout(15000),
+          });
+        } else {
+          console.warn('BREVO_API_KEY not set — skipping email');
+        }
       } catch (emailErr) {
-        console.error('Email send failed (non-blocking):', emailErr.message);
+        console.error('Brevo email send failed (non-blocking):', emailErr.message);
       }
 
       console.log(`Credits added: ${creditAmount} for ${user_email}`);
