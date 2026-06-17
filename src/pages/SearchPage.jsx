@@ -26,8 +26,21 @@ export default function SearchPage() {
   const [paymentError, setPaymentError] = useState(null);
   const [publicPreview, setPublicPreview] = useState(null); // anteprima per utenti non loggati
   const [pendingFormData, setPendingFormData] = useState(null);
+  const [pendingBatchData, setPendingBatchData] = useState(null); // salvato prima del redirect a /credits
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+
+  // Recupera batch salvato prima del redirect a /credits (dopo ricarica)
+  useEffect(() => {
+    try {
+      const saved = sessionStorage.getItem('urbicheck_pending_batch');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        sessionStorage.removeItem('urbicheck_pending_batch');
+        setPendingBatchData(parsed);
+      }
+    } catch (_) {}
+  }, []);
 
   // Recupera la ricerca salvata prima del login (utente appena autenticato)
   useEffect(() => {
@@ -274,6 +287,12 @@ export default function SearchPage() {
       ? getBulkPricingBeta(1).totalPrice
       : (bulkPricing?.totalPrice || getBulkPricingBeta(units.length).totalPrice);
     if ((credits?.balance || 0) < effectiveCost) {
+      // Save batch state before redirecting to credits
+      try {
+        const serializable = { ...formData };
+        delete serializable.planimetriaFile; // File object can't be serialized
+        sessionStorage.setItem('urbicheck_pending_batch', JSON.stringify(serializable));
+      } catch (_) {}
       navigate('/credits');
       setIsLoading(false);
       return;
@@ -609,6 +628,24 @@ export default function SearchPage() {
         </div>
       ) : (
         <>
+          {pendingBatchData && (
+            <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}
+              className="mb-5 p-5 rounded-lg border-2 border-emerald-500 bg-emerald-50 space-y-3">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+                <p className="text-sm font-bold text-emerald-800" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
+                  Acquisto completato! Riprendi la tua analisi:
+                </p>
+              </div>
+              <div className="text-xs text-emerald-700 space-y-1" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
+                <p><strong>{pendingBatchData.units?.length || 1} unità</strong> — {pendingBatchData.comune}</p>
+                <p>Prezzo totale: <strong>€{(pendingBatchData.bulkPricing?.totalPrice || pendingBatchData.units?.length * 2.99).toFixed(2)}</strong></p>
+              </div>
+              <p className="text-[10px] text-emerald-600 italic">
+                I dati sono stati pre-compilati. Verifica e clicca "Conferma e Analizza" per procedere.
+              </p>
+            </motion.div>
+          )}
           <div className="bg-white p-6 lg:p-8" style={{ border: '1px solid #C4BAA8' }}>
             <ErrorBoundary>
               <CadastralSearchForm
@@ -616,6 +653,7 @@ export default function SearchPage() {
                 isLoading={isLoading}
                 submitLabel={isAuthenticated ? "Analizza →" : "Cerca particella — gratis →"}
                 userBalance={credits?.balance ?? null}
+                initialBatchData={pendingBatchData}
               />
             </ErrorBoundary>
           </div>

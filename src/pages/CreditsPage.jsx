@@ -90,9 +90,15 @@ export default function CreditsPage() {
 
     setLoadingPkg(pkg.id);
     try {
+      // If user came from a pending batch analysis, redirect back to search
+      const hasPendingBatch = !!sessionStorage.getItem('urbicheck_pending_batch');
+      const successUrl = hasPendingBatch
+        ? `${window.location.origin}/search`
+        : `${window.location.origin}/credits?success=1`;
+
       const res = await stripeCheckout({
         price_id: pkg.price_id,
-        success_url: `${window.location.origin}/credits?success=1`,
+        success_url: successUrl,
         cancel_url: `${window.location.origin}/credits?cancelled=1`,
       });
       if (res?.data?.url) {

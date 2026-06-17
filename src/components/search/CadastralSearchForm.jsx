@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -82,7 +82,7 @@ function newParcel(foglio = "", particella = "") {
   return { id: nextId(), foglio, particella, sezione: "", indirizzo: "", subs: [{ id: nextId(), value: "" }] };
 }
 
-export default function CadastralSearchForm({ onSubmit, isLoading, submitLabel = "Analizza →", userBalance = null }) {
+export default function CadastralSearchForm({ onSubmit, isLoading, submitLabel = "Analizza →", userBalance = null, initialBatchData = null }) {
   const [selectedComune, setSelectedComune] = useState(null);
   const [parcels, setParcels] = useState([newParcel()]);
   const [finalita, setFinalita] = useState("");
@@ -103,6 +103,58 @@ export default function CadastralSearchForm({ onSubmit, isLoading, submitLabel =
   const [statoConservativo, setStatoConservativo] = useState("buono");
   const [destinazioneObiettivo, setDestinazioneObiettivo] = useState("");
   const [speseAccessorie, setSpeseAccessorie] = useState("10");
+
+  // ── Restore batch state after credit purchase ─────────────────────────────
+  useEffect(() => {
+    if (!initialBatchData) return;
+    const d = initialBatchData;
+
+    // Reconstruct comune
+    if (d.comune_id) {
+      setSelectedComune({
+        id: d.comune_id,
+        nome: d.comune || '',
+        provincia: d.provincia || '',
+        regione: d.regione || '',
+        sigla_provincia: d.sigla_provincia || '',
+        piano_tipo: d.piano_tipo || '',
+      });
+    }
+
+    // Reconstruct parcels from units
+    if (d.units?.length) {
+      const parcelMap = new Map();
+      for (const u of d.units) {
+        const key = `${u.foglio || ''}|${u.particella || ''}`;
+        if (!parcelMap.has(key)) {
+          parcelMap.set(key, {
+            id: nextId(),
+            foglio: u.foglio || '',
+            particella: u.particella || '',
+            sezione: u.sezione_catastale || '',
+            indirizzo: u.indirizzo_immobile || '',
+            subs: [],
+          });
+        }
+        parcelMap.get(key).subs.push({ id: nextId(), value: u.subalterno || '' });
+      }
+      const reconstructed = [...parcelMap.values()].map(p => ({
+        ...p,
+        subs: p.subs.length ? p.subs : [{ id: nextId(), value: '' }],
+      }));
+      if (reconstructed.length) setParcels(reconstructed);
+    }
+
+    if (d.finalita) setFinalita(d.finalita);
+    if (d.prezzo_acquisto) setPrezzoAcquisto(d.prezzo_acquisto);
+    if (d.superficie) setSuperficie(d.superficie);
+    if (d.stato_conservativo) setStatoConservativo(d.stato_conservativo);
+    if (d.destinazione_obiettivo) setDestinazioneObiettivo(d.destinazione_obiettivo);
+    if (d.spese_accessorie) setSpeseAccessorie(d.spese_accessorie);
+    if (d._batchPertinenze !== undefined) setBatchPertinenze(d._batchPertinenze);
+    if (d.total_acquisition_price) setTotalAcquisitionPrice(String(d.total_acquisition_price));
+    if (d.superficie_manuale) setSuperficieMq(String(d.superficie_manuale));
+  }, [initialBatchData]);
 
   const showFinancialSection = FIN_FINALITA.includes(finalita);
   const isInvestimento = finalita === "investimento";
