@@ -9,6 +9,7 @@ import { calculatePlanimetriaArea } from "@/functions/calculatePlanimetriaArea";
 import ComuneAutocomplete from "@/components/search/ComuneAutocomplete";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import VisuraUploader from "@/components/search/VisuraUploader";
+import IndirizzoAutocomplete from "@/components/search/IndirizzoAutocomplete";
 
 const FINALITA = [
   { value: "acquisto_privato", label: "Acquisto privato" },
@@ -356,6 +357,15 @@ export default function CadastralSearchForm({ onSubmit, isLoading, submitLabel =
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6" data-search-form>
+      {/* Cerca per indirizzo */}
+      <IndirizzoAutocomplete
+        onComuneFound={(comuneName) => {
+          base44.entities.ComuneItalia.filter({ nome: comuneName }, "-created_date", 1).then(results => {
+            if (results[0]) setSelectedComune(results[0]);
+          }).catch(() => {});
+        }}
+      />
+
       {/* Comune */}
       <ComuneAutocomplete selectedComune={selectedComune} onSelect={setSelectedComune} required />
 
