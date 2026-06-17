@@ -82,7 +82,7 @@ function newParcel(foglio = "", particella = "") {
   return { id: nextId(), foglio, particella, sezione: "", indirizzo: "", subs: [{ id: nextId(), value: "" }] };
 }
 
-export default function CadastralSearchForm({ onSubmit, isLoading, submitLabel = "Analizza →", userBalance = null, initialBatchData = null }) {
+export default function CadastralSearchForm({ onSubmit, isLoading, submitLabel = "Analizza →", userBalance = null, initialBatchData = null, prefillData = null }) {
   const [selectedComune, setSelectedComune] = useState(null);
   const [parcels, setParcels] = useState([newParcel()]);
   const [finalita, setFinalita] = useState("");
@@ -96,6 +96,7 @@ export default function CadastralSearchForm({ onSubmit, isLoading, submitLabel =
   const [totalAcquisitionPrice, setTotalAcquisitionPrice] = useState("");
   const [prezzoBaseAsta, setPrezzoBaseAsta] = useState("");
   const [batchPertinenze, setBatchPertinenze] = useState(null); // null=unasked, true=yes, false=no
+  const [accordionOpen, setAccordionOpen] = useState(false);
 
   // Financial fields
   const [prezzoAcquisto, setPrezzoAcquisto] = useState("");
@@ -155,6 +156,24 @@ export default function CadastralSearchForm({ onSubmit, isLoading, submitLabel =
     if (d.total_acquisition_price) setTotalAcquisitionPrice(String(d.total_acquisition_price));
     if (d.superficie_manuale) setSuperficieMq(String(d.superficie_manuale));
   }, [initialBatchData]);
+
+  // ── Pre-fill from example button ──────────────────────────────────────────
+  useEffect(() => {
+    if (!prefillData) return;
+    if (prefillData.comune) {
+      base44.entities.ComuneItalia.filter({ nome: prefillData.comune }, "-created_date", 1).then(results => {
+        if (results[0]) setSelectedComune(results[0]);
+      }).catch(() => {});
+    }
+    if (prefillData.foglio) {
+      setParcels([{ ...newParcel(prefillData.foglio, prefillData.particella || ""), sezione: prefillData.sezione || "" }]);
+    }
+    if (prefillData.finalita) setFinalita(prefillData.finalita);
+    setTimeout(() => {
+      const el = document.querySelector('[data-search-form]');
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 150);
+  }, [prefillData]);
 
   const showFinancialSection = FIN_FINALITA.includes(finalita);
   const isInvestimento = finalita === "investimento";
@@ -336,233 +355,37 @@ export default function CadastralSearchForm({ onSubmit, isLoading, submitLabel =
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
-      {/* Visura uploader */}
-      <VisuraUploader onDataExtracted={handleVisuraData} />
-      {prezzoBaseAsta && (
-        <div className="flex items-center gap-2 px-4 py-2.5 border border-emerald-300 bg-emerald-50 text-xs" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
-          <span className="text-emerald-700 font-semibold uppercase tracking-wide">💰 Prezzo base d'asta:</span>
-          <span className="font-bold text-emerald-900">€ {parseFloat(prezzoBaseAsta).toLocaleString('it-IT', { minimumFractionDigits: 2 })}</span>
-        </div>
-      )}
-
-      <div className="flex items-center gap-3">
-        <div className="flex-1 h-px bg-border" />
-        <span className="text-xs text-muted-foreground uppercase tracking-wider">oppure inserisci manualmente</span>
-        <div className="flex-1 h-px bg-border" />
-      </div>
-
+    <form onSubmit={handleSubmit} className="space-y-6" data-search-form>
       {/* Comune */}
       <ComuneAutocomplete selectedComune={selectedComune} onSelect={setSelectedComune} required />
 
-      {/* Dati catastali — multi-parcel */}
+      {/* Essential cadastral fields */}
       <div>
         <div className="flex items-center justify-between mb-3">
-          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Dati catastali</p>
-          {isBatch && (
-            <span className="text-xs font-semibold px-2 py-0.5 rounded" style={{ background: '#1A3A6B', color: '#fff', fontFamily: "'IBM Plex Mono', monospace" }}>
-              <Building2 className="w-3 h-3 inline mr-1" />
-              {totalUnits} unità
-            </span>
-          )}
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Dati catastali *</p>
         </div>
-
-        <div className="space-y-4">
-          {parcels.map((parcel, pi) => (
-            <div key={parcel.id} className="border border-border rounded-lg p-4 space-y-3" style={{ background: '#fafaf8' }}>
-              <div className="flex items-center justify-between">
-                <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
-                  Immobile {pi + 1}
-                </p>
-                {parcels.length > 1 && (
-                  <button type="button" onClick={() => removeParcel(parcel.id)}
-                    className="p-1 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600 transition-colors">
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                )}
-              </div>
-
-              <div className="grid grid-cols-3 gap-2">
-                <div className="space-y-1">
-                  <Label className="text-xs">Foglio *</Label>
-                  <Input value={parcel.foglio} onChange={e => updateParcel(parcel.id, 'foglio', e.target.value)} placeholder="es. 15" />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs">Particella *</Label>
-                  <Input value={parcel.particella} onChange={e => updateParcel(parcel.id, 'particella', e.target.value)} placeholder="es. 342" />
-                </div>
-                <div className="space-y-1">
-                  <div className="flex items-center gap-1">
-                    <Label className="text-xs">Sezione</Label>
-                    <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Info className="w-3 h-3 text-muted-foreground cursor-help" />
-                        </TooltipTrigger>
-                        <TooltipContent className="max-w-xs text-xs">
-                          La sezione catastale (A, B, C…) è visibile sulla tua visura. Lascia vuoto se non presente.
-                        </TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-                  </div>
-                  <Input
-                    value={parcel.sezione}
-                    onChange={e => updateParcel(parcel.id, 'sezione', e.target.value.toUpperCase())}
-                    placeholder="es. A, PL"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-1">
-                <Label className="text-xs">Via / Indirizzo <span className="text-muted-foreground">(opzionale)</span></Label>
-                <Input
-                  value={parcel.indirizzo}
-                  onChange={e => updateParcel(parcel.id, 'indirizzo', e.target.value)}
-                  placeholder="es. Via della Libertà 1"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label className="text-xs uppercase tracking-wide text-muted-foreground">Subalterni</Label>
-                {parcel.subs.map((sub, si) => (
-                  <div key={sub.id} className="flex items-center gap-2">
-                    <span className="text-xs text-muted-foreground w-8 shrink-0" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>Sub.</span>
-                    <Input
-                      value={sub.value}
-                      onChange={e => updateSub(parcel.id, sub.id, e.target.value)}
-                      placeholder={`es. ${si + 1}`}
-                      className="flex-1 h-8 text-sm"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => removeSub(parcel.id, sub.id)}
-                      disabled={parcel.subs.length === 1}
-                      className="p-1 rounded hover:bg-red-50 text-muted-foreground hover:text-red-500 transition-colors disabled:opacity-30"
-                    >
-                      <X className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                ))}
-                {totalUnits < MAX_UNITS && (
-                  <button
-                    type="button"
-                    onClick={() => addSub(parcel.id)}
-                    className="flex items-center gap-1.5 text-xs font-semibold transition-colors"
-                    style={{ color: '#1A3A6B', fontFamily: "'IBM Plex Mono', monospace" }}
-                  >
-                    <Plus className="w-3.5 h-3.5" /> + Aggiungi subalterno
-                  </button>
-                )}
-              </div>
+        <div className="grid grid-cols-3 gap-2">
+          <div className="space-y-1">
+            <Label className="text-xs">Foglio *</Label>
+            <Input value={parcels[0].foglio} onChange={e => updateParcel(parcels[0].id, 'foglio', e.target.value)} placeholder="es. 15" />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">Particella *</Label>
+            <Input value={parcels[0].particella} onChange={e => updateParcel(parcels[0].id, 'particella', e.target.value)} placeholder="es. 342" />
+          </div>
+          <div className="space-y-1">
+            <div className="flex items-center gap-1">
+              <Label className="text-xs">Sezione</Label>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild><Info className="w-3 h-3 text-muted-foreground cursor-help" /></TooltipTrigger>
+                  <TooltipContent className="max-w-xs text-xs">La sezione catastale (A, B, C…) è visibile sulla tua visura. Lascia vuoto se non presente.</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
             </div>
-          ))}
+            <Input value={parcels[0].sezione} onChange={e => updateParcel(parcels[0].id, 'sezione', e.target.value.toUpperCase())} placeholder="es. A, PL" />
+          </div>
         </div>
-
-        <div className="mt-3">
-          {totalUnits < MAX_UNITS ? (
-            <button
-              type="button"
-              onClick={addParcel}
-              className="flex items-center gap-2 text-xs font-semibold px-3 py-2 border rounded transition-colors hover:bg-stone-50"
-              style={{ borderColor: '#C4BAA8', color: '#1A3A6B', fontFamily: "'IBM Plex Mono', monospace" }}
-            >
-              <Plus className="w-3.5 h-3.5" /> + Aggiungi immobile (foglio/particella diversi)
-            </button>
-          ) : (
-            <p className="text-xs text-amber-700 flex items-center gap-1" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
-              <AlertTriangle className="w-3.5 h-3.5" /> Limite massimo di {MAX_UNITS} unità per batch raggiunto
-            </p>
-          )}
-        </div>
-      </div>
-
-      {/* Planimetria catastale upload */}
-      <div className="border-2 border-dashed border-border rounded-lg p-4 space-y-2">
-        <Label className="flex items-center gap-2 cursor-pointer">
-          📐 Allega planimetria catastale <span className="text-muted-foreground text-xs">(opzionale)</span>
-        </Label>
-        <input
-          type="file"
-          accept=".pdf,.jpg,.jpeg,.png"
-          onChange={e => {
-            const f = e.target.files?.[0] || null;
-            setPlanimetriaFile(f);
-            setPlanimetriaFormato(null);
-            setPlanimetriaSuperficie(null);
-            if (f) handlePlanimetriaCalcolo(f);  // calcola subito senza selezione formato
-          }}
-          className="block text-xs text-muted-foreground w-full cursor-pointer file:mr-3 file:py-1 file:px-3 file:border-0 file:text-xs file:font-semibold file:bg-primary file:text-primary-foreground file:cursor-pointer hover:file:opacity-90"
-        />
-        <p className="text-[10px] text-muted-foreground">Hai la planimetria? Allegala per calcoli più precisi — PDF, JPG o PNG · Max 10MB</p>
-        <p className="text-[10px] text-muted-foreground italic">Documento riservato — accessibile solo al proprietario o a professionisti abilitati con autorizzazione scritta</p>
-
-        {/* Auto-calcolo in corso */}
-
-        {/* Loading */}
-        {planimetriaCalcoloLoading && (
-          <div className="mt-2 flex items-center gap-2 text-xs text-primary" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
-            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-            Calcolo superficie in corso…
-          </div>
-        )}
-
-        {/* Success result */}
-        {planimetriaSuperficie && planimetriaSuperficie !== 'failed' && (
-          <div className="mt-2 p-3 rounded border border-emerald-300 bg-emerald-50 space-y-1">
-            <div className="flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-              <p className="text-xs font-bold text-emerald-800" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
-                Superficie calcolata: {planimetriaSuperficie} m² (da planimetria AdE)
-              </p>
-            </div>
-            <p className="text-[10px] text-emerald-700 italic pl-6" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
-              Calcolato automaticamente dalla planimetria catastale — precisione ±10%
-            </p>
-          </div>
-        )}
-
-        {/* Failed — show manual input inline */}
-        {planimetriaSuperficie === 'failed' && (
-          <div className="mt-2 p-3 rounded border border-amber-300 bg-amber-50 space-y-2">
-            <p className="text-xs font-semibold text-amber-800" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
-              ⚠️ Calcolo automatico non riuscito — inserisci manualmente la superficie:
-            </p>
-            <Input
-              type="number"
-              value={superficieMq}
-              onChange={e => setSuperficieMq(e.target.value)}
-              placeholder="es. 85 mq"
-              className="h-8 text-sm"
-            />
-          </div>
-        )}
-
-        <div className="mt-2 p-3 rounded bg-blue-50 border border-blue-200 text-[10px] text-blue-800 space-y-2">
-          <p className="font-semibold">ℹ️ Visura catastale vs Planimetria catastale</p>
-          <div>
-            <p className="font-semibold text-emerald-700">📜 Visura catastale — PUBBLICA</p>
-            <p>Chiunque può richiederla <strong>gratuitamente</strong> sul portale dell'Agenzia delle Entrate per qualsiasi immobile. <a href="https://servizionline.agenziaentrate.gov.it/" target="_blank" rel="noopener noreferrer" className="underline">Portale AdE →</a></p>
-          </div>
-          <div>
-            <p className="font-semibold text-amber-700">🔒 Planimetria catastale — RISERVATA</p>
-            <p>Accessibile solo al <strong>proprietario</strong> (portale AdE con SPID) o a un <strong>professionista abilitato</strong> con SISTER e autorizzazione scritta del proprietario.</p>
-          </div>
-          <p className="italic">Se disponi già della planimetria, allegala per migliorare la precisione dell'analisi.</p>
-        </div>
-      </div>
-
-      {/* Superficie manuale */}
-      <div className="space-y-1.5">
-        <div className="flex items-center gap-1.5">
-          <Label>Superficie nota (mq)</Label>
-          <span className="text-xs text-muted-foreground">(opzionale — migliora l'analisi finanziaria)</span>
-        </div>
-        <Input
-          type="number"
-          value={superficieMq}
-          onChange={e => setSuperficieMq(e.target.value)}
-          placeholder="es. 85 mq"
-        />
       </div>
 
       {/* Finalità */}
@@ -576,56 +399,245 @@ export default function CadastralSearchForm({ onSubmit, isLoading, submitLabel =
         </Select>
       </div>
 
-      {/* Sezione finanziaria */}
-      <div style={{ display: showFinancialSection ? 'block' : 'none' }}>
-        <div className={`rounded-lg border p-4 space-y-4 ${finDataRequired ? 'border-primary bg-blue-50/40' : 'border-border bg-muted/30'}`}>
-          {finDataRequired ? (
-            <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: '#1A3A6B' }}>
-              Dati finanziari <span className="text-accent ml-1">* obbligatorio</span>
-            </p>
-          ) : (
-            <button type="button" className="flex items-center gap-2 w-full text-left" onClick={() => setShowFinancial(v => !v)}>
-              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex-1">
-                Dati finanziari (opzionale — per analisi investimento)
-              </p>
-              {showFinancial ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
-            </button>
+      {/* Accordion toggle */}
+      <button
+        type="button"
+        onClick={() => setAccordionOpen(!accordionOpen)}
+        className="flex items-center gap-2 w-full py-2.5 px-4 border border-dashed border-border rounded-lg bg-muted/20 hover:bg-muted/40 transition-colors"
+      >
+        <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex-1 text-left" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
+          Dati opzionali {accordionOpen ? '▲' : '▼'}
+        </span>
+        <span className="text-[10px] text-muted-foreground/70 hidden sm:inline" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
+          Indirizzo, subalterni, planimetria, dati finanziari…
+        </span>
+      </button>
+
+      {accordionOpen && (
+        <>
+          {/* Visura uploader */}
+          <VisuraUploader onDataExtracted={handleVisuraData} />
+          {prezzoBaseAsta && (
+            <div className="flex items-center gap-2 px-4 py-2.5 border border-emerald-300 bg-emerald-50 text-xs" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
+              <span className="text-emerald-700 font-semibold uppercase tracking-wide">💰 Prezzo base d'asta:</span>
+              <span className="font-bold text-emerald-900">€ {parseFloat(prezzoBaseAsta).toLocaleString('it-IT', { minimumFractionDigits: 2 })}</span>
+            </div>
           )}
-          <div style={{ display: (finDataRequired || showFinancial) ? 'grid' : 'none' }} className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label>Prezzo di acquisto (€)</Label>
-              <Input type="number" value={prezzoAcquisto} onChange={e => setPrezzoAcquisto(e.target.value)} placeholder="es. 150000" />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Superficie stimata (mq)</Label>
-              <Input type="number" value={superficie} onChange={e => setSuperficie(e.target.value)} placeholder="es. 80" />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Stato conservativo</Label>
-              <Select value={statoConservativo} onValueChange={setStatoConservativo}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {STATO_CONSERVATIVO.map(s => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label>Destinazione obiettivo</Label>
-              <Select value={destinazioneObiettivo} onValueChange={setDestinazioneObiettivo}>
-                <SelectTrigger><SelectValue placeholder="Seleziona..." /></SelectTrigger>
-                <SelectContent>
-                  {DESTINAZIONE_OBIETTIVO.map(d => <SelectItem key={d.value} value={d.value}>{d.label}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5 md:col-span-2">
-              <Label>Spese accessorie (%)</Label>
-              <Input type="number" value={speseAccessorie} onChange={e => setSpeseAccessorie(e.target.value)} placeholder="es. 10" />
-              <p className="text-xs text-muted-foreground">Notaio, agenzia, imposte — tipicamente 8–12%</p>
+
+          <div className="flex items-center gap-3">
+            <div className="flex-1 h-px bg-border" />
+            <span className="text-xs text-muted-foreground uppercase tracking-wider">dettagli immobile</span>
+            <div className="flex-1 h-px bg-border" />
+          </div>
+
+          {/* Parcel details — foglio/particella/sezione already visible above for first parcel */}
+          {parcels.map((parcel, pi) => {
+            const isFirst = pi === 0;
+            return (
+              <div key={parcel.id} className="border border-border rounded-lg p-4 space-y-3" style={{ background: '#fafaf8' }}>
+                <div className="flex items-center justify-between">
+                  <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
+                    Immobile {pi + 1} {isFirst ? '— dettagli' : ''}
+                  </p>
+                  {parcels.length > 1 && (
+                    <button type="button" onClick={() => removeParcel(parcel.id)}
+                      className="p-1 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600 transition-colors">
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+
+                {!isFirst && (
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="space-y-1">
+                      <Label className="text-xs">Foglio *</Label>
+                      <Input value={parcel.foglio} onChange={e => updateParcel(parcel.id, 'foglio', e.target.value)} placeholder="es. 15" />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Particella *</Label>
+                      <Input value={parcel.particella} onChange={e => updateParcel(parcel.id, 'particella', e.target.value)} placeholder="es. 342" />
+                    </div>
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-1">
+                        <Label className="text-xs">Sezione</Label>
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild><Info className="w-3 h-3 text-muted-foreground cursor-help" /></TooltipTrigger>
+                            <TooltipContent className="max-w-xs text-xs">La sezione catastale (A, B, C…) è visibile sulla tua visura. Lascia vuoto se non presente.</TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      </div>
+                      <Input value={parcel.sezione} onChange={e => updateParcel(parcel.id, 'sezione', e.target.value.toUpperCase())} placeholder="es. A, PL" />
+                    </div>
+                  </div>
+                )}
+
+                <div className="space-y-1">
+                  <Label className="text-xs">Via / Indirizzo <span className="text-muted-foreground">(opzionale)</span></Label>
+                  <Input value={parcel.indirizzo} onChange={e => updateParcel(parcel.id, 'indirizzo', e.target.value)} placeholder="es. Via della Libertà 1" />
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-xs uppercase tracking-wide text-muted-foreground">Subalterni</Label>
+                  {parcel.subs.map((sub, si) => (
+                    <div key={sub.id} className="flex items-center gap-2">
+                      <span className="text-xs text-muted-foreground w-8 shrink-0" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>Sub.</span>
+                      <Input value={sub.value} onChange={e => updateSub(parcel.id, sub.id, e.target.value)} placeholder={`es. ${si + 1}`} className="flex-1 h-8 text-sm" />
+                      <button type="button" onClick={() => removeSub(parcel.id, sub.id)} disabled={parcel.subs.length === 1}
+                        className="p-1 rounded hover:bg-red-50 text-muted-foreground hover:text-red-500 transition-colors disabled:opacity-30">
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                  {totalUnits < MAX_UNITS && (
+                    <button type="button" onClick={() => addSub(parcel.id)}
+                      className="flex items-center gap-1.5 text-xs font-semibold transition-colors"
+                      style={{ color: '#1A3A6B', fontFamily: "'IBM Plex Mono', monospace" }}>
+                      <Plus className="w-3.5 h-3.5" /> + Aggiungi subalterno
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+
+          {totalUnits < MAX_UNITS ? (
+            <button type="button" onClick={addParcel}
+              className="flex items-center gap-2 text-xs font-semibold px-3 py-2 border rounded transition-colors hover:bg-stone-50"
+              style={{ borderColor: '#C4BAA8', color: '#1A3A6B', fontFamily: "'IBM Plex Mono', monospace" }}>
+              <Plus className="w-3.5 h-3.5" /> + Aggiungi immobile (foglio/particella diversi)
+            </button>
+          ) : (
+            <p className="text-xs text-amber-700 flex items-center gap-1" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
+              <AlertTriangle className="w-3.5 h-3.5" /> Limite massimo di {MAX_UNITS} unità per batch raggiunto
+            </p>
+          )}
+
+          {/* Planimetria catastale upload */}
+          <div className="border-2 border-dashed border-border rounded-lg p-4 space-y-2">
+            <Label className="flex items-center gap-2 cursor-pointer">
+              📐 Allega planimetria catastale <span className="text-muted-foreground text-xs">(opzionale)</span>
+            </Label>
+            <input
+              type="file"
+              accept=".pdf,.jpg,.jpeg,.png"
+              onChange={e => {
+                const f = e.target.files?.[0] || null;
+                setPlanimetriaFile(f);
+                setPlanimetriaFormato(null);
+                setPlanimetriaSuperficie(null);
+                if (f) handlePlanimetriaCalcolo(f);
+              }}
+              className="block text-xs text-muted-foreground w-full cursor-pointer file:mr-3 file:py-1 file:px-3 file:border-0 file:text-xs file:font-semibold file:bg-primary file:text-primary-foreground file:cursor-pointer hover:file:opacity-90"
+            />
+            <p className="text-[10px] text-muted-foreground">Hai la planimetria? Allegala per calcoli più precisi — PDF, JPG o PNG · Max 10MB</p>
+            <p className="text-[10px] text-muted-foreground italic">Documento riservato — accessibile solo al proprietario o a professionisti abilitati con autorizzazione scritta</p>
+
+            {planimetriaCalcoloLoading && (
+              <div className="mt-2 flex items-center gap-2 text-xs text-primary" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                Calcolo superficie in corso…
+              </div>
+            )}
+
+            {planimetriaSuperficie && planimetriaSuperficie !== 'failed' && (
+              <div className="mt-2 p-3 rounded border border-emerald-300 bg-emerald-50 space-y-1">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <p className="text-xs font-bold text-emerald-800" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
+                    Superficie calcolata: {planimetriaSuperficie} m² (da planimetria AdE)
+                  </p>
+                </div>
+                <p className="text-[10px] text-emerald-700 italic pl-6" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
+                  Calcolato automaticamente dalla planimetria catastale — precisione ±10%
+                </p>
+              </div>
+            )}
+
+            {planimetriaSuperficie === 'failed' && (
+              <div className="mt-2 p-3 rounded border border-amber-300 bg-amber-50 space-y-2">
+                <p className="text-xs font-semibold text-amber-800" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
+                  ⚠️ Calcolo automatico non riuscito — inserisci manualmente la superficie:
+                </p>
+                <Input type="number" value={superficieMq} onChange={e => setSuperficieMq(e.target.value)} placeholder="es. 85 mq" className="h-8 text-sm" />
+              </div>
+            )}
+
+            <div className="mt-2 p-3 rounded bg-blue-50 border border-blue-200 text-[10px] text-blue-800 space-y-2">
+              <p className="font-semibold">ℹ️ Visura catastale vs Planimetria catastale</p>
+              <div>
+                <p className="font-semibold text-emerald-700">📜 Visura catastale — PUBBLICA</p>
+                <p>Chiunque può richiederla <strong>gratuitamente</strong> sul portale dell'Agenzia delle Entrate per qualsiasi immobile. <a href="https://servizionline.agenziaentrate.gov.it/" target="_blank" rel="noopener noreferrer" className="underline">Portale AdE →</a></p>
+              </div>
+              <div>
+                <p className="font-semibold text-amber-700">🔒 Planimetria catastale — RISERVATA</p>
+                <p>Accessibile solo al <strong>proprietario</strong> (portale AdE con SPID) o a un <strong>professionista abilitato</strong> con SISTER e autorizzazione scritta del proprietario.</p>
+              </div>
+              <p className="italic">Se disponi già della planimetria, allegala per migliorare la precisione dell'analisi.</p>
             </div>
           </div>
-        </div>
-      </div>
+
+          {/* Superficie manuale */}
+          <div className="space-y-1.5">
+            <div className="flex items-center gap-1.5">
+              <Label>Superficie nota (mq)</Label>
+              <span className="text-xs text-muted-foreground">(opzionale — migliora l'analisi finanziaria)</span>
+            </div>
+            <Input type="number" value={superficieMq} onChange={e => setSuperficieMq(e.target.value)} placeholder="es. 85 mq" />
+          </div>
+
+          {/* Sezione finanziaria */}
+          <div style={{ display: showFinancialSection ? 'block' : 'none' }}>
+            <div className={`rounded-lg border p-4 space-y-4 ${finDataRequired ? 'border-primary bg-blue-50/40' : 'border-border bg-muted/30'}`}>
+              {finDataRequired ? (
+                <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: '#1A3A6B' }}>
+                  Dati finanziari <span className="text-accent ml-1">* obbligatorio</span>
+                </p>
+              ) : (
+                <button type="button" className="flex items-center gap-2 w-full text-left" onClick={() => setShowFinancial(v => !v)}>
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex-1">
+                    Dati finanziari (opzionale — per analisi investimento)
+                  </p>
+                  {showFinancial ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
+                </button>
+              )}
+              <div style={{ display: (finDataRequired || showFinancial) ? 'grid' : 'none' }} className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label>Prezzo di acquisto (€)</Label>
+                  <Input type="number" value={prezzoAcquisto} onChange={e => setPrezzoAcquisto(e.target.value)} placeholder="es. 150000" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Superficie stimata (mq)</Label>
+                  <Input type="number" value={superficie} onChange={e => setSuperficie(e.target.value)} placeholder="es. 80" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Stato conservativo</Label>
+                  <Select value={statoConservativo} onValueChange={setStatoConservativo}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {STATO_CONSERVATIVO.map(s => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Destinazione obiettivo</Label>
+                  <Select value={destinazioneObiettivo} onValueChange={setDestinazioneObiettivo}>
+                    <SelectTrigger><SelectValue placeholder="Seleziona..." /></SelectTrigger>
+                    <SelectContent>
+                      {DESTINAZIONE_OBIETTIVO.map(d => <SelectItem key={d.value} value={d.value}>{d.label}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5 md:col-span-2">
+                  <Label>Spese accessorie (%)</Label>
+                  <Input type="number" value={speseAccessorie} onChange={e => setSpeseAccessorie(e.target.value)} placeholder="es. 10" />
+                  <p className="text-xs text-muted-foreground">Notaio, agenzia, imposte — tipicamente 8–12%</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
 
       {/* Pricing summary + prezzo acquisizione — only for batch */}
       {isBatch && (

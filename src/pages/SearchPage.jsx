@@ -27,6 +27,7 @@ export default function SearchPage() {
   const [publicPreview, setPublicPreview] = useState(null); // anteprima per utenti non loggati
   const [pendingFormData, setPendingFormData] = useState(null);
   const [pendingBatchData, setPendingBatchData] = useState(null); // salvato prima del redirect a /credits
+  const [exampleData, setExampleData] = useState(null);
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
@@ -646,6 +647,22 @@ export default function SearchPage() {
               </p>
             </motion.div>
           )}
+
+          {/* Prova con un esempio */}
+          <button
+            type="button"
+            onClick={() => setExampleData({ comune: "Torino", foglio: "15", particella: "342", finalita: "acquisto_privato" })}
+            className="w-full mb-4 py-2.5 px-4 border border-dashed border-primary/40 bg-primary/5 hover:bg-primary/10 rounded-lg transition-colors flex items-center justify-center gap-2"
+            style={{ fontFamily: "'IBM Plex Mono', monospace" }}
+          >
+            <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: '#1A3A6B' }}>
+              Prova con un esempio →
+            </span>
+            <span className="text-[10px] text-muted-foreground hidden sm:inline">
+              Torino · F.15 · P.342 · Acquisto privato
+            </span>
+          </button>
+
           <div className="bg-white p-6 lg:p-8" style={{ border: '1px solid #C4BAA8' }}>
             <ErrorBoundary>
               <CadastralSearchForm
@@ -654,6 +671,7 @@ export default function SearchPage() {
                 submitLabel={isAuthenticated ? "Analizza →" : "Cerca particella — gratis →"}
                 userBalance={credits?.balance ?? null}
                 initialBatchData={pendingBatchData}
+                prefillData={exampleData}
               />
             </ErrorBoundary>
           </div>
