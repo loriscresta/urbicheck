@@ -67,8 +67,8 @@ const futurePlans = [
 ];
 
 const stats = [
-  { value: "10+",     label: "Report elaborati" },
-  { value: "2",       label: "Regioni coperte" },
+  { value: "✓",       label: "Dati catastali ufficiali" },
+  { value: "3",       label: "Regioni coperte" },
   { value: "Art.142", label: "Vincoli inclusi" },
   { value: "< 60s",   label: "Tempo di risposta" },
 ];
