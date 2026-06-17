@@ -617,7 +617,7 @@ export default function CadastralSearchForm({ onSubmit, isLoading, submitLabel =
                     <span>Saldo disponibile:</span>
                     <span className="font-semibold">
                       €{userBalance.toFixed(2)}
-                      {hasSufficientBalance ? ' ✓ Crediti sufficienti' : ' ⚠ Crediti insufficienti'}
+                      {hasSufficientBalance ? ' ✓ Crediti sufficienti' : ` ⚠ Mancano €${(pricing.totalPrice - userBalance).toFixed(2)} — clicca per ricaricare`}
                     </span>
                   </div>
                 )}
@@ -689,14 +689,17 @@ export default function CadastralSearchForm({ onSubmit, isLoading, submitLabel =
 
       <Button
         type="submit"
-        disabled={!isValid || isLoading || (isBatch && !hasSufficientBalance)}
+        disabled={!isValid || isLoading}
         className="w-full font-semibold"
         style={{ background: '#1A3A6B', borderRadius: '0', borderBottom: '3px solid #B33A2A', fontFamily: "'IBM Plex Mono', monospace" }}
         size="lg"
       >
         {isLoading ? (
           <><Loader2 className="w-4 h-4 animate-spin" /> Analisi in corso... (30–60s per unità)</>
-        ) : isBatch ? `Conferma e Analizza ${batchPertinenze === true ? '1 report' : `${totalUnits} unità`} →` : submitLabel}
+        ) : isBatch ? (hasSufficientBalance
+          ? `Conferma e Analizza ${batchPertinenze === true ? '1 report' : `${totalUnits} unità`} →`
+          : `Ricarica crediti per analizzare ${batchPertinenze === true ? '1 report' : `${totalUnits} unità`} →`)
+        : submitLabel}
       </Button>
 
       {!isValid && (

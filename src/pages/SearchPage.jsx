@@ -269,6 +269,16 @@ export default function SearchPage() {
       spese_accessorie, categoria_catastale, superficie_mq, rendita_catastale, vani, indirizzo_catastale,
       visura_uploaded, intestatari_visura, ...sharedCadastral } = formData;
 
+    // ── Pre-check: insufficient balance → redirect to credits page ─────────
+    const effectiveCost = formData._batchPertinenze
+      ? getBulkPricingBeta(1).totalPrice
+      : (bulkPricing?.totalPrice || getBulkPricingBeta(units.length).totalPrice);
+    if ((credits?.balance || 0) < effectiveCost) {
+      navigate('/credits');
+      setIsLoading(false);
+      return;
+    }
+
     const pricePerUnit = bulkPricing?.pricePerUnit || 2.99;
     const fin_data = { prezzo_acquisto, superficie, stato_conservativo, destinazione_obiettivo, spese_accessorie };
     const visuraExtra = visura_uploaded ? { categoria_catastale, superficie_mq, rendita_catastale, vani, indirizzo_catastale, visura_uploaded: true } : {};
@@ -838,4 +848,21 @@ REGOLA LINGUISTICA: Usa ESCLUSIVAMENTE terminologia tecnica italiana.`,
   });
 
   return mergeEnrichment(result, enrichment);
+}
+
+// ── Bulk pricing helper (beta tiers) ──────────────────────────────────────
+const BULK_TIERS_BETA = [
+  { min: 1,  max: 1,  pricePerUnit: 2.99,  discount: 0    },
+  { min: 2,  max: 4,  pricePerUnit: 2.59,  discount: 0.13 },
+  { min: 5,  max: 9,  pricePerUnit: 2.39,  discount: 0.20 },
+  { min: 10, max: 19, pricePerUnit: 1.99,  discount: 0.33 },
+  { min: 20, max: Infinity, pricePerUnit: 1.69, discount: 0.43 },
+];
+
+function getBulkPricingBeta(unitCount) {
+  const tier = BULK_TIERS_BETA.find(t => unitCount >= t.min && unitCount <= t.max);
+  return {
+    pricePerUnit: tier.pricePerUnit,
+    totalPrice: +(tier.pricePerUnit * unitCount).toFixed(2),
+  };
 }
