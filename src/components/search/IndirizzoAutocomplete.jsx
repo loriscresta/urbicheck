@@ -1,11 +1,14 @@
 import React, { useState, useRef } from "react";
-import { MapPin } from "lucide-react";
+import { MapPin, Loader2, CheckCircle2 } from "lucide-react";
+import { lookupParcelByCoords } from "@/functions/lookupParcelByCoords";
 
-export default function IndirizzoAutocomplete({ onComuneFound }) {
+export default function IndirizzoAutocomplete({ onComuneFound, onParcelFound }) {
   const [addressQuery, setAddressQuery] = useState("");
   const [addressSuggestions, setAddressSuggestions] = useState([]);
   const [mapCoords, setMapCoords] = useState(null);
   const [comuneTrovato, setComuneTrovato] = useState("");
+  const [parcelLoading, setParcelLoading] = useState(false);
+  const [parcelFound, setParcelFound] = useState(false);
   const debounceRef = useRef(null);
 
   const handleAddressInput = (val) => {
@@ -29,7 +32,7 @@ export default function IndirizzoAutocomplete({ onComuneFound }) {
     }, 400);
   };
 
-  const handleSelectAddress = (item) => {
+  const handleSelectAddress = async (item) => {
     setAddressQuery(item.display_name);
     setAddressSuggestions([]);
 
@@ -44,7 +47,30 @@ export default function IndirizzoAutocomplete({ onComuneFound }) {
       setComuneTrovato(comune);
       onComuneFound?.(comune);
     }
-    setMapCoords({ lat: parseFloat(item.lat), lon: parseFloat(item.lon) });
+
+    const lat = parseFloat(item.lat);
+    const lon = parseFloat(item.lon);
+    setMapCoords({ lat, lon });
+
+    // Lookup catastale via Catasto Agent
+    setParcelLoading(true);
+    setParcelFound(false);
+    try {
+      const res = await lookupParcelByCoords({ lat, lon });
+      const data = res?.data || res;
+      if (data?.found && data?.foglio && data?.particella) {
+        setParcelFound(true);
+        onParcelFound?.({
+          foglio: String(data.foglio),
+          particella: String(data.particella),
+          sezione: data.sezione || null,
+        });
+      }
+    } catch (_) {
+      // Silenzioso — l'utente compila a mano
+    } finally {
+      setParcelLoading(false);
+    }
   };
 
   const handleClear = () => {
@@ -52,6 +78,7 @@ export default function IndirizzoAutocomplete({ onComuneFound }) {
     setAddressSuggestions([]);
     setMapCoords(null);
     setComuneTrovato("");
+    setParcelFound(false);
   };
 
   const bbox =
@@ -139,6 +166,20 @@ export default function IndirizzoAutocomplete({ onComuneFound }) {
         <p className="text-[10px] text-emerald-700 font-semibold" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
           Comune rilevato: {comuneTrovato}
         </p>
+      )}
+
+      {parcelLoading && (
+        <div className="flex items-center gap-2 text-xs px-3 py-1.5 rounded border border-amber-200 bg-amber-50" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
+          <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-600" />
+          <span className="text-amber-700">Ricerca foglio e particella in corso...</span>
+        </div>
+      )}
+
+      {parcelFound && (
+        <div className="flex items-center gap-2 text-xs px-3 py-1.5 rounded border border-emerald-300 bg-emerald-50" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
+          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+          <span className="text-emerald-700 font-semibold">✓ Dati catastali trovati automaticamente</span>
+        </div>
       )}
 
       {mapCoords && (

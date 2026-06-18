@@ -364,6 +364,12 @@ export default function CadastralSearchForm({ onSubmit, isLoading, submitLabel =
             if (results[0]) setSelectedComune(results[0]);
           }).catch(() => {});
         }}
+        onParcelFound={({ foglio, particella, sezione }) => {
+          setParcels(ps => {
+            if (!ps.length) return [{ ...newParcel(foglio, particella), sezione: sezione || "" }];
+            return ps.map((p, i) => i === 0 ? { ...p, foglio, particella, sezione: sezione || p.sezione } : p);
+          });
+        }}
       />
 
       {/* Comune */}
