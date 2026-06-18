@@ -2,6 +2,37 @@ import React, { useState, useRef } from "react";
 import { MapPin, Loader2, CheckCircle2 } from "lucide-react";
 import { lookupParcelByCoords } from "@/functions/lookupParcelByCoords";
 
+// ── Helpers ────────────────────────────────────────────────────────────
+
+/** Parsa input per estrarre numero civico, via e città */
+function parseAddressInput(val) {
+  const trimmed = val.trim();
+  // Cerca un numero isolato (civico)
+  const numMatch = trimmed.match(/\b(\d+[a-zA-Z]?)\b/);
+  if (!numMatch) return { street: trimmed, city: "", housenumber: "" };
+
+  const numIdx = numMatch.index;
+  const housenumber = numMatch[1];
+  const beforeNum = trimmed.slice(0, numIdx).trim();
+  const afterNum = trimmed.slice(numIdx + housenumber.length).trim().replace(/^[,\s]+/, "");
+
+  // Se c'è testo prima del numero → via + civico; dopo → città
+  // Se non c'è testo prima (es. "44 Carentino") → solo civico + città
+  const street = beforeNum ? `${beforeNum} ${housenumber}` : housenumber;
+  const city = afterNum || "";
+
+  return { street, city, housenumber };
+}
+
+/** Formatta un suggerimento Nominatim per la dropdown */
+function formatSuggestionDisplay(item) {
+  const a = item.address || {};
+  if (a.house_number && a.road) {
+    return `${a.road} ${a.house_number}, ${a.town || a.city || a.village || ""}, ${a.state || ""}`.replace(/,\s*,/g, ",").replace(/,\s*$/, "");
+  }
+  return `${a.road || (item.display_name || "").split(",")[0]}, ${a.town || a.city || a.village || ""}`.replace(/,\s*,/g, ",").replace(/,\s*$/, "");
+}
+
 export default function IndirizzoAutocomplete({ onComuneFound, onParcelFound }) {
   const [addressQuery, setAddressQuery] = useState("");
   const [addressSuggestions, setAddressSuggestions] = useState([]);
@@ -20,12 +51,42 @@ export default function IndirizzoAutocomplete({ onComuneFound, onParcelFound }) 
     }
     debounceRef.current = setTimeout(async () => {
       try {
-        const res = await fetch(
-          `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(val)}&countrycodes=it&format=json&addressdetails=1&limit=6`,
-          { headers: { "Accept-Language": "it" } }
-        );
-        const data = await res.json();
-        setAddressSuggestions(Array.isArray(data) ? data : []);
+        const { street, city } = parseAddressInput(val);
+        const headers = { "Accept-Language": "it" };
+        const baseUrl = "https://nominatim.openstreetmap.org/search?countrycodes=it&format=json&addressdetails=1&limit=4";
+        const calls = [
+          fetch(`${baseUrl}&q=${encodeURIComponent(val)}`, { headers }),
+        ];
+        if (city && street) {
+          calls.push(
+            fetch(`${baseUrl}&street=${encodeURIComponent(street)}&city=${encodeURIComponent(city)}`, { headers })
+          );
+        }
+
+        const results = await Promise.allSettled(calls);
+        const seenIds = new Set();
+        const merged = [];
+
+        // Structured results first (call B), then free-form (call A)
+        const addResults = (arr) => {
+          if (!Array.isArray(arr)) return;
+          for (const item of arr) {
+            if (!item?.place_id || seenIds.has(item.place_id)) continue;
+            seenIds.add(item.place_id);
+            merged.push(item);
+            if (merged.length >= 6) break;
+          }
+        };
+
+        // Push structured first (index 1 if exists), then free-form (index 0)
+        if (results.length > 1 && results[1].status === "fulfilled") {
+          addResults(await results[1].value.clone().json());
+        }
+        if (results[0].status === "fulfilled") {
+          addResults(await results[0].value.clone().json());
+        }
+
+        setAddressSuggestions(merged);
       } catch (_) {
         setAddressSuggestions([]);
       }
@@ -155,7 +216,7 @@ export default function IndirizzoAutocomplete({ onComuneFound, onParcelFound }) 
                 onMouseEnter={(e) => { e.currentTarget.style.background = "#f4efe6"; }}
                 onMouseLeave={(e) => { e.currentTarget.style.background = "#fff"; }}
               >
-                <span style={{ fontSize: "0.85em" }}>{s.display_name}</span>
+                <span style={{ fontSize: "0.85em" }}>{formatSuggestionDisplay(s)}</span>
               </li>
             ))}
           </ul>
