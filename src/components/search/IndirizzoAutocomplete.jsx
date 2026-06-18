@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { MapPin, Loader2, CheckCircle2 } from "lucide-react";
 import { lookupParcelByCoords } from "@/functions/lookupParcelByCoords";
 
@@ -7,7 +7,6 @@ import { lookupParcelByCoords } from "@/functions/lookupParcelByCoords";
 /** Parsa input per estrarre numero civico, via e città */
 function parseAddressInput(val) {
   const trimmed = val.trim();
-  // Cerca un numero isolato (civico)
   const numMatch = trimmed.match(/\b(\d+[a-zA-Z]?)\b/);
   if (!numMatch) return { street: trimmed, city: "", housenumber: "" };
 
@@ -16,8 +15,6 @@ function parseAddressInput(val) {
   const beforeNum = trimmed.slice(0, numIdx).trim();
   const afterNum = trimmed.slice(numIdx + housenumber.length).trim().replace(/^[,\s]+/, "");
 
-  // Se c'è testo prima del numero → via + civico; dopo → città
-  // Se non c'è testo prima (es. "44 Carentino") → solo civico + città
   const street = beforeNum ? `${beforeNum} ${housenumber}` : housenumber;
   const city = afterNum || "";
 
@@ -40,8 +37,89 @@ export default function IndirizzoAutocomplete({ onComuneFound, onParcelFound }) 
   const [comuneTrovato, setComuneTrovato] = useState("");
   const [parcelLoading, setParcelLoading] = useState(false);
   const [parcelFound, setParcelFound] = useState(false);
+  const [mapReady, setMapReady] = useState(false);
   const debounceRef = useRef(null);
+  const mapContainerRef = useRef(null);
+  const leafletMapRef = useRef(null);
+  const markerRef = useRef(null);
 
+  // ── Carica Leaflet da CDN una volta ────────────────────────────────────
+  useEffect(() => {
+    if (window.L) {
+      setMapReady(true);
+      return;
+    }
+    const link = document.createElement("link");
+    link.rel = "stylesheet";
+    link.href = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
+    document.head.appendChild(link);
+
+    const script = document.createElement("script");
+    script.src = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
+    script.onload = () => setMapReady(true);
+    script.onerror = () => setMapReady(false);
+    document.head.appendChild(script);
+  }, []);
+
+  // ── Catastomappe lookup condiviso ──────────────────────────────────────
+  const doParcelLookup = async (lat, lon) => {
+    setParcelLoading(true);
+    setParcelFound(false);
+    try {
+      const res = await lookupParcelByCoords({ lat, lon });
+      const data = res?.data || res;
+      if (data?.found && data?.foglio && data?.particella) {
+        setParcelFound(true);
+        onParcelFound?.({
+          foglio: String(data.foglio),
+          particella: String(data.particella),
+          sezione: data.sezione || null,
+        });
+      }
+    } catch (_) {
+      // Silenzioso — l'utente compila a mano
+    } finally {
+      setParcelLoading(false);
+    }
+  };
+
+  // ── Inizializza / aggiorna mappa Leaflet ───────────────────────────────
+  useEffect(() => {
+    if (!mapReady || !mapCoords || !mapContainerRef.current) return;
+
+    // Rimuovi mappa precedente
+    if (leafletMapRef.current) {
+      leafletMapRef.current.remove();
+      leafletMapRef.current = null;
+      markerRef.current = null;
+    }
+
+    const { lat, lon } = mapCoords;
+    const map = window.L.map(mapContainerRef.current).setView([lat, lon], 17);
+    leafletMapRef.current = map;
+
+    window.L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      attribution: "© OpenStreetMap contributors",
+    }).addTo(map);
+
+    const marker = window.L.marker([lat, lon], { draggable: true }).addTo(map);
+    markerRef.current = marker;
+
+    marker.on("dragend", (e) => {
+      const pos = e.target.getLatLng();
+      setMapCoords({ lat: pos.lat, lon: pos.lng });
+      doParcelLookup(pos.lat, pos.lng);
+    });
+
+    return () => {
+      if (leafletMapRef.current) {
+        leafletMapRef.current.remove();
+        leafletMapRef.current = null;
+      }
+    };
+  }, [mapCoords, mapReady]);
+
+  // ── Nominatim input handler ────────────────────────────────────────────
   const handleAddressInput = (val) => {
     setAddressQuery(val);
     clearTimeout(debounceRef.current);
@@ -67,7 +145,6 @@ export default function IndirizzoAutocomplete({ onComuneFound, onParcelFound }) 
         const seenIds = new Set();
         const merged = [];
 
-        // Structured results first (call B), then free-form (call A)
         const addResults = (arr) => {
           if (!Array.isArray(arr)) return;
           for (const item of arr) {
@@ -78,7 +155,6 @@ export default function IndirizzoAutocomplete({ onComuneFound, onParcelFound }) 
           }
         };
 
-        // Push structured first (index 1 if exists), then free-form (index 0)
         if (results.length > 1 && results[1].status === "fulfilled") {
           addResults(await results[1].value.clone().json());
         }
@@ -93,6 +169,7 @@ export default function IndirizzoAutocomplete({ onComuneFound, onParcelFound }) 
     }, 400);
   };
 
+  // ── Selezione indirizzo dalla dropdown ─────────────────────────────────
   const handleSelectAddress = async (item) => {
     setAddressQuery(item.display_name);
     setAddressSuggestions([]);
@@ -113,25 +190,7 @@ export default function IndirizzoAutocomplete({ onComuneFound, onParcelFound }) 
     const lon = parseFloat(item.lon);
     setMapCoords({ lat, lon });
 
-    // Lookup catastale via Catasto Agent
-    setParcelLoading(true);
-    setParcelFound(false);
-    try {
-      const res = await lookupParcelByCoords({ lat, lon });
-      const data = res?.data || res;
-      if (data?.found && data?.foglio && data?.particella) {
-        setParcelFound(true);
-        onParcelFound?.({
-          foglio: String(data.foglio),
-          particella: String(data.particella),
-          sezione: data.sezione || null,
-        });
-      }
-    } catch (_) {
-      // Silenzioso — l'utente compila a mano
-    } finally {
-      setParcelLoading(false);
-    }
+    doParcelLookup(lat, lon);
   };
 
   const handleClear = () => {
@@ -141,11 +200,6 @@ export default function IndirizzoAutocomplete({ onComuneFound, onParcelFound }) 
     setComuneTrovato("");
     setParcelFound(false);
   };
-
-  const bbox =
-    mapCoords
-      ? `${mapCoords.lon - 0.003},${mapCoords.lat - 0.003},${mapCoords.lon + 0.003},${mapCoords.lat + 0.003}`
-      : "";
 
   return (
     <div className="space-y-2 mb-4">
@@ -244,20 +298,21 @@ export default function IndirizzoAutocomplete({ onComuneFound, onParcelFound }) 
       )}
 
       {mapCoords && (
-        <iframe
-          title="Mappa dell'indirizzo"
-          width="100%"
-          height="200"
-          style={{
-            borderRadius: "8px",
-            border: "none",
-            marginTop: "8px",
-            display: "block",
-          }}
-          src={`https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik&marker=${mapCoords.lat},${mapCoords.lon}`}
-          allowFullScreen
-          loading="lazy"
-        />
+        <div style={{ marginTop: "8px" }}>
+          <div
+            ref={mapContainerRef}
+            style={{
+              width: "100%",
+              height: "220px",
+              borderRadius: "8px",
+              border: "1px solid #ddd",
+              zIndex: 0,
+            }}
+          />
+          <p style={{ fontSize: "12px", color: "#888", marginTop: "4px" }}>
+            📍 Trascina il pin sull'immobile esatto per ottenere i dati catastali precisi
+          </p>
+        </div>
       )}
     </div>
   );
