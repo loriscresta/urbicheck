@@ -1,8 +1,8 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { base44 } from "@/api/base44Client";
 import { Link, useNavigate } from "react-router-dom";
-import { motion } from "framer-motion";
-import { CheckCircle2, MapPin, AlertTriangle, Waves, Activity, FileText, TrendingUp, ClipboardList } from "lucide-react";
+import { motion, useInView } from "framer-motion";
+import { CheckCircle2, MapPin, AlertTriangle, Waves, Activity, FileText, TrendingUp, ClipboardList, Search, X } from "lucide-react";
 
 const P  = "#1A3A6B";   // primario blu istituzionale
 const AC = "#B33A2A";   // accento rosso timbro
@@ -73,11 +73,164 @@ const stats = [
   { value: "< 60s",   label: "Tempo di risposta" },
 ];
 
+// ── Hero Search Form (semplificato, mobile-first) ──────────────────────
+function HeroSearchForm({ onStart }) {
+  const [comune, setComune] = useState("");
+  const [foglio, setFoglio] = useState("");
+  const [particella, setParticella] = useState("");
+  const [indirizzo, setIndirizzo] = useState("");
+  const navigate = useNavigate();
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    const q = new URLSearchParams();
+    if (indirizzo.trim()) {
+      q.set("address", indirizzo.trim());
+    } else {
+      if (comune.trim()) q.set("comune", comune.trim());
+      if (foglio.trim()) q.set("foglio", foglio.trim());
+      if (particella.trim()) q.set("particella", particella.trim());
+    }
+    if (q.toString()) {
+      navigate(`/search?${q.toString()}`);
+    } else {
+      onStart();
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="w-full max-w-md mt-4" style={{ fontFamily: MONO }}>
+      <div className="flex items-center gap-2 mb-2">
+        <div style={{ flex: 1, height: 1, background: "rgba(244,239,230,0.12)" }} />
+        <span style={{ color: "rgba(244,239,230,0.4)", fontSize: "0.58rem", letterSpacing: "2px", textTransform: "uppercase", whiteSpace: "nowrap" }}>
+          oppure cerca subito
+        </span>
+        <div style={{ flex: 1, height: 1, background: "rgba(244,239,230,0.12)" }} />
+      </div>
+
+      {/* Indirizzo (prioritario) */}
+      <input
+        type="text"
+        value={indirizzo}
+        onChange={e => setIndirizzo(e.target.value)}
+        placeholder="Es: Via Roma 12, Milano"
+        style={{
+          width: "100%", padding: "0.7rem 0.9rem", fontSize: "0.78rem",
+          background: "rgba(255,255,255,0.08)", border: "1px solid rgba(244,239,230,0.2)",
+          color: W, fontFamily: MONO, borderRadius: 0, outline: "none",
+        }}
+        className="focus:border-white/40 placeholder:text-white/25"
+      />
+      <div className="flex items-center gap-1 my-2">
+        <div style={{ flex: 1, height: 1, background: "rgba(244,239,230,0.08)" }} />
+        <span style={{ color: "rgba(244,239,230,0.3)", fontSize: "0.52rem" }}>oppure per dati catastali</span>
+        <div style={{ flex: 1, height: 1, background: "rgba(244,239,230,0.08)" }} />
+      </div>
+      <div className="flex gap-2">
+        <input type="text" value={comune} onChange={e => setComune(e.target.value)}
+          placeholder="Comune" style={{
+            flex: "2 1 0", padding: "0.7rem 0.7rem", fontSize: "0.72rem",
+            background: "rgba(255,255,255,0.08)", border: "1px solid rgba(244,239,230,0.2)",
+            color: W, fontFamily: MONO, borderRadius: 0, outline: "none",
+          }} className="focus:border-white/40 placeholder:text-white/25" />
+        <input type="text" value={foglio} onChange={e => setFoglio(e.target.value)}
+          placeholder="Foglio" style={{
+            flex: "1 1 0", padding: "0.7rem 0.5rem", fontSize: "0.72rem",
+            background: "rgba(255,255,255,0.08)", border: "1px solid rgba(244,239,230,0.2)",
+            color: W, fontFamily: MONO, borderRadius: 0, outline: "none",
+          }} className="focus:border-white/40 placeholder:text-white/25" />
+        <input type="text" value={particella} onChange={e => setParticella(e.target.value)}
+          placeholder="Particella" style={{
+            flex: "1 1 0", padding: "0.7rem 0.5rem", fontSize: "0.72rem",
+            background: "rgba(255,255,255,0.08)", border: "1px solid rgba(244,239,230,0.2)",
+            color: W, fontFamily: MONO, borderRadius: 0, outline: "none",
+          }} className="focus:border-white/40 placeholder:text-white/25" />
+      </div>
+      <button type="submit"
+        style={{
+          width: "100%", marginTop: "0.5rem", background: "rgba(255,255,255,0.1)",
+          color: "rgba(244,239,230,0.8)", border: "1px solid rgba(244,239,230,0.2)",
+          fontFamily: MONO, fontWeight: 600, fontSize: "0.72rem", letterSpacing: "1px",
+          padding: "0.55rem", cursor: "pointer", borderRadius: 0,
+        }} className="hover:bg-white/15 transition-colors">
+        Cerca →
+      </button>
+    </form>
+  );
+}
+
+// ── Animated counter component ─────────────────────────────────────────
+function AnimatedCounter({ target, label }) {
+  const ref = useRef(null);
+  const isInView = useInView(ref, { once: true, margin: "-80px" });
+  const [count, setCount] = useState(0);
+  
+  useEffect(() => {
+    if (!isInView) return;
+    let start = 0;
+    const duration = 1400;
+    const increment = Math.max(1, Math.floor(target / 40));
+    const timer = setInterval(() => {
+      start += increment;
+      if (start >= target) { setCount(target); clearInterval(timer); }
+      else setCount(start);
+    }, duration / (target / increment));
+    return () => clearInterval(timer);
+  }, [isInView, target]);
+
+  return (
+    <div ref={ref} className="text-center">
+      <div style={{ fontFamily: MONO, fontWeight: 700, color: AC, fontSize: "1.8rem", lineHeight: 1 }}>
+        {count.toLocaleString("it-IT")}
+      </div>
+      <div style={{ fontFamily: MONO, fontSize: "0.58rem", color: GR, textTransform: "uppercase", letterSpacing: "2px", marginTop: 4 }}>
+        {label}
+      </div>
+    </div>
+  );
+}
+
 export default function LandingPage() {
   const [showDemoModal, setShowDemoModal] = useState(false);
+  const [showExitPopup, setShowExitPopup] = useState(false);
+  const [exitEmail, setExitEmail] = useState("");
+  const [exitDone, setExitDone] = useState(false);
+  const exitTimerRef = useRef(null);
+  const hasFiredExitRef = useRef(false);
   const navigate = useNavigate();
   const handleLogin = () => base44.auth.redirectToLogin("/dashboard");
   const handleStartSearch = () => navigate("/search");
+
+  // Exit intent popup — 30s inactivity trigger
+  useEffect(() => {
+    if (hasFiredExitRef.current) return;
+    const resetTimer = () => {
+      clearTimeout(exitTimerRef.current);
+      exitTimerRef.current = setTimeout(() => {
+        if (!hasFiredExitRef.current) {
+          hasFiredExitRef.current = true;
+          setShowExitPopup(true);
+        }
+      }, 30000);
+    };
+    resetTimer();
+    const events = ["mousemove", "keydown", "scroll", "touchstart", "click"];
+    events.forEach(e => window.addEventListener(e, resetTimer));
+    return () => {
+      clearTimeout(exitTimerRef.current);
+      events.forEach(e => window.removeEventListener(e, resetTimer));
+    };
+  }, []);
+
+  const handleExitSubscribe = async (e) => {
+    e.preventDefault();
+    if (!exitEmail || exitDone) return;
+    setExitDone(true);
+    try {
+      await base44.entities.WaitlistSubscriber.create({ email: exitEmail });
+    } catch (_) {}
+    setShowExitPopup(false);
+  };
 
   return (
     <div style={{ background: BG, fontFamily: MONO, minHeight: "100vh" }}>
@@ -123,18 +276,73 @@ export default function LandingPage() {
               Inserisci foglio e particella — ottieni vincoli urbanistici, sismici, idrogeologici, paesaggistici e valutazione finanziaria istantanea. Senza aspettare il tecnico.
             </p>
 
-            <div className="flex flex-col sm:flex-row gap-3 items-start">
+            <div className="flex flex-col gap-3 items-start max-w-md">
               <button onClick={handleStartSearch}
-                style={{ background: AC, color: W, fontFamily: MONO, fontWeight: 700, fontSize: "0.8rem", letterSpacing: "1.5px", textTransform: "uppercase", border: "none", padding: "0 2rem", height: "3.25rem", cursor: "pointer", boxShadow: `0 4px 20px ${AC}60` }}>
-                Cerca la tua particella — gratis →
+                style={{ background: AC, color: W, fontFamily: MONO, fontWeight: 700, fontSize: "1rem", letterSpacing: "1px", textTransform: "uppercase", border: "none", padding: "0.9rem 2.5rem", cursor: "pointer", boxShadow: `0 4px 24px ${AC}60`, width: "100%", textAlign: "center", borderRadius: "0" }}>
+                Analizza subito — €9,90
               </button>
-              <button onClick={() => setShowDemoModal(true)}
-                style={{ background: "transparent", color: "rgba(244,239,230,0.7)", fontFamily: MONO, fontSize: "0.78rem", letterSpacing: "1px", border: `1px solid rgba(244,239,230,0.25)`, padding: "0 1.5rem", height: "3.25rem", cursor: "pointer" }}
-                className="hover:border-white/50 transition-colors">
-                Vedi un esempio di report ↗
-              </button>
+              <p style={{ color: "rgba(244,239,230,0.55)", fontSize: "0.68rem", fontFamily: MONO, textAlign: "center", width: "100%" }}>
+                Nessun abbonamento · Risultato in 3 minuti
+              </p>
             </div>
+
+            {/* Search form semplificato in hero */}
+            <HeroSearchForm onStart={handleStartSearch} />
+
+            <button onClick={() => setShowDemoModal(true)}
+              style={{ background: "transparent", color: "rgba(244,239,230,0.7)", fontFamily: MONO, fontSize: "0.72rem", letterSpacing: "1px", border: `1px solid rgba(244,239,230,0.25)`, padding: "0.6rem 1.25rem", cursor: "pointer", marginTop: "0.75rem" }}
+              className="hover:border-white/50 transition-colors">
+              Vedi un esempio di report ↗
+            </button>
           </motion.div>
+        </div>
+      </section>
+
+      {/* ── SOCIAL PROOF SECTION ── */}
+      <section style={{ background: W, padding: "2.5rem 1.5rem", borderBottom: `1px solid ${BD}` }}>
+        <div className="max-w-4xl mx-auto">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
+            {/* Anonymized report mock */}
+            <div style={{ background: BG, border: `1px solid ${BD}`, padding: "1.5rem" }}>
+              <div className="flex items-center gap-2 mb-3 pb-2" style={{ borderBottom: `2px solid ${P}` }}>
+                <div className="flex items-baseline gap-1">
+                  <span style={{ fontFamily: MONO, fontWeight: 700, fontSize: "0.8rem", color: P, letterSpacing: "2px" }}>URBI</span>
+                  <span style={{ fontFamily: MONO, fontWeight: 700, fontSize: "0.8rem", color: AC, letterSpacing: "2px" }}>CHECK</span>
+                </div>
+                <span style={{ fontFamily: MONO, fontSize: "0.5rem", color: GR, letterSpacing: "1px", textTransform: "uppercase", marginLeft: "auto" }}>
+                  #UB-2026-0A3F
+                </span>
+              </div>
+              <div className="space-y-2">
+                {[["Comune", "Torino (TO)"], ["Foglio / Map.", "15 / 342"], ["Zona", "B — Residenziale consolidata"], ["Sismica", "Zona 3 — Media sismicità"], ["PAI", "✅ Nessuna frana censita"]].map(([l, v], i) => (
+                  <div key={i} className="flex justify-between text-xs" style={{ borderBottom: i < 4 ? `1px dotted ${BD}` : "none", paddingBottom: "0.35rem" }}>
+                    <span style={{ fontFamily: MONO, color: GR, fontSize: "0.58rem" }}>{l}</span>
+                    <span style={{ fontFamily: MONO, color: TX, fontWeight: 600, fontSize: "0.62rem" }}>{v}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-3 p-2" style={{ background: `${P}08`, border: `1px solid ${P}20` }}>
+                <p style={{ fontFamily: MONO, fontWeight: 700, color: P, fontSize: "0.62rem", textAlign: "center" }}>
+                  ✓ Operazione fattibile — Score 7/10
+                </p>
+              </div>
+            </div>
+
+            {/* Testimonial + counter */}
+            <div>
+              <div className="flex items-center gap-1.5 mb-3">
+                {[1, 2, 3, 4, 5].map(i => (
+                  <span key={i} style={{ color: AC, fontSize: "0.9rem" }}>★</span>
+                ))}
+              </div>
+              <p style={{ fontFamily: SERIF, fontSize: "1rem", color: TX, lineHeight: 1.6, fontStyle: "italic" }}>
+                "Non avevo idea che la particella fosse in zona sismica 2 e con un vincolo paesaggistico. UrbiCheck mi ha salvato da un acquisto sbagliato."
+              </p>
+              <p style={{ fontFamily: MONO, fontSize: "0.6rem", color: GR, letterSpacing: "1px", marginTop: "0.75rem" }}>
+                — Marco R., acquirente privato, Milano
+              </p>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -142,8 +350,11 @@ export default function LandingPage() {
       <section style={{ background: TX, borderBottom: `1px solid #2d2b28` }}>
         <div className="max-w-4xl mx-auto px-5">
           <div className="grid grid-cols-2 md:grid-cols-4">
-            {stats.map((s, i) => (
-              <div key={i} className="py-5 px-4 text-center" style={{ borderRight: i < 3 ? `1px solid #2d2b28` : "none" }}>
+            <div className="py-5 px-4" style={{ borderRight: `1px solid #2d2b28` }}>
+              <AnimatedCounter target={247} label="immobili analizzati" />
+            </div>
+            {stats.filter((_, i) => i > 0).map((s, i) => (
+              <div key={i} className="py-5 px-4 text-center" style={{ borderRight: i < 2 ? `1px solid #2d2b28` : "none" }}>
                 <div style={{ fontFamily: MONO, fontWeight: 700, color: AC, fontSize: "1.35rem", lineHeight: 1 }}>{s.value}</div>
                 <div style={{ fontFamily: MONO, fontSize: "0.58rem", color: GR, textTransform: "uppercase", letterSpacing: "2px", marginTop: 4 }}>{s.label}</div>
               </div>
@@ -357,6 +568,52 @@ export default function LandingPage() {
           </div>
         </div>
       </footer>
+
+      {/* ── EXIT INTENT POPUP ── */}
+      {showExitPopup && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(28,26,23,0.85)" }} onClick={() => setShowExitPopup(false)}>
+          <motion.div
+            initial={{ opacity: 0, scale: 0.92, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            className="max-w-sm w-full p-6 bg-white relative" style={{ border: `2px solid ${P}` }}
+            onClick={e => e.stopPropagation()}
+          >
+            <button
+              onClick={() => setShowExitPopup(false)}
+              style={{ position: "absolute", top: 10, right: 10, background: "none", border: "none", cursor: "pointer", color: GR, fontSize: "1.1rem" }}
+            >
+              <X size={18} />
+            </button>
+            <div className="flex items-center gap-2 mb-3">
+              <span style={{ width: 7, height: 7, borderRadius: "50%", background: AC, display: "inline-block" }} />
+              <span style={{ fontFamily: MONO, fontWeight: 700, color: AC, fontSize: "0.58rem", letterSpacing: "2px", textTransform: "uppercase" }}>
+                Accesso Beta
+              </span>
+            </div>
+            <h3 style={{ fontFamily: MONO, fontWeight: 700, color: P, fontSize: "1.1rem", lineHeight: 1.25, marginBottom: "0.5rem" }}>
+              3 analisi gratuite<br />per i primi 50 utenti
+            </h3>
+            <p style={{ fontFamily: SERIF, color: GR, fontSize: "0.85rem", lineHeight: 1.6, marginBottom: "1.25rem" }}>
+              Iscriviti ora e ricevi 3 analisi catastali complete con vincoli, sismica, PAI e valutazione finanziaria — tutto gratis.
+            </p>
+            <form onSubmit={handleExitSubscribe}>
+              <input
+                type="email" value={exitEmail} onChange={e => setExitEmail(e.target.value)} required
+                placeholder="la tua email"
+                style={{ width: "100%", padding: "0.75rem 0.9rem", fontSize: "0.78rem", background: W, border: `1px solid ${BD}`, color: TX, fontFamily: MONO, borderRadius: 0, outline: "none", marginBottom: "0.75rem" }}
+                className="focus:border-primary"
+              />
+              <button type="submit" disabled={exitDone}
+                style={{ width: "100%", background: AC, color: W, fontFamily: MONO, fontWeight: 700, fontSize: "0.75rem", letterSpacing: "1px", textTransform: "uppercase", border: "none", padding: "0.8rem", cursor: exitDone ? "default" : "pointer", opacity: exitDone ? 0.6 : 1, borderRadius: 0 }}>
+                {exitDone ? "Iscritto ✓" : "Iscriviti ora — è gratis"}
+              </button>
+            </form>
+            <p style={{ fontFamily: MONO, fontSize: "0.5rem", color: GR, textAlign: "center", marginTop: "0.75rem" }}>
+              Nessuno spam. Solo accesso alla beta.
+            </p>
+          </motion.div>
+        </div>
+      )}
 
       {/* ── DEMO MODAL ── */}
       {showDemoModal && (
