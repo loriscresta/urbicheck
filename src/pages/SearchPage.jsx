@@ -275,6 +275,9 @@ export default function SearchPage() {
       sessionStorage.setItem('urbicheck_last_charge', JSON.stringify(chargeResult));
     }
 
+    // Meta Pixel — Purchase (query pagata con successo, paid=true)
+    trackEvent("Purchase", { customData: { value: query.cost, currency: "EUR" }, email: currentUser?.email });
+
     navigate(`/report/${query.id}`);
   };
 
@@ -519,6 +522,9 @@ export default function SearchPage() {
           ...queryIds.map(qid => base44.entities.CadastralQuery.update(qid, { paid: true })),
           base44.entities.BatchQuery.update(batchRecord.id, { paid: true }),
         ]);
+
+        // Meta Pixel — Purchase (batch pagato con successo, paid=true)
+        trackEvent("Purchase", { customData: { value: totalCost, currency: "EUR" }, email: user.email });
       } catch (e) {
         console.error('Batch charge error:', e);
         setPaymentError('Errore durante il pagamento batch. Riprova.');
