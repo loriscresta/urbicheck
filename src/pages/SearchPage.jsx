@@ -234,6 +234,7 @@ export default function SearchPage() {
     }
 
     // ── Pagamento immediato: crea la query SOLO se il pagamento va a buon fine ──
+    window.fbq?.('track', 'InitiateCheckout');
     let chargeResult = null;
     try {
       const cr = await chargeReport({ query_id: query.id });
@@ -276,6 +277,7 @@ export default function SearchPage() {
     }
 
     // Meta Pixel — Purchase (query pagata con successo, paid=true)
+    window.fbq?.('track', 'Purchase', { value: query.cost, currency: 'EUR' });
     trackEvent("Purchase", { customData: { value: query.cost, currency: "EUR" }, email: currentUser?.email });
 
     navigate(`/report/${query.id}`);
@@ -345,6 +347,7 @@ export default function SearchPage() {
     const _bLat = batchEnrichment?.geocoding?.lat;
     const _bLon = batchEnrichment?.geocoding?.lon ?? batchEnrichment?.geocoding?.lng ?? null;
 
+    window.fbq?.('track', 'InitiateCheckout');
     const queryIds = [];
     const results = [];
     setBatchProgress({ current: 0, total: units.length, results: [] });
@@ -524,6 +527,7 @@ export default function SearchPage() {
         ]);
 
         // Meta Pixel — Purchase (batch pagato con successo, paid=true)
+        window.fbq?.('track', 'Purchase', { value: totalCost, currency: 'EUR' });
         trackEvent("Purchase", { customData: { value: totalCost, currency: "EUR" }, email: user.email });
       } catch (e) {
         console.error('Batch charge error:', e);
