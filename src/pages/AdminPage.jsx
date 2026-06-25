@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { motion } from "framer-motion";
+import ParcelCoveragePanel from "@/components/admin/ParcelCoveragePanel";
 
 const mono = "'IBM Plex Mono', monospace";
 const serif = "'Libre Baskerville', serif";
@@ -153,7 +154,7 @@ export default function AdminPage() {
   const failedQueries = allQueries.filter(q => q.status === "failed").length;
   const uniqueUsers = [...new Set(allQueries.map(q => q.created_by))];
 
-  const TABS = ["overview", "utenti", "query", "waitlist", "transazioni"];
+  const TABS = ["overview", "utenti", "query", "waitlist", "transazioni", "copertura"];
 
   const handleSendMassEmail = async () => {
     if (!massEmailMsg.trim()) return;
@@ -397,6 +398,9 @@ export default function AdminPage() {
           </div>
         </div>
       )}
+
+      {/* ── COPERTURA CATASTALE ── */}
+      {activeTab === "copertura" && <ParcelCoveragePanel />}
 
       <div className="mt-10 pt-6 border-t text-center text-[10px] uppercase tracking-[2px]" style={{ borderColor: T.border, color: T.grey, fontFamily: mono }}>
         urbicheck.it — Admin Panel — Accesso riservato

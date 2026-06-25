@@ -1,0 +1,87 @@
+{
+  "name": "ParcelCoverageTest",
+  "type": "object",
+  "properties": {
+    "comune": {
+      "type": "string",
+      "description": "Nome del comune testato"
+    },
+    "provincia": {
+      "type": "string",
+      "description": "Provincia del comune"
+    },
+    "regione": {
+      "type": "string",
+      "description": "Regione del comune"
+    },
+    "codice_istat": {
+      "type": "string",
+      "description": "Codice ISTAT del comune (se disponibile in ComuneItalia)"
+    },
+    "test_lat": {
+      "type": "number",
+      "description": "Latitudine del centro del comune geocodificato con Google"
+    },
+    "test_lon": {
+      "type": "number",
+      "description": "Longitudine del centro del comune geocodificato con Google"
+    },
+    "found": {
+      "type": "boolean",
+      "description": "True se almeno uno dei 5 punti di test ha restituito una particella"
+    },
+    "hits": {
+      "type": "number",
+      "default": 0,
+      "description": "Numero di punti di test (su 5) che hanno trovato una particella"
+    },
+    "comune_code": {
+      "type": "string",
+      "description": "Codice catastale del comune restituito dal primo esito positivo (es. B885)"
+    },
+    "esito": {
+      "type": "string",
+      "enum": [
+        "coperto",
+        "buco",
+        "geocode_fallito"
+      ],
+      "description": "Esito del test di copertura: coperto (hits>0), buco (hits=0), geocode_fallito (geocoding non riuscito)"
+    },
+    "note": {
+      "type": "string",
+      "description": "Note operative o errori riscontrati"
+    },
+    "tested_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Timestamp UTC dell'ultima esecuzione del test per questo comune"
+    }
+  },
+  "required": [
+    "comune",
+    "esito"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "read": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}
