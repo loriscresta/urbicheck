@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
-import { MapPin, Loader2, CheckCircle2 } from "lucide-react";
+import { MapPin, Loader2, CheckCircle2, AlertCircle } from "lucide-react";
+import { base44 } from "@/api/base44Client";
 import { lookupParcelByCoords } from "@/functions/lookupParcelByCoords";
 
 // ── Helpers ────────────────────────────────────────────────────────────
@@ -30,18 +31,31 @@ function formatSuggestionDisplay(item) {
   return `${a.road || (item.display_name || "").split(",")[0]}, ${a.town || a.city || a.village || ""}`.replace(/,\s*,/g, ",").replace(/,\s*$/, "");
 }
 
-export default function IndirizzoAutocomplete({ onComuneFound, onParcelFound }) {
+const NOMINATIM_BASE = "https://nominatim.openstreetmap.org/search?countrycodes=it&format=json&addressdetails=1";
+
+export default function IndirizzoAutocomplete({ onComuneFound, onParcelFound, onResetParcel, initialAddress }) {
   const [addressQuery, setAddressQuery] = useState("");
   const [addressSuggestions, setAddressSuggestions] = useState([]);
   const [mapCoords, setMapCoords] = useState(null);
   const [comuneTrovato, setComuneTrovato] = useState("");
   const [parcelLoading, setParcelLoading] = useState(false);
-  const [parcelFound, setParcelFound] = useState(false);
+  // idle | loading | found | not_found
+  const [parcelStatus, setParcelStatus] = useState("idle");
   const [mapReady, setMapReady] = useState(false);
   const debounceRef = useRef(null);
   const mapContainerRef = useRef(null);
   const leafletMapRef = useRef(null);
   const markerRef = useRef(null);
+  const initialDoneRef = useRef(false);
+
+  // ── Reset completo dello stato precedente (comune, particella, mappa, banner) ──
+  const resetState = () => {
+    setComuneTrovato("");
+    setParcelStatus("idle");
+    setMapCoords(null);
+    setAddressSuggestions([]);
+    onResetParcel?.();
+  };
 
   // ── Carica Leaflet da CDN una volta ────────────────────────────────────
   useEffect(() => {
@@ -64,24 +78,78 @@ export default function IndirizzoAutocomplete({ onComuneFound, onParcelFound }) 
   // ── Catastomappe lookup condiviso ──────────────────────────────────────
   const doParcelLookup = async (lat, lon) => {
     setParcelLoading(true);
-    setParcelFound(false);
+    setParcelStatus("loading");
     try {
       const res = await lookupParcelByCoords({ lat, lon });
       const data = res?.data || res;
       if (data?.found && data?.foglio && data?.particella) {
-        setParcelFound(true);
+        setParcelStatus("found");
         onParcelFound?.({
           foglio: String(data.foglio),
           particella: String(data.particella),
           sezione: data.sezione || null,
         });
+      } else {
+        setParcelStatus("not_found");
       }
     } catch (_) {
-      // Silenzioso — l'utente compila a mano
+      setParcelStatus("not_found");
     } finally {
       setParcelLoading(false);
     }
   };
+
+  // ── Fallback: se Nominatim non trova, cerca coordinata del comune in ComuneItalia ──
+  const comuneFallbackLookup = async (queryString) => {
+    const parts = queryString.split(",").map((p) => p.trim()).filter(Boolean);
+    // Prova l'ultimo segmento dopo la virgola, poi il primo
+    const candidates = [];
+    if (parts.length > 1) candidates.push(parts[parts.length - 1]);
+    candidates.push(parts[0]);
+
+    for (const nome of candidates) {
+      if (!nome) continue;
+      try {
+        const results = await base44.entities.ComuneItalia.filter({ nome }, "-created_date", 1);
+        const c = results?.[0];
+        if (c && typeof c.lat === "number" && typeof c.lon === "number") {
+          setComuneTrovato(c.nome);
+          onComuneFound?.(c.nome);
+          setMapCoords({ lat: c.lat, lon: c.lon });
+          setParcelStatus("not_found");
+          return;
+        }
+      } catch (_) {}
+    }
+    // Nessun fallback disponibile
+    setParcelStatus("not_found");
+  };
+
+  // ── Geocoding + risoluzione automatica di una stringa indirizzo completa ──
+  const geocodeAndResolve = async (queryString) => {
+    try {
+      const res = await fetch(`${NOMINATIM_BASE}&limit=1&q=${encodeURIComponent(queryString)}`, {
+        headers: { "Accept-Language": "it" },
+      });
+      if (res.ok) {
+        const arr = await res.json();
+        if (arr && arr.length > 0) {
+          await selectAddress(arr[0]);
+          return;
+        }
+      }
+    } catch (_) {}
+    await comuneFallbackLookup(queryString);
+  };
+
+  // ── Risolve l'indirizzo iniziale (arrivo da /search?address=...) ─────────
+  useEffect(() => {
+    if (initialDoneRef.current) return;
+    if (!initialAddress) return;
+    initialDoneRef.current = true;
+    setAddressQuery(initialAddress);
+    geocodeAndResolve(initialAddress);
+  }, [initialAddress]);
 
   // ── Inizializza / aggiorna mappa Leaflet ───────────────────────────────
   useEffect(() => {
@@ -123,6 +191,8 @@ export default function IndirizzoAutocomplete({ onComuneFound, onParcelFound }) 
   const handleAddressInput = (val) => {
     setAddressQuery(val);
     clearTimeout(debounceRef.current);
+    // (a) Reset sempre dello stato precedente a ogni cambio testo
+    resetState();
     if (val.length < 3) {
       setAddressSuggestions([]);
       return;
@@ -131,7 +201,7 @@ export default function IndirizzoAutocomplete({ onComuneFound, onParcelFound }) 
       try {
         const { street, city } = parseAddressInput(val);
         const headers = { "Accept-Language": "it" };
-        const baseUrl = "https://nominatim.openstreetmap.org/search?countrycodes=it&format=json&addressdetails=1&limit=4";
+        const baseUrl = `${NOMINATIM_BASE}&limit=4`;
         const calls = [
           fetch(`${baseUrl}&q=${encodeURIComponent(val)}`, { headers }),
         ];
@@ -169,8 +239,10 @@ export default function IndirizzoAutocomplete({ onComuneFound, onParcelFound }) 
     }, 400);
   };
 
-  // ── Selezione indirizzo dalla dropdown ─────────────────────────────────
-  const handleSelectAddress = async (item) => {
+  // ── Selezione indirizzo (da dropdown o da geocoding iniziale) ───────────
+  const selectAddress = async (item) => {
+    // (a) Resetta prima lo stato precedente, poi imposta i nuovi valori
+    resetState();
     setAddressQuery(item.display_name);
     setAddressSuggestions([]);
 
@@ -190,15 +262,12 @@ export default function IndirizzoAutocomplete({ onComuneFound, onParcelFound }) 
     const lon = parseFloat(item.lon);
     setMapCoords({ lat, lon });
 
-    doParcelLookup(lat, lon);
+    await doParcelLookup(lat, lon);
   };
 
   const handleClear = () => {
+    resetState();
     setAddressQuery("");
-    setAddressSuggestions([]);
-    setMapCoords(null);
-    setComuneTrovato("");
-    setParcelFound(false);
   };
 
   return (
@@ -258,7 +327,7 @@ export default function IndirizzoAutocomplete({ onComuneFound, onParcelFound }) 
             {addressSuggestions.map((s, i) => (
               <li
                 key={i}
-                onClick={() => handleSelectAddress(s)}
+                onClick={() => selectAddress(s)}
                 style={{
                   padding: "10px 12px",
                   cursor: "pointer",
@@ -290,10 +359,19 @@ export default function IndirizzoAutocomplete({ onComuneFound, onParcelFound }) 
         </div>
       )}
 
-      {parcelFound && (
+      {!parcelLoading && parcelStatus === "found" && (
         <div className="flex items-center gap-2 text-xs px-3 py-1.5 rounded border border-emerald-300 bg-emerald-50" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
           <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
           <span className="text-emerald-700 font-semibold">✓ Dati catastali trovati automaticamente</span>
+        </div>
+      )}
+
+      {!parcelLoading && parcelStatus === "not_found" && (
+        <div className="flex items-start gap-2 text-xs px-3 py-2 rounded border border-amber-300 bg-amber-50" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
+          <AlertCircle className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-0.5" />
+          <span className="text-amber-800">
+            Non siamo riusciti a ricavare i dati catastali da questo indirizzo. Trascina il pin sull'immobile esatto sulla mappa, oppure inserisci manualmente Foglio e Particella qui sotto.
+          </span>
         </div>
       )}
 

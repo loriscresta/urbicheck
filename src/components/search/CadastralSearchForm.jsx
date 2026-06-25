@@ -83,7 +83,7 @@ function newParcel(foglio = "", particella = "") {
   return { id: nextId(), foglio, particella, sezione: "", indirizzo: "", subs: [{ id: nextId(), value: "" }] };
 }
 
-export default function CadastralSearchForm({ onSubmit, isLoading, submitLabel = "Analizza →", userBalance = null, initialBatchData = null, prefillData = null }) {
+export default function CadastralSearchForm({ onSubmit, isLoading, submitLabel = "Analizza →", userBalance = null, initialBatchData = null, prefillData = null, initialAddress = null }) {
   const [selectedComune, setSelectedComune] = useState(null);
   const [parcels, setParcels] = useState([newParcel()]);
   const [finalita, setFinalita] = useState("");
@@ -359,6 +359,7 @@ export default function CadastralSearchForm({ onSubmit, isLoading, submitLabel =
     <form onSubmit={handleSubmit} className="space-y-6" data-search-form>
       {/* Cerca per indirizzo */}
       <IndirizzoAutocomplete
+        initialAddress={initialAddress}
         onComuneFound={(comuneName) => {
           base44.entities.ComuneItalia.filter({ nome: comuneName }, "-created_date", 1).then(results => {
             if (results[0]) setSelectedComune(results[0]);
@@ -369,6 +370,9 @@ export default function CadastralSearchForm({ onSubmit, isLoading, submitLabel =
             if (!ps.length) return [{ ...newParcel(foglio, particella), sezione: sezione || "" }];
             return ps.map((p, i) => i === 0 ? { ...p, foglio, particella, sezione: sezione || p.sezione } : p);
           });
+        }}
+        onResetParcel={() => {
+          setParcels(ps => ps.map((p, i) => i === 0 ? { ...p, foglio: "", particella: "", sezione: "" } : p));
         }}
       />
 

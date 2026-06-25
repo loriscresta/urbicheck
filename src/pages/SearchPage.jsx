@@ -30,6 +30,7 @@ export default function SearchPage() {
   const [exampleData, setExampleData] = useState(null);
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const initialAddress = searchParams.get("address");
 
   // Recupera batch salvato prima del redirect a /credits (dopo ricarica)
   useEffect(() => {
@@ -682,6 +683,7 @@ export default function SearchPage() {
                 userBalance={credits?.balance ?? null}
                 initialBatchData={pendingBatchData}
                 prefillData={exampleData}
+                initialAddress={initialAddress}
               />
             </ErrorBoundary>
           </div>
