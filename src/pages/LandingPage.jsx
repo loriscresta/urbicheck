@@ -83,14 +83,16 @@ function HeroSearchForm({ onStart }) {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    const q = new URLSearchParams();
+    // Priorità assoluta: indirizzo presente → naviga sempre a /search?address=
+    // (mai fallback onStart/popup, così Invio porta sempre alla ricerca)
     if (indirizzo.trim()) {
-      q.set("address", indirizzo.trim());
-    } else {
-      if (comune.trim()) q.set("comune", comune.trim());
-      if (foglio.trim()) q.set("foglio", foglio.trim());
-      if (particella.trim()) q.set("particella", particella.trim());
+      navigate(`/search?address=${encodeURIComponent(indirizzo.trim())}`);
+      return;
     }
+    const q = new URLSearchParams();
+    if (comune.trim()) q.set("comune", comune.trim());
+    if (foglio.trim()) q.set("foglio", foglio.trim());
+    if (particella.trim()) q.set("particella", particella.trim());
     if (q.toString()) {
       navigate(`/search?${q.toString()}`);
     } else {
