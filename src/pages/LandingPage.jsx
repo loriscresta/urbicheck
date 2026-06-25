@@ -194,45 +194,9 @@ function AnimatedCounter({ target, label }) {
 
 export default function LandingPage() {
   const [showDemoModal, setShowDemoModal] = useState(false);
-  const [showExitPopup, setShowExitPopup] = useState(false);
-  const [exitEmail, setExitEmail] = useState("");
-  const [exitDone, setExitDone] = useState(false);
-  const exitTimerRef = useRef(null);
-  const hasFiredExitRef = useRef(false);
   const navigate = useNavigate();
   const handleLogin = () => base44.auth.redirectToLogin("/dashboard");
   const handleStartSearch = () => navigate("/search");
-
-  // Exit intent popup — 30s inactivity trigger
-  useEffect(() => {
-    if (hasFiredExitRef.current) return;
-    const resetTimer = () => {
-      clearTimeout(exitTimerRef.current);
-      exitTimerRef.current = setTimeout(() => {
-        if (!hasFiredExitRef.current) {
-          hasFiredExitRef.current = true;
-          setShowExitPopup(true);
-        }
-      }, 30000);
-    };
-    resetTimer();
-    const events = ["mousemove", "keydown", "scroll", "touchstart", "click"];
-    events.forEach(e => window.addEventListener(e, resetTimer));
-    return () => {
-      clearTimeout(exitTimerRef.current);
-      events.forEach(e => window.removeEventListener(e, resetTimer));
-    };
-  }, []);
-
-  const handleExitSubscribe = async (e) => {
-    e.preventDefault();
-    if (!exitEmail || exitDone) return;
-    setExitDone(true);
-    try {
-      await base44.entities.WaitlistSubscriber.create({ email: exitEmail });
-    } catch (_) {}
-    setShowExitPopup(false);
-  };
 
   return (
     <div style={{ background: BG, fontFamily: MONO, minHeight: "100vh" }}>
@@ -545,52 +509,6 @@ export default function LandingPage() {
           </div>
         </div>
       </footer>
-
-      {/* ── EXIT INTENT POPUP ── */}
-      {showExitPopup && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(28,26,23,0.85)" }} onClick={() => setShowExitPopup(false)}>
-          <motion.div
-            initial={{ opacity: 0, scale: 0.92, y: 20 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            className="max-w-sm w-full p-6 bg-white relative" style={{ border: `2px solid ${P}` }}
-            onClick={e => e.stopPropagation()}
-          >
-            <button
-              onClick={() => setShowExitPopup(false)}
-              style={{ position: "absolute", top: 10, right: 10, background: "none", border: "none", cursor: "pointer", color: GR, fontSize: "1.1rem" }}
-            >
-              <X size={18} />
-            </button>
-            <div className="flex items-center gap-2 mb-3">
-              <span style={{ width: 7, height: 7, borderRadius: "50%", background: AC, display: "inline-block" }} />
-              <span style={{ fontFamily: MONO, fontWeight: 700, color: AC, fontSize: "0.58rem", letterSpacing: "2px", textTransform: "uppercase" }}>
-                Accesso Beta
-              </span>
-            </div>
-            <h3 style={{ fontFamily: MONO, fontWeight: 700, color: P, fontSize: "1.1rem", lineHeight: 1.25, marginBottom: "0.5rem" }}>
-              3 analisi gratuite<br />per i primi 50 utenti
-            </h3>
-            <p style={{ fontFamily: SERIF, color: GR, fontSize: "0.85rem", lineHeight: 1.6, marginBottom: "1.25rem" }}>
-              Iscriviti ora e ricevi 3 analisi catastali complete con vincoli, sismica, PAI e valutazione finanziaria — tutto gratis.
-            </p>
-            <form onSubmit={handleExitSubscribe}>
-              <input
-                type="email" value={exitEmail} onChange={e => setExitEmail(e.target.value)} required
-                placeholder="la tua email"
-                style={{ width: "100%", padding: "0.75rem 0.9rem", fontSize: "0.78rem", background: W, border: `1px solid ${BD}`, color: TX, fontFamily: MONO, borderRadius: 0, outline: "none", marginBottom: "0.75rem" }}
-                className="focus:border-primary"
-              />
-              <button type="submit" disabled={exitDone}
-                style={{ width: "100%", background: AC, color: W, fontFamily: MONO, fontWeight: 700, fontSize: "0.75rem", letterSpacing: "1px", textTransform: "uppercase", border: "none", padding: "0.8rem", cursor: exitDone ? "default" : "pointer", opacity: exitDone ? 0.6 : 1, borderRadius: 0 }}>
-                {exitDone ? "Iscritto ✓" : "Iscriviti ora — è gratis"}
-              </button>
-            </form>
-            <p style={{ fontFamily: MONO, fontSize: "0.5rem", color: GR, textAlign: "center", marginTop: "0.75rem" }}>
-              Nessuno spam. Solo accesso alla beta.
-            </p>
-          </motion.div>
-        </div>
-      )}
 
       {/* ── DEMO MODAL ── */}
       {showDemoModal && (
