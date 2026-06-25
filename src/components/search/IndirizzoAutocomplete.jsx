@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from "react";
 import { MapPin, Loader2, CheckCircle2, AlertCircle } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { lookupParcelByCoords } from "@/functions/lookupParcelByCoords";
+import { geocodeAddressCascade } from "@/functions/geocodeAddressCascade";
 
 // ── Helpers ────────────────────────────────────────────────────────────
 
@@ -126,20 +127,21 @@ export default function IndirizzoAutocomplete({ onComuneFound, onParcelFound, on
     setParcelStatus("not_found");
   };
 
-  // ── Geocoding + risoluzione automatica di una stringa indirizzo completa ──
+  // ── Geocoding a cascata (backend: Google primario → Nominatim fallback) ──
+  // La chiave Google resta lato server. Le coordinate alimentano lookupParcelByCoords.
   const geocodeAndResolve = async (queryString) => {
     try {
-      const res = await fetch(`${NOMINATIM_BASE}&limit=1&q=${encodeURIComponent(queryString)}`, {
-        headers: { "Accept-Language": "it" },
-      });
-      if (res.ok) {
-        const arr = await res.json();
-        if (arr && arr.length > 0) {
-          await selectAddress(arr[0]);
-          return;
-        }
+      const res = await geocodeAddressCascade({ address: queryString });
+      const d = res?.data || res;
+      if (d && d.found !== false && d.lat != null && d.lng != null && isFinite(d.lat) && isFinite(d.lng)) {
+        const comune = d.comune || "";
+        if (comune) { setComuneTrovato(comune); onComuneFound?.(comune); }
+        setMapCoords({ lat: d.lat, lon: d.lng });
+        await doParcelLookup(d.lat, d.lng);
+        return;
       }
     } catch (_) {}
+    // Nessun risultato: pin sul centroide del comune (ComuneItalia) o stato not_found
     await comuneFallbackLookup(queryString);
   };
 
