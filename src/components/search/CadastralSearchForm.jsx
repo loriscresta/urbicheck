@@ -374,6 +374,7 @@ export default function CadastralSearchForm({ onSubmit, isLoading, submitLabel =
         onResetParcel={() => {
           setParcels(ps => ps.map((p, i) => i === 0 ? { ...p, foglio: "", particella: "", sezione: "" } : p));
         }}
+        onResetComune={() => setSelectedComune(null)}
       />
 
       {/* Comune */}

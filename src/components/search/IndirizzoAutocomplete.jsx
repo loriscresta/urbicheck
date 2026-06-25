@@ -33,7 +33,7 @@ function formatSuggestionDisplay(item) {
 
 const NOMINATIM_BASE = "https://nominatim.openstreetmap.org/search?countrycodes=it&format=json&addressdetails=1";
 
-export default function IndirizzoAutocomplete({ onComuneFound, onParcelFound, onResetParcel, initialAddress }) {
+export default function IndirizzoAutocomplete({ onComuneFound, onParcelFound, onResetParcel, onResetComune, initialAddress }) {
   const [addressQuery, setAddressQuery] = useState("");
   const [addressSuggestions, setAddressSuggestions] = useState([]);
   const [mapCoords, setMapCoords] = useState(null);
@@ -55,6 +55,7 @@ export default function IndirizzoAutocomplete({ onComuneFound, onParcelFound, on
     setMapCoords(null);
     setAddressSuggestions([]);
     onResetParcel?.();
+    onResetComune?.();
   };
 
   // ── Carica Leaflet da CDN una volta ────────────────────────────────────
@@ -370,7 +371,7 @@ export default function IndirizzoAutocomplete({ onComuneFound, onParcelFound, on
         <div className="flex items-start gap-2 text-xs px-3 py-2 rounded border border-amber-300 bg-amber-50" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
           <AlertCircle className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-0.5" />
           <span className="text-amber-800">
-            Non siamo riusciti a ricavare i dati catastali da questo indirizzo. Trascina il pin sull'immobile esatto sulla mappa, oppure inserisci manualmente Foglio e Particella qui sotto.
+            Non siamo riusciti a ricavare i dati catastali da questo indirizzo. Trascina il pin sull'immobile esatto sulla mappa, oppure inserisci manualmente Comune, Foglio e Particella.
           </span>
         </div>
       )}
