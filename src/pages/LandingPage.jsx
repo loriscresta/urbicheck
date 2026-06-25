@@ -275,16 +275,16 @@ export default function LandingPage() {
             </h1>
 
             <p style={{ color: "rgba(244,239,230,0.75)", fontFamily: SERIF, fontSize: "1.05rem", lineHeight: 1.75, maxWidth: 600, marginBottom: "2.5rem" }}>
-              Inserisci foglio e particella — ottieni vincoli urbanistici, sismici, idrogeologici, paesaggistici e valutazione finanziaria istantanea. Senza aspettare il tecnico.
+              Inserisci un indirizzo e ottieni vincoli urbanistici, sismici, idrogeologici, paesaggistici e valutazione finanziaria. Senza aspettare il tecnico.
             </p>
 
             <div className="flex flex-col gap-3 items-start max-w-md">
               <button onClick={handleStartSearch}
                 style={{ background: AC, color: W, fontFamily: MONO, fontWeight: 700, fontSize: "1rem", letterSpacing: "1px", textTransform: "uppercase", border: "none", padding: "0.9rem 2.5rem", cursor: "pointer", boxShadow: `0 4px 24px ${AC}60`, width: "100%", textAlign: "center", borderRadius: "0" }}>
-                Analizza subito — €9,90
+                Inizia gratis →
               </button>
               <p style={{ color: "rgba(244,239,230,0.55)", fontSize: "0.68rem", fontFamily: MONO, textAlign: "center", width: "100%" }}>
-                Nessun abbonamento · Risultato in 3 minuti
+                Prime 3 analisi gratis. Poi €2,99 a report in beta — prezzo pieno €9,90. Nessun abbonamento.
               </p>
             </div>
 
@@ -303,7 +303,7 @@ export default function LandingPage() {
       {/* ── SOCIAL PROOF SECTION ── */}
       <section style={{ background: W, padding: "2.5rem 1.5rem", borderBottom: `1px solid ${BD}` }}>
         <div className="max-w-4xl mx-auto">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
+          <div className="grid grid-cols-1 gap-8 max-w-sm mx-auto">
             {/* Anonymized report mock */}
             <div style={{ background: BG, border: `1px solid ${BD}`, padding: "1.5rem" }}>
               <div className="flex items-center gap-2 mb-3 pb-2" style={{ borderBottom: `2px solid ${P}` }}>
@@ -330,20 +330,6 @@ export default function LandingPage() {
               </div>
             </div>
 
-            {/* Testimonial + counter */}
-            <div>
-              <div className="flex items-center gap-1.5 mb-3">
-                {[1, 2, 3, 4, 5].map(i => (
-                  <span key={i} style={{ color: AC, fontSize: "0.9rem" }}>★</span>
-                ))}
-              </div>
-              <p style={{ fontFamily: SERIF, fontSize: "1rem", color: TX, lineHeight: 1.6, fontStyle: "italic" }}>
-                "Non avevo idea che la particella fosse in zona sismica 2 e con un vincolo paesaggistico. UrbiCheck mi ha salvato da un acquisto sbagliato."
-              </p>
-              <p style={{ fontFamily: MONO, fontSize: "0.6rem", color: GR, letterSpacing: "1px", marginTop: "0.75rem" }}>
-                — Marco R., acquirente privato, Milano
-              </p>
-            </div>
           </div>
         </div>
       </section>
@@ -352,8 +338,9 @@ export default function LandingPage() {
       <section style={{ background: TX, borderBottom: `1px solid #2d2b28` }}>
         <div className="max-w-4xl mx-auto px-5">
           <div className="grid grid-cols-2 md:grid-cols-4">
-            <div className="py-5 px-4" style={{ borderRight: `1px solid #2d2b28` }}>
-              <AnimatedCounter target={247} label="immobili analizzati" />
+            <div className="py-5 px-4 text-center" style={{ borderRight: `1px solid #2d2b28` }}>
+              <div style={{ fontFamily: MONO, fontWeight: 700, color: AC, fontSize: "1.35rem", lineHeight: 1 }}>✓</div>
+              <div style={{ fontFamily: MONO, fontSize: "0.58rem", color: GR, textTransform: "uppercase", letterSpacing: "2px", marginTop: 4 }}>Dati da fonti ufficiali WFS regionali</div>
             </div>
             {stats.filter((_, i) => i > 0).map((s, i) => (
               <div key={i} className="py-5 px-4 text-center" style={{ borderRight: i < 2 ? `1px solid #2d2b28` : "none" }}>
@@ -429,7 +416,7 @@ export default function LandingPage() {
                 {[
                   "Prime 3 analisi completamente gratuite",
                   "Tutte le funzionalità incluse: vincoli, PAI, sismica, valutazione finanziaria",
-                  "Prezzi speciali beta: €2,99/report dopo le prime 3 (vs €9,90 al lancio)",
+                  "€2,99 a report in beta dopo le prime 3, poi €9,90 a prezzo pieno",
                 ].map((item, i) => (
                   <li key={i} className="flex items-start gap-2.5">
                     <span style={{ color: AC, fontWeight: 700, marginTop: 2 }}>✓</span>
@@ -470,53 +457,41 @@ export default function LandingPage() {
             Pay-per-report. Nessun abbonamento.
           </h2>
 
-          {/* ── BETA CARD (central) ── */}
-          <div className="max-w-lg mx-auto mb-10">
-            <div className="relative p-8 bg-white flex flex-col" style={{ border: `2px solid ${AC}`, boxShadow: `0 0 32px ${AC}25` }}>
-              <div style={{ position: "absolute", top: -1, left: "50%", transform: "translateX(-50%)", background: AC, color: W, fontFamily: MONO, fontWeight: 700, fontSize: "0.58rem", letterSpacing: "2px", textTransform: "uppercase", padding: "4px 16px", whiteSpace: "nowrap" }}>
-                BETA ATTIVA
-              </div>
-              <p style={{ fontFamily: MONO, fontWeight: 700, color: GR, fontSize: "0.62rem", letterSpacing: "2px", textTransform: "uppercase", marginBottom: "0.75rem", textAlign: "center" }}>Prezzo speciale beta</p>
-              <div className="text-center mb-1">
-                <span style={{ fontFamily: MONO, fontWeight: 700, color: AC, fontSize: "3.5rem", lineHeight: 1 }}>€0</span>
-              </div>
-              <p style={{ fontFamily: SERIF, color: GR, fontSize: "0.82rem", textAlign: "center", marginBottom: "0.25rem" }}>per le prime 3 analisi</p>
-              <p style={{ fontFamily: MONO, color: P, fontSize: "0.78rem", textAlign: "center", fontWeight: 700, marginBottom: "1.75rem" }}>poi €2,99/report</p>
-              <ul className="space-y-2 mb-6">
-                {betaFeatures.map((f, j) => (
-                  <li key={j} className="flex items-center gap-2">
-                    <CheckCircle2 style={{ width: 13, height: 13, color: AC, flexShrink: 0 }} />
-                    <span style={{ fontFamily: MONO, fontSize: "0.72rem", color: TX }}>{f}</span>
-                  </li>
-                ))}
-              </ul>
-              <p style={{ fontFamily: MONO, fontSize: "0.58rem", color: GR, textAlign: "center", marginBottom: "1.25rem" }}>Valido 30 giorni dal lancio · Solo Piemonte, Liguria, Lombardia</p>
-              <button onClick={handleStartSearch} style={{
-                background: AC, color: W, border: "none",
-                fontFamily: MONO, fontWeight: 700, fontSize: "0.78rem", letterSpacing: "1.5px", textTransform: "uppercase",
-                padding: "0.85rem", cursor: "pointer", width: "100%",
-              }}>
-                Cerca la tua particella — gratis →
-              </button>
-            </div>
-          </div>
-
-          {/* ── FUTURE PLANS (greyed out) ── */}
-          <div>
-            <p style={{ fontFamily: MONO, fontSize: "0.62rem", color: GR, letterSpacing: "2px", textTransform: "uppercase", textAlign: "center", marginBottom: "1.25rem", opacity: 0.7 }}>Prezzi al lancio ufficiale</p>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 opacity-50 relative">
-              <div className="absolute inset-0 z-10 flex items-center justify-center">
-                <span style={{ background: P, color: W, fontFamily: MONO, fontWeight: 700, fontSize: "0.65rem", letterSpacing: "2px", textTransform: "uppercase", padding: "6px 18px", border: `2px solid ${AC}` }}>Coming soon</span>
-              </div>
-              {futurePlans.map((p, i) => (
-                <div key={i} className="p-5 bg-white" style={{ border: `1px solid ${BD}` }}>
-                  <p style={{ fontFamily: MONO, fontWeight: 700, color: GR, fontSize: "0.62rem", letterSpacing: "2px", textTransform: "uppercase", marginBottom: "0.5rem" }}>{p.name}</p>
-                  <p style={{ fontFamily: MONO, fontWeight: 700, color: P, fontSize: "1.8rem", lineHeight: 1, marginBottom: "0.25rem" }}>{p.price}</p>
-                  <p style={{ fontFamily: SERIF, color: GR, fontSize: "0.75rem" }}>{p.desc}</p>
+          {/* ── SCALA PREZZI A 3 GRADINI ── */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {[
+              { name: "Gratis", price: "€0", sub: "le prime 3 analisi", highlight: false },
+              { name: "Beta", price: "€2,99", sub: "/ report — prezzo beta, a tempo", highlight: true },
+              { name: "Prezzo pieno", price: "€9,90", sub: "/ report — nessun abbonamento", highlight: false },
+            ].map((t, i) => (
+              <div key={i} className="p-6 bg-white flex flex-col" style={{ border: t.highlight ? `2px solid ${AC}` : `1px solid ${BD}`, boxShadow: t.highlight ? `0 0 32px ${AC}25` : "none", position: "relative" }}>
+                {t.highlight && (
+                  <div style={{ position: "absolute", top: -1, left: "50%", transform: "translateX(-50%)", background: AC, color: W, fontFamily: MONO, fontWeight: 700, fontSize: "0.56rem", letterSpacing: "2px", textTransform: "uppercase", padding: "4px 14px", whiteSpace: "nowrap" }}>BETA</div>
+                )}
+                <p style={{ fontFamily: MONO, fontWeight: 700, color: GR, fontSize: "0.58rem", letterSpacing: "2px", textTransform: "uppercase", marginBottom: "0.75rem", textAlign: "center" }}>{t.name}</p>
+                <div className="text-center mb-1">
+                  <span style={{ fontFamily: MONO, fontWeight: 700, color: t.highlight ? AC : P, fontSize: "2.4rem", lineHeight: 1 }}>{t.price}</span>
                 </div>
-              ))}
-            </div>
+                <p style={{ fontFamily: SERIF, color: GR, fontSize: "0.78rem", textAlign: "center", marginBottom: "1.25rem" }}>{t.sub}</p>
+                <ul className="space-y-2 mb-6 flex-1">
+                  {["Zona urbanistica", "Vincoli art.142 D.Lgs 42/2004", "Rischio PAI", "Sismica", "Valutazione finanziaria OMI", "Pratiche e iter burocratico"].map((f, j) => (
+                    <li key={j} className="flex items-center gap-2">
+                      <CheckCircle2 style={{ width: 13, height: 13, color: AC, flexShrink: 0 }} />
+                      <span style={{ fontFamily: MONO, fontSize: "0.68rem", color: TX }}>{f}</span>
+                    </li>
+                  ))}
+                </ul>
+                <button onClick={handleStartSearch} style={{
+                  width: "100%", background: AC, color: W, border: "none",
+                  fontFamily: MONO, fontWeight: 700, fontSize: "0.72rem", letterSpacing: "1px", textTransform: "uppercase",
+                  padding: "0.75rem", cursor: "pointer",
+                }}>
+                  Inizia gratis →
+                </button>
+              </div>
+            ))}
           </div>
+          <p style={{ fontFamily: MONO, fontSize: "0.56rem", color: GR, textAlign: "center", marginTop: "1.5rem" }}>Solo Piemonte, Liguria e Lombardia · Prezzo beta a tempo</p>
         </div>
       </section>
 
@@ -531,7 +506,7 @@ export default function LandingPage() {
             UrbiCheck è in accesso anticipato. Piemonte, Liguria e Lombardia disponibili da subito. Nuove regioni in arrivo.
           </p>
           <p style={{ color: AC, fontFamily: MONO, fontSize: "0.68rem", letterSpacing: "1px", marginBottom: "2rem" }}>
-            3 gratis → €2,99/report → fino a 6 report totali in beta · Prezzo speciale beta · Valido 30 giorni dal lancio
+            3 gratis → €2,99 a report in beta → €9,90 prezzo pieno · Nessun abbonamento
           </p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <button onClick={handleStartSearch}
@@ -647,7 +622,7 @@ export default function LandingPage() {
               <p style={{ fontFamily: MONO, fontWeight: 700, color: P, fontSize: "0.72rem" }}>✓ Operazione fattibile — Score 7/10</p>
             </div>
             <button onClick={handleStartSearch} style={{ width: "100%", marginTop: "1rem", background: AC, color: W, fontFamily: MONO, fontWeight: 700, fontSize: "0.75rem", letterSpacing: "1.5px", textTransform: "uppercase", border: "none", padding: "0.85rem", cursor: "pointer" }}>
-              Cerca la tua particella — gratis →
+              Inizia gratis →
             </button>
           </motion.div>
         </div>
