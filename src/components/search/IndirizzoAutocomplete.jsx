@@ -40,8 +40,9 @@ export default function IndirizzoAutocomplete({ onComuneFound, onParcelFound, on
   const [mapCoords, setMapCoords] = useState(null);
   const [comuneTrovato, setComuneTrovato] = useState("");
   const [parcelLoading, setParcelLoading] = useState(false);
-  // idle | loading | found | not_found
+  // idle | loading | found | snapped | not_found
   const [parcelStatus, setParcelStatus] = useState("idle");
+  const [snapDistM, setSnapDistM] = useState(null);
   const [mapReady, setMapReady] = useState(false);
   const debounceRef = useRef(null);
   const mapContainerRef = useRef(null);
@@ -53,6 +54,7 @@ export default function IndirizzoAutocomplete({ onComuneFound, onParcelFound, on
   const resetState = () => {
     setComuneTrovato("");
     setParcelStatus("idle");
+    setSnapDistM(null);
     setMapCoords(null);
     setAddressSuggestions([]);
     onResetParcel?.();
@@ -85,11 +87,19 @@ export default function IndirizzoAutocomplete({ onComuneFound, onParcelFound, on
       const res = await lookupParcelByCoords({ lat, lon });
       const data = res?.data || res;
       if (data?.found && data?.foglio && data?.particella) {
-        setParcelStatus("found");
+        if (data.snapped) {
+          setParcelStatus("snapped");
+          setSnapDistM(data.snap_dist_m ?? null);
+        } else {
+          setParcelStatus("found");
+          setSnapDistM(null);
+        }
         onParcelFound?.({
           foglio: String(data.foglio),
           particella: String(data.particella),
           sezione: data.sezione || null,
+          snapped: data.snapped || false,
+          snap_dist_m: data.snap_dist_m ?? null,
         });
       } else {
         setParcelStatus("not_found");
@@ -366,6 +376,15 @@ export default function IndirizzoAutocomplete({ onComuneFound, onParcelFound, on
         <div className="flex items-center gap-2 text-xs px-3 py-1.5 rounded border border-emerald-300 bg-emerald-50" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
           <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
           <span className="text-emerald-700 font-semibold">✓ Dati catastali trovati automaticamente</span>
+        </div>
+      )}
+
+      {!parcelLoading && parcelStatus === "snapped" && (
+        <div className="flex items-start gap-2 text-xs px-3 py-2 rounded border border-amber-300 bg-amber-50" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
+          <AlertCircle className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-0.5" />
+          <span className="text-amber-800">
+            📍 Particella più vicina{snapDistM != null ? ` (~${snapDistM} m)` : ""} — controlla che il pin sia sull'immobile giusto. Se non è corretto, trascina il pin sull'edificio oppure inserisci manualmente Foglio e Particella.
+          </span>
         </div>
       )}
 

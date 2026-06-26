@@ -31,7 +31,9 @@ Deno.serve(async (req) => {
         const data = await res.json();
         if (data.found && data.parcels?.length) {
           const p = data.parcels[0];
-          console.log(`[lookupParcelByCoords] OK (Aruba): foglio=${p.foglio} part=${p.particella} comune_code=${p.comune_code}`);
+          const isSnapped = data.snapped === true || p.snapped === true;
+          const snapDistM = isSnapped ? Math.round(p.dist_m ?? 0) : null;
+          console.log(`[lookupParcelByCoords] OK (Aruba): foglio=${p.foglio} part=${p.particella} snapped=${isSnapped} dist_m=${snapDistM}`);
           return Response.json({
             found: true,
             foglio: p.foglio != null ? Number(p.foglio) : null,
@@ -42,6 +44,8 @@ Deno.serve(async (req) => {
             centroid_lon: p.centroid_lon ?? null,
             geometry_geojson: p.geometry || null,
             fonte: 'catasto_agent',
+            snapped: isSnapped,
+            snap_dist_m: snapDistM,
           });
         }
         // found=false → nessuna particella in questa posizione nella nostra DB

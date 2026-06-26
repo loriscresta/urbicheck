@@ -202,7 +202,7 @@ export default function SearchPage() {
       : formData;
     const { prezzo_acquisto, superficie, stato_conservativo, destinazione_obiettivo, spese_accessorie,
       categoria_catastale, superficie_mq, rendita_catastale, vani, indirizzo_catastale,
-      visura_uploaded, intestatari_visura, ...cadastralData } = enrichedFormData;
+      visura_uploaded, intestatari_visura, _snap_info, ...cadastralData } = enrichedFormData;
     const fin_data = { prezzo_acquisto, superficie, stato_conservativo, destinazione_obiettivo, spese_accessorie };
 
     const enrichment = await callUrbiCheckEnrichment(enrichedFormData);
@@ -219,7 +219,7 @@ export default function SearchPage() {
     const query = await base44.entities.CadastralQuery.create({
       ...cadastralData,
       status: "pending",
-      report_data: { ...reportData, fin_data, planimetria_data: planimetriaData },
+      report_data: { ...reportData, fin_data, planimetria_data: planimetriaData, ...(_snap_info ? { snap_info: _snap_info } : {}) },
       cost: 9.90,
       ...geocodingCoords,
       ...(superficieEffettiva ? { superficie_mq: superficieEffettiva } : {}),

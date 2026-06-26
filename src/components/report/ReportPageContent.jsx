@@ -509,6 +509,7 @@ export default function ReportPageContent({ query, refetch = () => {}, isPublicV
       <div className="space-y-6">
         {/* Tipologia immobile — mostrata sempre se c'è almeno un dato noto */}
         {(() => {
+          const snapInfo = r.snap_info;
           const cat = query.categoria_catastale || cleanVal(r.dati_catastali?.categoria) || r.catasto_data?.categoria;
           const dest = cleanVal(r.dati_catastali?.destinazione_uso) || r.catasto_data?.destinazione_uso;
           const cons = query.vani ? `${query.vani} vani` : (cleanVal(r.dati_catastali?.consistenza) || r.catasto_data?.superficie);
@@ -519,6 +520,14 @@ export default function ReportPageContent({ query, refetch = () => {}, isPublicV
           const hasAnyData = cat || dest || cons || query.superficie_mq || classe || rendita || zona;
           return (
             <ReportSection icon={Building2} title="Tipologia Immobile" delay={0.02}>
+              {snapInfo?.snapped && (
+                <div className="mb-3 flex items-start gap-2 px-3 py-2 rounded border border-amber-300 bg-amber-50 text-xs" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
+                  <AlertCircle className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-0.5" />
+                  <span className="text-amber-800">
+                    📍 Particella più vicina al punto geocodificato{snapInfo.snap_dist_m != null ? ` (~${snapInfo.snap_dist_m} m)` : ""} — dati non da match esatto. Verificare che corrisponda all'immobile corretto.
+                  </span>
+                </div>
+              )}
               {hasAnyData ? (
                 <>
                   <DataRow label="Categoria catastale" value={cat} />

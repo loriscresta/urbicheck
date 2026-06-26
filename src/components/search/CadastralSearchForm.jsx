@@ -86,6 +86,7 @@ function newParcel(foglio = "", particella = "") {
 export default function CadastralSearchForm({ onSubmit, isLoading, submitLabel = "Analizza →", userBalance = null, initialBatchData = null, prefillData = null, initialAddress = null }) {
   const [selectedComune, setSelectedComune] = useState(null);
   const [parcels, setParcels] = useState([newParcel()]);
+  const [snapInfo, setSnapInfo] = useState(null); // { snapped: bool, snap_dist_m: number }
   const [finalita, setFinalita] = useState("");
   const [showFinancial, setShowFinancial] = useState(false);
   const [visuraDati, setVisuraDati] = useState(null);
@@ -321,6 +322,7 @@ export default function CadastralSearchForm({ onSubmit, isLoading, submitLabel =
         subalterno: p.subs[0].value,
         sezione_catastale: p.sezione?.trim().toUpperCase() || undefined,
         indirizzo_immobile: p.indirizzo?.trim() || undefined,
+        _snap_info: snapInfo || undefined,
       });
     } else {
       // Batch mode — enrich units with per-sub visura data when available
@@ -365,7 +367,8 @@ export default function CadastralSearchForm({ onSubmit, isLoading, submitLabel =
             if (results[0]) setSelectedComune(results[0]);
           }).catch(() => {});
         }}
-        onParcelFound={({ foglio, particella, sezione }) => {
+        onParcelFound={({ foglio, particella, sezione, snapped, snap_dist_m }) => {
+          setSnapInfo(snapped ? { snapped: true, snap_dist_m: snap_dist_m ?? null } : null);
           setParcels(ps => {
             if (!ps.length) return [{ ...newParcel(foglio, particella), sezione: sezione || "" }];
             return ps.map((p, i) => i === 0 ? { ...p, foglio, particella, sezione: sezione || p.sezione } : p);
