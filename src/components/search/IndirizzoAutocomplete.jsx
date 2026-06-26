@@ -293,31 +293,67 @@ export default function IndirizzoAutocomplete({ onComuneFound, onParcelFound, on
           </label>
         </div>
 
-        <input
-          type="text"
-          value={addressQuery}
-          onChange={(e) => handleAddressInput(e.target.value)}
-          placeholder="Es: Via Roma 15, Torino"
-          style={{
-            width: "100%",
-            padding: "10px 12px",
-            border: "1px solid #C4BAA8",
-            borderRadius: "6px",
-            fontFamily: "'IBM Plex Mono', monospace",
-            fontSize: "0.875rem",
-            background: "#fff",
-            color: "#1C1A17",
-            outline: "none",
-          }}
-          onFocus={(e) => {
-            e.target.style.borderColor = "#1A3A6B";
-            e.target.style.boxShadow = "0 0 0 2px rgba(26,58,107,0.15)";
-          }}
-          onBlur={(e) => {
-            e.target.style.borderColor = "#C4BAA8";
-            e.target.style.boxShadow = "none";
-          }}
-        />
+        <div style={{ display: "flex", gap: "6px" }}>
+          <input
+            type="text"
+            value={addressQuery}
+            onChange={(e) => handleAddressInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                e.stopPropagation();
+                if (addressQuery.trim().length >= 3) {
+                  setAddressSuggestions([]);
+                  geocodeAndResolve(addressQuery.trim());
+                }
+              }
+            }}
+            placeholder="Es: Via Roma 15, Torino"
+            style={{
+              flex: 1,
+              padding: "10px 12px",
+              border: "1px solid #C4BAA8",
+              borderRadius: "6px",
+              fontFamily: "'IBM Plex Mono', monospace",
+              fontSize: "0.875rem",
+              background: "#fff",
+              color: "#1C1A17",
+              outline: "none",
+            }}
+            onFocus={(e) => {
+              e.target.style.borderColor = "#1A3A6B";
+              e.target.style.boxShadow = "0 0 0 2px rgba(26,58,107,0.15)";
+            }}
+            onBlur={(e) => {
+              e.target.style.borderColor = "#C4BAA8";
+              e.target.style.boxShadow = "none";
+            }}
+          />
+          <button
+            type="button"
+            onClick={() => {
+              if (addressQuery.trim().length >= 3) {
+                setAddressSuggestions([]);
+                geocodeAndResolve(addressQuery.trim());
+              }
+            }}
+            style={{
+              padding: "0 14px",
+              background: "#1A3A6B",
+              color: "#fff",
+              border: "none",
+              borderRadius: "6px",
+              fontFamily: "'IBM Plex Mono', monospace",
+              fontSize: "0.8rem",
+              fontWeight: 700,
+              cursor: "pointer",
+              whiteSpace: "nowrap",
+              flexShrink: 0,
+            }}
+          >
+            →
+          </button>
+        </div>
 
         {addressSuggestions.length > 0 && (
           <ul
