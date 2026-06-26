@@ -420,6 +420,46 @@ export default function CadastralSearchForm({ onSubmit, isLoading, submitLabel =
         </Select>
       </div>
 
+      {/* ── Riquadro dati obbligatori per finalità che lo richiedono ── */}
+      {finDataRequired && (
+        <div className="rounded-lg border-2 border-primary p-4 space-y-4" style={{ background: 'rgba(26,58,107,0.04)' }}>
+          <div>
+            <p className="text-xs font-bold uppercase tracking-wider mb-0.5" style={{ color: '#1A3A6B', fontFamily: "'IBM Plex Mono', monospace" }}>
+              Dati necessari per il calcolo del rendimento *
+            </p>
+            <p className="text-[11px]" style={{ color: '#7A7268', fontFamily: "'IBM Plex Mono', monospace" }}>
+              Per la finalità <strong>{FINALITA.find(f => f.value === finalita)?.label}</strong> servono questi due dati per calcolare rendimento e ROI.
+            </p>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label className="text-sm font-semibold" style={{ color: '#1A3A6B' }}>
+                Prezzo di acquisto (€) <span style={{ color: '#B33A2A' }}>*</span>
+              </Label>
+              <Input
+                type="number"
+                value={prezzoAcquisto}
+                onChange={e => setPrezzoAcquisto(e.target.value)}
+                placeholder="es. 150000"
+                className={prezzoAcquisto ? '' : 'border-primary/50 ring-1 ring-primary/20'}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-sm font-semibold" style={{ color: '#1A3A6B' }}>
+                Superficie (mq) <span style={{ color: '#B33A2A' }}>*</span>
+              </Label>
+              <Input
+                type="number"
+                value={superficie}
+                onChange={e => setSuperficie(e.target.value)}
+                placeholder="es. 80"
+                className={superficie ? '' : 'border-primary/50 ring-1 ring-primary/20'}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Accordion toggle */}
       <button
         type="button"
@@ -788,15 +828,24 @@ export default function CadastralSearchForm({ onSubmit, isLoading, submitLabel =
       </Button>
 
       {!isValid && (
-        <p className="text-xs text-center" style={{ color: '#7A7268', fontFamily: "'IBM Plex Mono', monospace" }}>
-          {isBatch && batchPertinenze === null
-            ? 'Rispondi alla domanda sulle pertinenze per procedere'
-            : finDataRequired && !(prezzoAcquisto && superficie)
-            ? '* Per finalità "Investimento" inserisci prezzo di acquisto e superficie'
-            : parcels.some(p => !p.foglio || !p.particella)
-            ? "Inserisci foglio e particella per ogni immobile"
-            : "Inserisci comune, dati catastali e finalità per procedere"}
-        </p>
+        <div className="text-center">
+          {finDataRequired && !(prezzoAcquisto && superficie) ? (
+            <div className="flex items-center justify-center gap-2 px-4 py-2.5 rounded border border-amber-300 bg-amber-50">
+              <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+              <p className="text-xs font-semibold text-amber-800" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
+                Inserisci{!prezzoAcquisto && !superficie ? ' prezzo di acquisto e superficie' : !prezzoAcquisto ? ' il prezzo di acquisto' : ' la superficie'} per procedere
+              </p>
+            </div>
+          ) : (
+            <p className="text-xs" style={{ color: '#7A7268', fontFamily: "'IBM Plex Mono', monospace" }}>
+              {isBatch && batchPertinenze === null
+                ? 'Rispondi alla domanda sulle pertinenze per procedere'
+                : parcels.some(p => !p.foglio || !p.particella)
+                ? "Inserisci foglio e particella per ogni immobile"
+                : "Inserisci comune, dati catastali e finalità per procedere"}
+            </p>
+          )}
+        </div>
       )}
     </form>
   );
