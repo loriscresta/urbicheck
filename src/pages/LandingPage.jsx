@@ -194,9 +194,14 @@ function AnimatedCounter({ target, label }) {
 
 export default function LandingPage() {
   const [showDemoModal, setShowDemoModal] = useState(false);
+  const [currentUser, setCurrentUser] = useState(null);
   const navigate = useNavigate();
   const handleLogin = () => base44.auth.redirectToLogin("/dashboard");
   const handleStartSearch = () => navigate("/search");
+
+  useEffect(() => {
+    base44.auth.me().then(u => setCurrentUser(u)).catch(() => {});
+  }, []);
 
   return (
     <div style={{ background: BG, fontFamily: MONO, minHeight: "100vh" }}>
@@ -212,9 +217,15 @@ export default function LandingPage() {
             })}
             <Link to="/waitlist" style={{ color: "rgba(244,239,230,0.65)", fontSize: "0.65rem", letterSpacing: "2px", textTransform: "uppercase" }} className="hover:text-white transition-colors">Beta</Link>
           </div>
-          <button onClick={handleLogin} style={{ background: AC, color: W, fontFamily: MONO, fontWeight: 700, fontSize: "0.65rem", letterSpacing: "2px", textTransform: "uppercase", border: "none", padding: "0 1.25rem", height: "2.25rem", cursor: "pointer" }}>
-            Accedi →
-          </button>
+          {currentUser ? (
+            <button onClick={() => navigate("/dashboard")} style={{ background: AC, color: W, fontFamily: MONO, fontWeight: 700, fontSize: "0.65rem", letterSpacing: "2px", textTransform: "uppercase", border: "none", padding: "0 1.25rem", height: "2.25rem", cursor: "pointer" }}>
+              Entra nell'app →
+            </button>
+          ) : (
+            <button onClick={handleLogin} style={{ background: AC, color: W, fontFamily: MONO, fontWeight: 700, fontSize: "0.65rem", letterSpacing: "2px", textTransform: "uppercase", border: "none", padding: "0 1.25rem", height: "2.25rem", cursor: "pointer" }}>
+              Accedi →
+            </button>
+          )}
         </div>
       </nav>
 
