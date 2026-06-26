@@ -12,11 +12,7 @@ const LAUNCH_PAID_REPORTS = 3; // report a prezzo lancio (dopo i gratuiti)
 const LAUNCH_PRICE = 2.99;     // prezzo offerta lancio
 const STANDARD_PRICE = 9.90;   // prezzo standard (report 7+)
 
-// ── Email normalization ──────────────────────────────────────────────────────
-// Rimuove alias '+' e, per Gmail, rimuove punti nella parte locale.
-// loriscresta+test2@gmail.com → loriscresta@gmail.com
-// loris.cresta@gmail.com → loriscresta@gmail.com
-
+// ── Email normalization + hash ────────────────────────────────────────────────
 function normalizeEmail(email) {
   if (!email) return '';
   let [local, domain] = email.toLowerCase().trim().split('@');
@@ -34,6 +30,14 @@ function normalizeEmail(email) {
   }
 
   return `${local}@${domain}`;
+}
+
+async function hashEmail(normalizedEmail) {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(normalizedEmail);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
 // Genera un token pubblico firmato con scadenza 72h e salva report_url sul record
@@ -132,7 +136,18 @@ Deno.serve(async (req) => {
       (sum, c) => sum + (c.beta_paid_reports_used || 0), 0
     );
 
-    console.log(`chargeReport: email=${user.email} normalized=${normalizedEmail} aggregatedFree=${aggregatedFreeUsed} aggregatedLaunch=${aggregatedLaunchUsed} records=${allNormalizedCredits.length}`);
+    // ── Anti-abuso: FreeTierLedger — contatori permanenti per email_hash ──────
+    const emailHash = await hashEmail(normalizedEmail);
+    const ledgerList = await base44.asServiceRole.entities.FreeTierLedger.filter({ email_hash: emailHash }, '', 1);
+    const ledger = ledgerList[0] || null;
+    const ledgerFreeUsed = ledger?.free_reports_used || 0;
+    const ledgerBetaUsed = ledger?.beta_paid_reports_used || 0;
+
+    // Usa il massimo tra il contatore live (UserCredits) e quello storico (FreeTierLedger)
+    const effectiveFreeUsed = Math.max(aggregatedFreeUsed, ledgerFreeUsed);
+    const effectiveLaunchUsed = Math.max(aggregatedLaunchUsed, ledgerBetaUsed);
+
+    console.log(`chargeReport: email=${user.email} normalized=${normalizedEmail} aggregatedFree=${aggregatedFreeUsed} aggregatedLaunch=${aggregatedLaunchUsed} ledgerFree=${ledgerFreeUsed} ledgerBeta=${ledgerBetaUsed} effectiveFree=${effectiveFreeUsed} effectiveLaunch=${effectiveLaunchUsed}`);
 
     // ── Controllo limite IP ────────────────────────────────────────────────
     const clientIp = getClientIp(req);
@@ -148,13 +163,13 @@ Deno.serve(async (req) => {
     console.log(`chargeReport: ip=${clientIp} ipFreeUsed=${ipFreeUsed}`);
 
     // ── Funnel pricing ────────────────────────────────────────────────────────
-    // Un report è gratuito SOLO SE sia l'email normalizzata che l'IP sono sotto soglia
-    const emailUnderLimit = aggregatedFreeUsed < FREE_REPORTS;
+    // Un report è gratuito SOLO SE sia l'email normalizzata (incl. FreeTierLedger) che l'IP sono sotto soglia
+    const emailUnderLimit = effectiveFreeUsed < FREE_REPORTS;
     const ipUnderLimit = clientIp === 'unknown' || ipFreeUsed < FREE_REPORTS_IP;
 
     if (emailUnderLimit && ipUnderLimit) {
       // TIER 1 — GRATIS (report 1–3, entrambe le condizioni soddisfatte)
-      console.log(`chargeReport: FREE tier — aggregatedFree=${aggregatedFreeUsed} ipFree=${ipFreeUsed}`);
+      console.log(`chargeReport: FREE tier — effectiveFree=${effectiveFreeUsed} ipFree=${ipFreeUsed}`);
 
       await base44.asServiceRole.entities.UserCredits.update(credits.id, {
         free_reports_used: (credits.free_reports_used || 0) + 1,
@@ -181,14 +196,14 @@ Deno.serve(async (req) => {
       await generateAndSavePublicToken(base44, query_id, query.comune, query.foglio, query.particella);
       await base44.asServiceRole.entities.CreditTransaction.create({
         user_email: user.email, type: 'query_charge', amount: 0,
-        description: `Report gratuito #${aggregatedFreeUsed + 1}/3 — ${query.comune || ''} F.${query.foglio} P.${query.particella}`,
+        description: `Report gratuito #${effectiveFreeUsed + 1}/3 — ${query.comune || ''} F.${query.foglio} P.${query.particella}`,
         query_id,
       });
-      return Response.json({ ok: true, deducted: 0, tier: 'free', free_reports_used: aggregatedFreeUsed + 1, free_reports_total: FREE_REPORTS, launch_reports_total: LAUNCH_PAID_REPORTS });
+      return Response.json({ ok: true, deducted: 0, tier: 'free', free_reports_used: effectiveFreeUsed + 1, free_reports_total: FREE_REPORTS, launch_reports_total: LAUNCH_PAID_REPORTS });
 
-    } else if (aggregatedLaunchUsed < LAUNCH_PAID_REPORTS) {
+    } else if (effectiveLaunchUsed < LAUNCH_PAID_REPORTS) {
       // TIER 2 — €2,99 offerta lancio (report 4–6)
-      console.log(`chargeReport: LAUNCH_PAID tier — aggregatedLaunch=${aggregatedLaunchUsed}`);
+      console.log(`chargeReport: LAUNCH_PAID tier — effectiveLaunch=${effectiveLaunchUsed}`);
 
       if ((credits.balance || 0) < LAUNCH_PRICE) {
         return Response.json({
@@ -210,14 +225,14 @@ Deno.serve(async (req) => {
       await generateAndSavePublicToken(base44, query_id, query.comune, query.foglio, query.particella);
       await base44.asServiceRole.entities.CreditTransaction.create({
         user_email: user.email, type: 'query_charge', amount: -LAUNCH_PRICE,
-        description: `Report lancio €2,99 #${aggregatedLaunchUsed + 1}/3 — ${query.comune || ''} F.${query.foglio} P.${query.particella}`,
+        description: `Report lancio €2,99 #${effectiveLaunchUsed + 1}/3 — ${query.comune || ''} F.${query.foglio} P.${query.particella}`,
         query_id,
       });
-      return Response.json({ ok: true, deducted: LAUNCH_PRICE, tier: 'launch_paid', free_reports_used: aggregatedFreeUsed, free_reports_total: FREE_REPORTS, launch_reports_used: aggregatedLaunchUsed + 1, launch_reports_total: LAUNCH_PAID_REPORTS });
+      return Response.json({ ok: true, deducted: LAUNCH_PRICE, tier: 'launch_paid', free_reports_used: effectiveFreeUsed, free_reports_total: FREE_REPORTS, launch_reports_used: effectiveLaunchUsed + 1, launch_reports_total: LAUNCH_PAID_REPORTS });
 
     } else {
       // TIER 3 — €9,90 prezzo standard (report 7+)
-      console.log(`chargeReport: STANDARD tier — aggregatedFree=${aggregatedFreeUsed}, aggregatedLaunch=${aggregatedLaunchUsed}`);
+      console.log(`chargeReport: STANDARD tier — effectiveFree=${effectiveFreeUsed}, effectiveLaunch=${effectiveLaunchUsed}`);
 
       if ((credits.balance || 0) < STANDARD_PRICE) {
         return Response.json({
@@ -241,7 +256,7 @@ Deno.serve(async (req) => {
         description: `Report standard €9,90 — ${query.comune || ''} F.${query.foglio} P.${query.particella}`,
         query_id,
       });
-      return Response.json({ ok: true, deducted: STANDARD_PRICE, tier: 'standard', free_reports_used: aggregatedFreeUsed, free_reports_total: FREE_REPORTS });
+      return Response.json({ ok: true, deducted: STANDARD_PRICE, tier: 'standard', free_reports_used: effectiveFreeUsed, free_reports_total: FREE_REPORTS });
     }
 
   } catch (error) {

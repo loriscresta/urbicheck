@@ -6,9 +6,10 @@ import { CREDIT_PACKAGES } from "@/lib/italianData";
 import CreditPackageCard from "@/components/credits/CreditPackageCard";
 import { format } from "date-fns";
 import { it } from "date-fns/locale";
-import { CreditCard, ArrowUpRight, ArrowDownRight, Loader2, Zap } from "lucide-react";
+import { CreditCard, ArrowUpRight, ArrowDownRight, Loader2, Zap, Trash2 } from "lucide-react";
 import { motion } from "framer-motion";
 import { stripeCheckout } from "@/functions/stripeCheckout";
+import { deleteUserData } from "@/functions/deleteUserData";
 
 
 
@@ -18,6 +19,7 @@ export default function CreditsPage() {
   const [adminUser, setAdminUser] = useState(null);
   const [autoReloadAmount, setAutoReloadAmount] = useState('');
   const [autoReloading, setAutoReloading] = useState(false);
+  const [deletingAccount, setDeletingAccount] = useState(false);
 
   useEffect(() => {
     base44.auth.me().then(u => {
@@ -129,6 +131,21 @@ export default function CreditsPage() {
     }
   }, []);
 
+  const handleDeleteAccount = async () => {
+    const confirmed = window.confirm(
+      "Sei sicuro di voler eliminare il tuo account?\n\nVerranno cancellati TUTTI i tuoi dati (crediti, ricerche, report, richieste atti). Questa operazione è irreversibile.\n\nProcedere?"
+    );
+    if (!confirmed) return;
+    setDeletingAccount(true);
+    try {
+      await deleteUserData({});
+      await base44.auth.logout('/');
+    } catch (err) {
+      toast({ title: "Errore eliminazione account", description: err.message, variant: "destructive" });
+      setDeletingAccount(false);
+    }
+  };
+
   const visiblePackages = CREDIT_PACKAGES.filter(pkg => !pkg.adminOnly || adminUser?.role === 'admin');
 
   return (
@@ -136,7 +153,7 @@ export default function CreditsPage() {
       <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}>
         <h1 className="text-3xl font-bold tracking-tight mb-2" style={{ color: '#1A3A6B', fontFamily: "'Libre Baskerville', serif", fontStyle: 'italic' }}>Ricarica Crediti</h1>
         <p className="mb-2 text-xs tracking-[1px] uppercase" style={{ color: '#7A7268', fontFamily: "'IBM Plex Mono', monospace" }}>
-          Ogni analisi catastale costa €9,90. Acquista pacchetti per risparmiare.
+          3 report gratuiti → €2,99/report in beta → €9,90 a regime. Nessun abbonamento.
         </p>
       </motion.div>
 
@@ -254,7 +271,29 @@ export default function CreditsPage() {
         </div>
       )}
 
-      <div className="mt-10 pt-6 border-t text-center text-[10px] uppercase tracking-[2px]" style={{ borderColor: '#C4BAA8', color: '#7A7268', fontFamily: "'IBM Plex Mono', monospace" }}>
+      {/* GDPR — Elimina Account */}
+      {!adminUser && (
+        <div className="mt-10 pt-6 border-t" style={{ borderColor: '#C4BAA8' }}>
+          <p className="text-[10px] font-semibold uppercase tracking-[2px] mb-3" style={{ color: '#7A7268', fontFamily: "'IBM Plex Mono', monospace" }}>Gestione Account</p>
+          <div className="flex items-center justify-between p-4 border border-dashed" style={{ borderColor: '#C4BAA8', background: '#fff' }}>
+            <div>
+              <p className="text-xs font-semibold" style={{ color: '#1C1A17', fontFamily: "'IBM Plex Mono', monospace" }}>Elimina il mio account</p>
+              <p className="text-[10px] mt-0.5" style={{ color: '#7A7268', fontFamily: "'IBM Plex Mono', monospace" }}>Cancella tutti i tuoi dati (GDPR). Operazione irreversibile.</p>
+            </div>
+            <button
+              onClick={handleDeleteAccount}
+              disabled={deletingAccount}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide border transition-colors hover:bg-red-50 disabled:opacity-50"
+              style={{ borderColor: '#B33A2A', color: '#B33A2A', fontFamily: "'IBM Plex Mono', monospace" }}
+            >
+              {deletingAccount ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}
+              Elimina account
+            </button>
+          </div>
+        </div>
+      )}
+
+      <div className="mt-6 pt-4 border-t text-center text-[10px] uppercase tracking-[2px]" style={{ borderColor: '#C4BAA8', color: '#7A7268', fontFamily: "'IBM Plex Mono', monospace" }}>
         urbicheck.it | Dati aggiornati da fonti GIS ufficiali regionali
       </div>
     </div>

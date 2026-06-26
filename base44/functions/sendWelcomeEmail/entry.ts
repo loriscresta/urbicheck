@@ -87,8 +87,8 @@ Deno.serve(async (req) => {
                   <table cellpadding="0" cellspacing="0"><tr>
                     <td style="width:40px;vertical-align:top;font-size:20px;">💳</td>
                     <td style="vertical-align:top;padding-left:12px;">
-                      <p style="margin:0 0 4px;font-family:'Courier New',monospace;font-size:13px;font-weight:700;color:#10b981;">🎁 3 report gratuiti — già accreditati!</p>
-                      <p style="margin:0;font-family:Georgia,serif;font-size:13px;color:#64748b;line-height:1.5;">Abbiamo accreditato €29,70 sul tuo saldo. Durante la beta i report 4-6 costano €2,99 ciascuno.</p>
+                     <p style="margin:0 0 4px;font-family:'Courier New',monospace;font-size:13px;font-weight:700;color:#10b981;">🎁 3 report gratuiti inclusi in beta!</p>
+                     <p style="margin:0;font-family:Georgia,serif;font-size:13px;color:#64748b;line-height:1.5;">Le prime 3 analisi sono gratuite. Poi €2,99 a report durante la beta, €9,90 a regime. Nessun abbonamento.</p>
                     </td>
                   </tr></table>
                 </td>

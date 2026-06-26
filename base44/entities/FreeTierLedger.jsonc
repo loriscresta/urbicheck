@@ -1,0 +1,50 @@
+{
+  "name": "FreeTierLedger",
+  "type": "object",
+  "properties": {
+    "email_hash": {
+      "type": "string",
+      "description": "SHA-256 dell'email normalizzata (no email in chiaro) \u2014 usato per anti-abuso free tier"
+    },
+    "free_reports_used": {
+      "type": "number",
+      "default": 0,
+      "description": "Report gratuiti consumati da questa email (contatore permanente, non cancellabile)"
+    },
+    "beta_paid_reports_used": {
+      "type": "number",
+      "default": 0,
+      "description": "Report beta \u20ac2,99 consumati da questa email (contatore permanente)"
+    },
+    "updated_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Ultima modifica ISO 8601"
+    }
+  },
+  "required": [
+    "email_hash"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "read": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}
