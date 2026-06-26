@@ -342,28 +342,12 @@ export default function ReportPageContent({ query, refetch = () => {}, isPublicV
   let metroCard = null;
   let tramCard = null;
 
-  // Lookup statico ferrovie dismesse/turistiche (usato da VincoliRischiPiemonte)
-  const FERROVIE_DISMESSE_PIEMONTE = [
-    { comuni: ['calamandrana','nizza monferrato','canelli','castagnole delle lanze','costigliole d\'asti','isola d\'asti','asti','portacomaro','castello di annone','annone di brianza'], nome: 'Ferrovia Asti-Alba (Ferrovia Turistica delle Langhe e del Monferrato)', tipo: 'ferroviaria_dismessa_turistica' },
-    { comuni: ['alba','bra','cherasco','fossano','cuneo'], nome: 'Ferrovia Alba-Bra-Cuneo (dismessa)', tipo: 'ferroviaria_dismessa' },
-    { comuni: ['mondovì','villanova mondovì','niella tanaro','ceva','garessio','ormea'], nome: 'Ferrovia Ceva-Ormea (dismessa)', tipo: 'ferroviaria_dismessa' },
-    { comuni: ['casale monferrato','occimiano','rivarone','tortona'], nome: 'Ferrovia Casale-Mortara (tratto piemontese, dismessa)', tipo: 'ferroviaria_dismessa' },
-  ];
-  const staticFerroviaMatch = isPiemonte
-    ? FERROVIE_DISMESSE_PIEMONTE.find(f => f.comuni.includes(comuneLower?.trim()))
-    : null;
-
   if (wfsFerroviario) {
-    // Regola unificata: se lookup statico trova una ferrovia, prevale sempre — anche se Overpass non la vede
-    if (staticFerroviaMatch) {
-      vincoloFerroviarioEffettivo = {
-        presente: true,
-        dettagli: `${staticFerroviaMatch.nome} — verifica fasce DPR 753/1980 (30m dall'asse) + L.128/2017. Ferrovia dismessa/turistica: le fasce di rispetto possono permanere. Verificare con Regione Piemonte e RFI prima di qualsiasi intervento edilizio.`,
-      };
-    } else if (ferrorieTrovate.length > 0) {
+    // Fonte unica: solo dati Overpass (server-side) — raggio 250m uniforme
+    if (ferrorieTrovate.length > 0) {
       vincoloFerroviarioEffettivo = { presente: true, dettagli: ferrorieTrovate.map(d => `${d.nome} — fascia rispetto 30m (DPR 753/1980)`).join(' | ') };
     } else {
-      vincoloFerroviarioEffettivo = { presente: false, dettagli: 'Nessuna ferrovia rilevata entro 500m.' };
+      vincoloFerroviarioEffettivo = { presente: false, dettagli: 'Nessuna ferrovia nelle vicinanze — nessun vincolo DPR 753/1980.' };
     }
   } else if (!isNewStructure && vfNew) {
     const vf = vfNew;
@@ -523,29 +507,48 @@ export default function ReportPageContent({ query, refetch = () => {}, isPublicV
       )}
 
       <div className="space-y-6">
-        {/* Tipologia immobile */}
-        {r.dati_catastali && (
-          <ReportSection icon={Building2} title="Tipologia Immobile" delay={0.02}>
-            <DataRow label="Categoria catastale" value={query.categoria_catastale || cleanVal(r.dati_catastali.categoria) || r.catasto_data?.categoria} />
-            <DataRow label="Destinazione d'Uso" value={cleanVal(r.dati_catastali.destinazione_uso) || r.catasto_data?.destinazione_uso} />
-            <DataRow label="Consistenza" value={query.vani ? `${query.vani} vani` : (cleanVal(r.dati_catastali.consistenza) || r.catasto_data?.superficie)} />
-            {query.superficie_mq && <DataRow label="Superficie catastale" value={`${query.superficie_mq} mq`} />}
-            <DataRow label="Classe" value={query.classe_catastale || cleanVal(r.dati_catastali.classe)} />
-            <DataRow label="Rendita Catastale" value={query.rendita_catastale != null ? `€${Number(query.rendita_catastale).toFixed(2)}` : cleanVal(r.dati_catastali.rendita_catastale)} />
-            <DataRow label="Zona Censuaria" value={query.zona_censuaria || cleanVal(r.dati_catastali.zona_censuaria)} />
-            {r.dati_catastali.microzona && !/verificare su visura/i.test(r.dati_catastali.microzona) && <DataRow label="Microzona" value={r.dati_catastali.microzona} />}
-            {query.intestatari?.length > 0 && <DataRow label="Intestatari" value={query.intestatari.join(" — ")} />}
-            {r.planimetria_data?.source === 'planimetria_upload' && r.planimetria_data?.was_uploaded === true && r.planimetria_data?.superficie_mq && (
-              <div className="mt-2 p-2 rounded bg-blue-50 border border-blue-200 text-xs text-blue-800 flex items-center gap-2">
-                <span>📐</span>
-                <span><strong>Planimetria allegata:</strong> Superficie {r.planimetria_data.superficie_mq} mq{r.planimetria_data.vani ? ` · Vani: ${r.planimetria_data.vani}` : ''}</span>
-              </div>
-            )}
-            {r.planimetria_data?.source === 'planimetria_upload' && r.planimetria_data?.was_uploaded === true && r.planimetria_data?.leggibile === false && (
-              <div className="mt-2 p-2 rounded bg-amber-50 border border-amber-200 text-xs text-amber-800">📐 Planimetria allegata — superficie non rilevata automaticamente.</div>
-            )}
-          </ReportSection>
-        )}
+        {/* Tipologia immobile — mostrata sempre se c'è almeno un dato noto */}
+        {(() => {
+          const cat = query.categoria_catastale || cleanVal(r.dati_catastali?.categoria) || r.catasto_data?.categoria;
+          const dest = cleanVal(r.dati_catastali?.destinazione_uso) || r.catasto_data?.destinazione_uso;
+          const cons = query.vani ? `${query.vani} vani` : (cleanVal(r.dati_catastali?.consistenza) || r.catasto_data?.superficie);
+          const classe = query.classe_catastale || cleanVal(r.dati_catastali?.classe);
+          const rendita = query.rendita_catastale != null ? `€${Number(query.rendita_catastale).toFixed(2)}` : cleanVal(r.dati_catastali?.rendita_catastale);
+          const zona = query.zona_censuaria || cleanVal(r.dati_catastali?.zona_censuaria);
+          const microzona = r.dati_catastali?.microzona && !/verificare su visura/i.test(r.dati_catastali.microzona) ? r.dati_catastali.microzona : null;
+          const hasAnyData = cat || dest || cons || query.superficie_mq || classe || rendita || zona;
+          return (
+            <ReportSection icon={Building2} title="Tipologia Immobile" delay={0.02}>
+              {hasAnyData ? (
+                <>
+                  <DataRow label="Categoria catastale" value={cat} />
+                  <DataRow label="Destinazione d'Uso" value={dest} />
+                  <DataRow label="Consistenza" value={cons} />
+                  {query.superficie_mq && <DataRow label="Superficie catastale" value={`${query.superficie_mq} mq`} />}
+                  <DataRow label="Classe" value={classe} />
+                  <DataRow label="Rendita Catastale" value={rendita} />
+                  <DataRow label="Zona Censuaria" value={zona} />
+                  {microzona && <DataRow label="Microzona" value={microzona} />}
+                  {query.intestatari?.length > 0 && <DataRow label="Intestatari" value={query.intestatari.join(" — ")} />}
+                </>
+              ) : (
+                <div className="flex items-start gap-2 p-3 rounded bg-muted/40 border border-border text-xs text-muted-foreground">
+                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-muted-foreground" />
+                  <span>Dati catastali non disponibili — richiedi la visura ufficiale all'Agenzia delle Entrate per categoria, rendita e intestatari.</span>
+                </div>
+              )}
+              {r.planimetria_data?.source === 'planimetria_upload' && r.planimetria_data?.was_uploaded === true && r.planimetria_data?.superficie_mq && (
+                <div className="mt-2 p-2 rounded bg-blue-50 border border-blue-200 text-xs text-blue-800 flex items-center gap-2">
+                  <span>📐</span>
+                  <span><strong>Planimetria allegata:</strong> Superficie {r.planimetria_data.superficie_mq} mq{r.planimetria_data.vani ? ` · Vani: ${r.planimetria_data.vani}` : ''}</span>
+                </div>
+              )}
+              {r.planimetria_data?.source === 'planimetria_upload' && r.planimetria_data?.was_uploaded === true && r.planimetria_data?.leggibile === false && (
+                <div className="mt-2 p-2 rounded bg-amber-50 border border-amber-200 text-xs text-amber-800">📐 Planimetria allegata — superficie non rilevata automaticamente.</div>
+              )}
+            </ReportSection>
+          );
+        })()}
 
         {/* Planimetria — solo in vista autenticata (richiede auth per upload) */}
         {!isPublicView && <PlanimetriaSection query={query} onUpdated={refetch} />}
@@ -619,7 +622,17 @@ export default function ReportPageContent({ query, refetch = () => {}, isPublicV
                 if (vf.vicina) return <div className="rounded-lg border border-amber-400 bg-amber-50 p-3"><p className="text-sm font-bold text-amber-900">🚂 Ferrovia nelle vicinanze — {vf.distanza_m != null ? `${vf.distanza_m}m` : 'distanza n/d'}</p>{vf.ferrovia && <p className="text-xs font-semibold text-amber-800 mt-1">{vf.ferrovia}</p>}<p className="text-xs text-amber-800 mt-1 leading-relaxed">Ferrovia rilevata nelle vicinanze ma fuori dalla fascia di rispetto legale (30m). Nessun vincolo DPR 753/1980 applicabile.</p>{isStorica && <p className="text-xs text-amber-700 mt-1 font-semibold">Linea a carattere storico/turistico — transiti limitati.</p>}</div>;
                 return <div className="rounded-lg border border-emerald-300 bg-emerald-50 p-3 flex items-center gap-2"><span className="text-base">✅</span><p className="text-sm text-emerald-800">Nessuna ferrovia entro 500m</p></div>;
               })()}
-              {!isNewStructure && vincoloFerroviarioEffettivo && <VincoloCard label="Vincolo Ferroviario" presente={vincoloFerroviarioEffettivo.presente} dettagli={vincoloFerroviarioEffettivo.dettagli} unverified={!hasVerifiedVincoli} />}
+              {!isNewStructure && vincoloFerroviarioEffettivo && (
+                vincoloFerroviarioEffettivo.presente
+                  ? <VincoloCard label="Vincolo Ferroviario (DPR 753/1980)" presente={true} dettagli={vincoloFerroviarioEffettivo.dettagli} unverified={!hasVerifiedVincoli} />
+                  : <div className="rounded-lg border border-emerald-300 bg-emerald-50 p-3 flex items-center gap-2">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                      <div>
+                        <p className="text-xs font-semibold text-emerald-800">Nessuna ferrovia nelle vicinanze — nessun vincolo DPR 753/1980</p>
+                        <p className="text-[10px] text-emerald-700 mt-0.5">Fonte: Overpass OSM (raggio 250m)</p>
+                      </div>
+                    </div>
+              )}
               {!isNewStructure && !vincoloFerroviarioEffettivo && isLombardia && (
                 <FerroviaCard data={wfsFerroviario || null} comune={query.comune} regione={query.regione} />
               )}
@@ -665,31 +678,42 @@ export default function ReportPageContent({ query, refetch = () => {}, isPublicV
             !ntaZona.toLowerCase().includes(wmsZonaCodice.toLowerCase()) &&
             !wmsZonaCodice.toLowerCase().includes(ntaZona.toLowerCase());
 
+          // Scegli la zona da mostrare: WMS (fonte ufficiale) se disponibile, altrimenti NTA/AI
+          const zonaDisplay = wmsDisponibile && wmsZonaCodice
+            ? `${wmsZonaCodice}${wmsDescrizione ? ` — ${wmsDescrizione}` : ''}`
+            : ntaZona || null;
+          const destDisplay = wmsDisponibile && wmsDescrizione
+            ? wmsDescrizione
+            : ntaDest || null;
+
           return (
             <ReportSection icon={FileText} title="Quadro Urbanistico (PRG/PUC)" delay={0.1}>
               {wmsDisponibile && wmsZonaCodice && (
                 <div className="mb-3 flex items-center gap-2 px-3 py-1.5 text-xs rounded bg-emerald-50 border border-emerald-200 text-emerald-800">
                   <CheckCircle2 className="w-3 h-3 shrink-0" />
-                  Zona da Mosaicatura PRG Piemonte (WMS ufficiale): <strong className="ml-1">{wmsZonaCodice}{wmsDescrizione ? ` — ${wmsDescrizione}` : ''}</strong>
+                  <span>Fonte primaria: <strong>Mosaicatura PRG Piemonte (WMS ufficiale)</strong>{ntaZona && ntaZona !== zonaDisplay ? <span className="ml-1 text-emerald-700"> · confermato da database NTA UrbiCheck</span> : null}</span>
                 </div>
               )}
               {hasDiscordanza && (
                 <div className="mb-3 flex items-start gap-2 p-3 rounded-lg border border-amber-300 bg-amber-50">
                   <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                   <p className="text-xs text-amber-900">
-                    <strong>⚠ Nota:</strong> Il database NTA UrbiCheck indica "<strong>{ntaZona}</strong>" come destinazione d'uso principale.
-                    {" "}Mosaicatura PRG regionale (WMS) indica codice <strong>{wmsZonaCodice}</strong>{wmsDescrizione ? ` (${wmsDescrizione})` : ''} — da verificare con CDU al Comune.
+                    <strong>⚠ Nota:</strong> Il WMS regionale indica codice <strong>{wmsZonaCodice}</strong>{wmsDescrizione ? ` (${wmsDescrizione})` : ''} come zona primaria.
+                    {" "}Il database NTA UrbiCheck riporta "<strong>{ntaZona}</strong>" — verificare con CDU al Comune per la classificazione definitiva.
                   </p>
                 </div>
               )}
               <DataRow label="Strumento Vigente" value={resolvedNta?.strumento || r.quadro_urbanistico.strumento_vigente} />
-              <DataRow label="Zona Urbanistica" value={ntaZona || (wmsDisponibile && wmsZonaCodice ? `${wmsZonaCodice}${wmsDescrizione ? ` — ${wmsDescrizione}` : ''}` : null)} />
-              <DataRow label="Destinazione d'Uso" value={ntaDest || (wmsDisponibile && wmsDescrizione ? wmsDescrizione : null)} />
+              <DataRow label="Zona Urbanistica" value={zonaDisplay} />
+              <DataRow label="Destinazione d'Uso" value={destDisplay} />
               <DataRow label="Indice Edificabilità" value={resolvedNta?.IF || ntaLocal?.IF || cleanVal(r.quadro_urbanistico.indice_edificabilita)} />
               <DataRow label="Altezza Massima" value={resolvedNta?.Hmax || ntaLocal?.Hmax || cleanVal(r.quadro_urbanistico.altezza_massima)} />
               <DataRow label="Rapporto di Copertura" value={resolvedNta?.RC || cleanVal(r.quadro_urbanistico.rc_percentuale)} />
               <DataRow label="Distanze Minime" value={resolvedNta?.Dc ? `Dc: ${resolvedNta.Dc} · Df: ${resolvedNta.Df} · Ds: ${resolvedNta.Ds}` : cleanVal(r.quadro_urbanistico.distanze_minime)} />
               {r.quadro_urbanistico.note_urbanistiche && !resolvedNta && cleanVal(r.quadro_urbanistico.note_urbanistiche) && <div className="mt-3 p-3 bg-muted/50 rounded-lg"><p className="text-sm text-muted-foreground">{r.quadro_urbanistico.note_urbanistiche}</p></div>}
+              <div className="mt-3 p-2 rounded bg-muted/30 border border-border text-[10px] text-muted-foreground">
+                ℹ️ La zonizzazione indicata è orientativa. Per la classificazione urbanistica definitiva con valore legale richiedere il CDU (Certificato di Destinazione Urbanistica) al Comune.
+              </div>
             </ReportSection>
           );
         })()}
