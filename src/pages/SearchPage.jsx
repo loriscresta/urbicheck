@@ -89,7 +89,10 @@ export default function SearchPage() {
       return;
     }
     setIsLoading(true);
-    trackEvent('Search');
+    const searchString = formData.indirizzo_immobile
+      ? formData.indirizzo_immobile
+      : [formData.comune, formData.foglio && `F.${formData.foglio}`, formData.particella && `P.${formData.particella}`].filter(Boolean).join(' ');
+    trackEvent('Search', { customData: { search_string: searchString }, email: currentUser?.email });
 
     // ── Flusso pubblico: solo anteprima senza login ─────────────────────────
     if (!isAuthenticated && !formData._batch) {
@@ -277,6 +280,8 @@ export default function SearchPage() {
       sessionStorage.setItem('urbicheck_last_charge', JSON.stringify(chargeResult));
     }
 
+    // Meta Pixel — Lead (report generato con successo)
+    trackEvent("Lead", { customData: { content_name: formData.comune, value: chargeResult?.amount_charged ?? query.cost, currency: "EUR" }, email: currentUser?.email });
     // Meta Pixel — Purchase (query pagata con successo, paid=true)
     window.fbq?.('track', 'Purchase', { value: query.cost, currency: 'EUR' });
     trackEvent("Purchase", { customData: { value: query.cost, currency: "EUR" }, email: currentUser?.email });
@@ -527,6 +532,8 @@ export default function SearchPage() {
           base44.entities.BatchQuery.update(batchRecord.id, { paid: true }),
         ]);
 
+        // Meta Pixel — Lead (batch report generato con successo)
+        trackEvent("Lead", { customData: { content_name: sharedCadastral.comune, value: totalCost, currency: "EUR" }, email: user.email });
         // Meta Pixel — Purchase (batch pagato con successo, paid=true)
         window.fbq?.('track', 'Purchase', { value: totalCost, currency: 'EUR' });
         trackEvent("Purchase", { customData: { value: totalCost, currency: "EUR" }, email: user.email });
