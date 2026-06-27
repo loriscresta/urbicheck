@@ -6,7 +6,7 @@ const CONSENT_KEY = "cookie_consent";
 
 export function loadMetaPixel() {
   if (window.fbq) return; // già caricato
-  const META_PIXEL_ID = "1405555848052349";
+  const META_PIXEL_ID = "1599024430406427";
   !(function (f, b, e, v, n, t, s) {
     if (f.fbq) return;
     n = f.fbq = function () { n.callMethod ? n.callMethod.apply(n, arguments) : n.queue.push(arguments); };
