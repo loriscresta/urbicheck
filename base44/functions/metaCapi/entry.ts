@@ -46,9 +46,9 @@ Deno.serve(async (req) => {
   const user = await getAuthenticatedUser(req);
   if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401, headers: corsHeaders });
 
-  const accessToken = Deno.env.get("META_CAPI_ACCESS_TOKEN");
+  const accessToken = Deno.env.get("META_CAPI_TOKEN");
   if (!accessToken) {
-    console.error("[metaCapi] missing META_CAPI_ACCESS_TOKEN");
+    console.error("[metaCapi] missing META_CAPI_TOKEN");
     return Response.json({ error: "missing META_CAPI_ACCESS_TOKEN" }, { status: 500, headers: corsHeaders });
   }
 
