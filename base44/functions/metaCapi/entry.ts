@@ -1,6 +1,6 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 
-const PIXEL_ID = "1405555848052349";
+const PIXEL_ID = "1962386827973256";
 
 const ALLOWED_ORIGINS = [
   "https://urbicheck.it",
