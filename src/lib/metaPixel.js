@@ -22,12 +22,13 @@ function getCookieValue(name) {
 export function trackEvent(eventName, options = {}) {
   if (!hasMarketingConsent()) return;
 
-  const { customData = {}, email } = options;
-  const event_id = crypto.randomUUID();
+  const { customData = {}, email, _event_id } = options;
+  // Usa event_id esterno se fornito (es. Purchase già inviato via fbq diretto), altrimenti genera uno nuovo
+  const event_id = _event_id || crypto.randomUUID();
   const event_source_url = window.location.href;
 
-  // 1. Pixel browser — stesso event_id per deduplicazione
-  if (typeof window.fbq !== "undefined") {
+  // 1. Pixel browser — stesso event_id per deduplicazione (solo se non già inviato esternamente)
+  if (!_event_id && typeof window.fbq !== "undefined") {
     window.fbq("track", eventName, customData, { eventID: event_id });
   }
 
