@@ -72,12 +72,13 @@ export default function ParcellaMap({ record, query, item }) {
 
   const hasPosition = !!(referenceLat && referenceLng && !isNaN(referenceLat) && !isNaN(referenceLng));
 
-  // Validazione poligono: baricentro del poligono deve essere entro 300m dal riferimento
+  // Validazione poligono: baricentro del poligono deve essere entro 500m dal riferimento.
+  // Se non c'è posizione di riferimento (centroide non ancora salvato), il poligono è comunque valido.
   const validGeometry = (() => {
     if (!geomJson?.geometry?.coordinates) return null;
-    if (!hasPosition) return geomJson; // no ref = assume valid
+    if (!hasPosition) return geomJson; // no ref = considera valido
     const dist = polygonCentroidDistance(geomJson.geometry, referenceLat, referenceLng);
-    if (dist !== null && dist > 300) return null; // scarta — poligono troppo lontano dal riferimento
+    if (dist !== null && dist > 500) return null; // scarta — poligono troppo lontano dal riferimento
     return geomJson;
   })();
   const hasPolygon  = !!validGeometry;
@@ -248,7 +249,7 @@ export default function ParcellaMap({ record, query, item }) {
         if (dist !== null && dist > 300) {
           console.warn(`[ParcellaMap] Poligono scartato — baricentro a ${dist.toFixed(0)}m dal riferimento`);
           savePolygon = false;
-          setWfsStatus("⚠️ Poligono catastale non disponibile — troppo distante dal riferimento");
+          setWfsStatus("⚠️ Poligono WFS non confermato — troppo distante dal riferimento");
         }
       }
 
@@ -349,7 +350,7 @@ export default function ParcellaMap({ record, query, item }) {
           weight: 2,
           className: "geom-missing-pulse",
         }).addTo(map).bindPopup(
-          `<strong>📍 Posizione approssimativa</strong><br/>Geometria particella non disponibile da Catastomappe<br/><small style="color:#666">Foglio ${foglio}, Particella ${particella}${entity.subalterno ? `, Sub. ${entity.subalterno}` : ''}<br/>L'indicatore arancione mostra la posizione stimata dall'indirizzo.</small>`
+          `<strong>📍 Posizione approssimativa</strong><br/>Geometria particella non ancora disponibile<br/><small style="color:#666">Foglio ${foglio}, Particella ${particella}${entity.subalterno ? `, Sub. ${entity.subalterno}` : ''}<br/>L'indicatore arancione mostra la posizione stimata dall'indirizzo.</small>`
         );
         // Aggiungi CSS per pulsazione
         const styleId = 'geom-pulse-css';
@@ -426,7 +427,7 @@ export default function ParcellaMap({ record, query, item }) {
     <div className="space-y-2">
       <p className="text-sm text-gray-500">
         {hasPolygon
-          ? <>📐 Confine catastale ufficiale della particella (fonte: catasto)</>
+          ? <>📐 Confine catastale della particella (fonte: {entity.fonte_dati_catastali === 'catasto_agent' ? 'server catasto Aruba' : 'catasto'})</>
           : <>📍 Posizione geocodificata da indirizzo — i confini ufficiali sono visibili nel layer WMS dell'Agenzia delle Entrate zoomando sulla mappa.</>
         }
       </p>

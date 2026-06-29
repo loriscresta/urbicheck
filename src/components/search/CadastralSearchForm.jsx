@@ -87,6 +87,7 @@ export default function CadastralSearchForm({ onSubmit, isLoading, submitLabel =
   const [selectedComune, setSelectedComune] = useState(null);
   const [parcels, setParcels] = useState([newParcel()]);
   const [snapInfo, setSnapInfo] = useState(null); // { snapped: bool, snap_dist_m: number }
+  const [arubaGeometry, setArubaGeometry] = useState(null); // GeoJSON Polygon da server Aruba
   const [finalita, setFinalita] = useState("");
   const [showFinancial, setShowFinancial] = useState(false);
   const [visuraDati, setVisuraDati] = useState(null);
@@ -323,6 +324,7 @@ export default function CadastralSearchForm({ onSubmit, isLoading, submitLabel =
         sezione_catastale: p.sezione?.trim().toUpperCase() || undefined,
         indirizzo_immobile: p.indirizzo?.trim() || undefined,
         _snap_info: snapInfo || undefined,
+        _aruba_geometry: arubaGeometry || undefined,
       });
     } else {
       // Batch mode — enrich units with per-sub visura data when available
@@ -367,8 +369,9 @@ export default function CadastralSearchForm({ onSubmit, isLoading, submitLabel =
             if (results[0]) setSelectedComune(results[0]);
           }).catch(() => {});
         }}
-        onParcelFound={({ foglio, particella, sezione, snapped, snap_dist_m }) => {
+        onParcelFound={({ foglio, particella, sezione, snapped, snap_dist_m, geometry_geojson }) => {
           setSnapInfo(snapped ? { snapped: true, snap_dist_m: snap_dist_m ?? null } : null);
+          if (geometry_geojson) setArubaGeometry(geometry_geojson);
           setParcels(ps => {
             if (!ps.length) return [{ ...newParcel(foglio, particella), sezione: sezione || "" }];
             return ps.map((p, i) => i === 0 ? { ...p, foglio, particella, sezione: sezione || p.sezione } : p);
@@ -376,6 +379,7 @@ export default function CadastralSearchForm({ onSubmit, isLoading, submitLabel =
         }}
         onResetParcel={() => {
           setParcels(ps => ps.map((p, i) => i === 0 ? { ...p, foglio: "", particella: "", sezione: "" } : p));
+          setArubaGeometry(null);
         }}
         onResetComune={() => setSelectedComune(null)}
       />

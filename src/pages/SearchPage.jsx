@@ -205,7 +205,7 @@ export default function SearchPage() {
       : formData;
     const { prezzo_acquisto, superficie, stato_conservativo, destinazione_obiettivo, spese_accessorie,
       categoria_catastale, superficie_mq, rendita_catastale, vani, indirizzo_catastale,
-      visura_uploaded, intestatari_visura, _snap_info, ...cadastralData } = enrichedFormData;
+      visura_uploaded, intestatari_visura, _snap_info, _aruba_geometry, ...cadastralData } = enrichedFormData;
     const fin_data = { prezzo_acquisto, superficie, stato_conservativo, destinazione_obiettivo, spese_accessorie };
 
     const enrichment = await callUrbiCheckEnrichment(enrichedFormData);
@@ -225,6 +225,7 @@ export default function SearchPage() {
       report_data: { ...reportData, fin_data, planimetria_data: planimetriaData, ...(_snap_info ? { snap_info: _snap_info } : {}) },
       cost: 9.90,
       ...geocodingCoords,
+      ...(_aruba_geometry ? { geometry_geojson: _aruba_geometry } : {}),
       ...(superficieEffettiva ? { superficie_mq: superficieEffettiva } : {}),
       ...(visura_uploaded ? { categoria_catastale, superficie_mq, rendita_catastale, vani, indirizzo_catastale, visura_uploaded: true } : {}),
     });
