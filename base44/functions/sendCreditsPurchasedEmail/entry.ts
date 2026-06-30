@@ -6,11 +6,24 @@ Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
 
+    // SICUREZZA: solo utenti autenticati. Un utente normale può inviare solo a sé stesso,
+    // un admin a qualsiasi indirizzo. Blocca lo spoofing da chiamanti anonimi.
+    // (Le email di acquisto reali sono comunque inviate da stripe-webhook via Brevo.)
+    let requestingUser = null;
+    try { requestingUser = await base44.auth.me(); } catch (_e) {}
+    if (!requestingUser) {
+      return Response.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const payload = await req.json();
     const { user_email, user_name, amount_purchased, new_balance } = payload;
 
     if (!user_email || !amount_purchased) {
       return Response.json({ error: 'user_email and amount_purchased required' }, { status: 400 });
+    }
+
+    if (requestingUser.role !== 'admin' && user_email !== requestingUser.email) {
+      return Response.json({ error: 'Forbidden' }, { status: 403 });
     }
 
     // Basic email format validation
@@ -122,6 +135,6 @@ Deno.serve(async (req) => {
     return Response.json({ ok: true });
   } catch (error) {
     console.error('[sendCreditsPurchasedEmail] Error:', error.message);
-    return Response.json({ error: error.message }, { status: 500 });
+    return Response.json({ error: 'Errore interno' }, { status: 500 });
   }
 });
