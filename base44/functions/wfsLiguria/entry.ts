@@ -1,6 +1,6 @@
 // wfsLiguria.js — URBICHECK Analisi Urbanistica (Liguria + Piemonte + ISPRA nazionale) — v2.3
-const PRG_AGENT_URL = Deno.env.get("PRG_AGENT_URL");
-const ENRICHMENT_API_URL = Deno.env.get("ENRICHMENT_API_URL");
+const PRG_AGENT_URL = Deno.env.get("PRG_AGENT_URL") ?? "https://urbicheck-prg-agent-production.up.railway.app";
+const ENRICHMENT_API_URL = Deno.env.get("ENRICHMENT_API_URL") ?? "https://web-production-6e951.up.railway.app";
 
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 
