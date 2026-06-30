@@ -3,7 +3,7 @@
 
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 
-const MAKE_WEBHOOK_URL = 'https://hook.eu1.make.com/ymhq6x0siot8olv8l6ya6cjllpd8sfws';
+const MAKE_WEBHOOK_URL = Deno.env.get('MAKE_PURCHASE_WEBHOOK_URL');
 
 Deno.serve(async (req) => {
   try {
@@ -19,6 +19,12 @@ Deno.serve(async (req) => {
 
     if (!userEmail || amount == null || type !== 'purchase') {
       return Response.json({ skipped: true, reason: 'not a purchase or missing fields' });
+    }
+
+    // Se l'URL webhook non è configurato, salta la notifica (non bloccante)
+    if (!MAKE_WEBHOOK_URL) {
+      console.warn('[notifyMakePurchase] MAKE_PURCHASE_WEBHOOK_URL non impostata — notifica saltata');
+      return Response.json({ success: true, skipped: 'webhook not configured' });
     }
 
     // Fire-and-forget: chiamiamo il webhook senza preoccuparci del risultato
