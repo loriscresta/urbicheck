@@ -1,6 +1,6 @@
 /**
  * fetchParcelGeometry — recupera la geometria GeoJSON di una particella catastale.
- * Prima tenta l'API interna UrbiCheck (http://80.211.24.114:8001/parcel),
+ * Prima tenta l'API interna UrbiCheck (endpoint da env CATASTO_API_URL, /parcel),
  * poi fallback al WFS dell'Agenzia delle Entrate.
  *
  * INPUT: { queryId, foglio, particella, sezione, comune, centroid_lat, centroid_lng }
