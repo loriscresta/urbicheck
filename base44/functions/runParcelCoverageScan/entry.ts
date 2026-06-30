@@ -58,6 +58,7 @@ function testPoints(lat, lon) {
 }
 
 Deno.serve(async (req) => {
+  console.log('CATASTO_REDEPLOY_MARKER_v3', new Date().toISOString());
   try {
     const base44 = createClientFromRequest(req);
     const user = await base44.auth.me();

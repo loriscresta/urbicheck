@@ -559,6 +559,7 @@ async function geocodeAddress(indirizzo, comune, provincia) {
 
 // ── MAIN ──
 Deno.serve(async (req) => {
+  console.log('CATASTO_REDEPLOY_MARKER_v3', new Date().toISOString());
   const base44 = createClientFromRequest(req);
   let user;
   try { user = await base44.auth.me(); } catch (_e) {}

@@ -7,6 +7,7 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 const AGENT_BASE = 'http://80.211.24.114:8001';
 
 Deno.serve(async (req) => {
+  console.log('CATASTO_REDEPLOY_MARKER_v3', new Date().toISOString());
   try {
     try { await createClientFromRequest(req).auth.me(); } catch (_e) {}
     // Permetti anche utenti non autenticati (ricerca pubblica)
