@@ -54,7 +54,8 @@ Deno.serve(async (req) => {
         return Response.json({ found: false, _debug: 'server_reached_no_parcel', _base: AGENT_BASE, _status: res.status });
       }
       console.warn(`[lookupParcelByCoords] Aruba HTTP ${res.status} — fallback Catastomappe`);
-      return Response.json({ found: false, _debug: 'http_error', _status: res.status, _base: AGENT_BASE });
+      const _body = await res.text().catch(() => '');
+      return Response.json({ found: false, _debug: 'http_error', _status: res.status, _base: AGENT_BASE, _server: res.headers.get('server'), _ct: res.headers.get('content-type'), _body: (_body || '').slice(0, 300) });
     } catch (primaryErr) {
       console.warn(`[lookupParcelByCoords] Aruba irraggiungibile (${primaryErr.message}) — fallback Catastomappe`);
       return Response.json({ found: false, _debug: 'fetch_error', _err: String(primaryErr && primaryErr.message), _base: AGENT_BASE });
