@@ -14,7 +14,7 @@ const DAYS_30 = 30 * 24 * 60 * 60 * 1000;
 async function lookupParcel(lat, lon) {
   const url = `${AGENT_BASE}/parcel?lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}&limit=1`;
   try {
-    const res = await fetch(url, { signal: AbortSignal.timeout(10000) });
+    const res = await fetch(url, { headers: { 'User-Agent': 'UrbiCheck/1.0 (info@urbicheck.it)', 'Accept': 'application/json' }, signal: AbortSignal.timeout(10000) });
     if (!res.ok) return { found: false };
     const data = await res.json();
     if (!data.found || !data.parcels?.length) return { found: false };

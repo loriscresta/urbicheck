@@ -27,7 +27,7 @@ Deno.serve(async (req) => {
     console.log(`[lookupParcelByCoords] primario: ${primaryUrl}`);
 
     try {
-      const res = await fetch(primaryUrl, { signal: AbortSignal.timeout(6000) });
+      const res = await fetch(primaryUrl, { headers: { 'User-Agent': 'UrbiCheck/1.0 (info@urbicheck.it)', 'Accept': 'application/json' }, signal: AbortSignal.timeout(6000) });
       if (res.ok) {
         const data = await res.json();
         if (data.found && data.parcels?.length) {

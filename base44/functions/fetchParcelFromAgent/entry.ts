@@ -60,7 +60,7 @@ Deno.serve(async (req) => {
 
   let parcel = null;
   try {
-    const res = await fetch(lookupUrl, { signal: AbortSignal.timeout(10000) });
+    const res = await fetch(lookupUrl, { headers: { 'User-Agent': 'UrbiCheck/1.0 (info@urbicheck.it)', 'Accept': 'application/json' }, signal: AbortSignal.timeout(10000) });
     if (res.ok) {
       const data = await res.json();
       if (data.found && data.parcels?.length > 0) {
@@ -94,7 +94,7 @@ Deno.serve(async (req) => {
       const fallbackUrl = `${AGENT_BASE}/parcel?lat=${comuneLat}&lon=${comuneLon}&limit=1`;
       console.log(`[fetchParcelFromAgent] fallback: ${fallbackUrl}`);
       try {
-        const res = await fetch(fallbackUrl, { signal: AbortSignal.timeout(10000) });
+        const res = await fetch(fallbackUrl, { headers: { 'User-Agent': 'UrbiCheck/1.0 (info@urbicheck.it)', 'Accept': 'application/json' }, signal: AbortSignal.timeout(10000) });
         if (res.ok) {
           const data = await res.json();
           if (data.found && data.parcels?.length > 0) {
