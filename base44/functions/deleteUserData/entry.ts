@@ -28,6 +28,15 @@ Deno.serve(async (req) => {
     const user = await base44.auth.me();
     if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
+    // Conferma esplicita richiesta: azione distruttiva e irreversibile (GDPR).
+    // Impedisce cancellazioni accidentali o innescate senza intento esplicito.
+    let reqBody = {};
+    try { reqBody = await req.json(); } catch (_e) { reqBody = {}; }
+    if (reqBody?.confirm !== true) {
+      return Response.json({ error: 'Conferma esplicita richiesta: invia { confirm: true }' }, { status: 400 });
+    }
+
+    // Opera SEMPRE e solo sui dati dell'utente autenticato (mai su id/email forniti dal client).
     const email = user.email;
     const normalizedEmail = normalizeEmail(email);
     const emailHash = await hashEmail(normalizedEmail);
@@ -95,6 +104,6 @@ Deno.serve(async (req) => {
 
   } catch (error) {
     console.error('deleteUserData error:', error.message);
-    return Response.json({ error: error.message }, { status: 500 });
+    return Response.json({ error: 'Errore interno durante la cancellazione' }, { status: 500 });
   }
 });
