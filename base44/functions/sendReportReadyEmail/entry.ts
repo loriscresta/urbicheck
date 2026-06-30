@@ -158,12 +158,11 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'query_id required' }, { status: 400 });
     }
 
-    // Get query — prefer data from payload if already included
-    let query = (payload.data?.status === 'completed') ? payload.data : null;
-    if (!query) {
-      const rows = await base44.asServiceRole.entities.CadastralQuery.filter({ id: query_id });
-      query = rows[0];
-    }
+    // SICUREZZA: carica SEMPRE il record reale dal DB (service role) usando query_id.
+    // Non fidarsi mai del contenuto di payload.data: un payload forgiato potrebbe
+    // altrimenti far inviare email con destinatario e contenuti arbitrari (spoofing).
+    const rows = await base44.asServiceRole.entities.CadastralQuery.filter({ id: query_id });
+    const query = rows[0];
     if (!query) return Response.json({ error: 'Query not found' }, { status: 404 });
 
     // Ownership check for direct user calls
