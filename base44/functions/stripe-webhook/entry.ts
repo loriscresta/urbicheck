@@ -57,12 +57,17 @@ Deno.serve(async (req) => {
       });
 
       // Notify Make.com webhook (fire-and-forget)
-      fetch('https://hook.eu1.make.com/ymhq6x0siot8olv8l6ya6cjllpd8sfws', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_email, amount: creditAmount, type: 'purchase' }),
-        signal: AbortSignal.timeout(10000),
-      }).catch(() => {});
+      const makeWebhookUrl = Deno.env.get('MAKE_PURCHASE_WEBHOOK_URL');
+      if (makeWebhookUrl) {
+        fetch(makeWebhookUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ user_email, amount: creditAmount, type: 'purchase' }),
+          signal: AbortSignal.timeout(10000),
+        }).catch(() => {});
+      } else {
+        console.warn('MAKE_PURCHASE_WEBHOOK_URL not set — skipping Make.com notification');
+      }
 
       // Send confirmation email via Brevo API directly
       try {
