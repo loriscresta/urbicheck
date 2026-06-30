@@ -135,7 +135,7 @@ export default function CreditsPage() {
     if (!confirmed) return;
     setDeletingAccount(true);
     try {
-      await deleteUserData({});
+      await deleteUserData({ confirm: true });
       await base44.auth.logout('/');
     } catch (err) {
       toast({ title: "Errore eliminazione account", description: err.message, variant: "destructive" });
