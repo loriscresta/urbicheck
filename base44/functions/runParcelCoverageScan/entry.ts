@@ -5,7 +5,7 @@
 // Admin-only, ripetibile/resumibile, sequenziale (rate-limit friendly).
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 
-const AGENT_BASE = 'http://80.211.24.114:8001';
+const AGENT_BASE = 'https://catasto.urbicheck.it';
 const GOOGLE_KEY = Deno.env.get('GOOGLE_MAPS_API_KEY');
 const BETA_REGIONI = ['Piemonte', 'Liguria', 'Lombardia'];
 const DAYS_30 = 30 * 24 * 60 * 60 * 1000;
@@ -14,7 +14,7 @@ const DAYS_30 = 30 * 24 * 60 * 60 * 1000;
 async function lookupParcel(lat, lon) {
   const url = `${AGENT_BASE}/parcel?lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}&limit=1`;
   try {
-    const res = await fetch(url, { headers: { 'User-Agent': 'UrbiCheck/1.0 (info@urbicheck.it)', 'Accept': 'application/json' }, signal: AbortSignal.timeout(10000) });
+    const res = await fetch(url, { headers: { 'User-Agent': 'UrbiCheck/1.0 (info@urbicheck.it)', 'Accept': 'application/json', 'X-Api-Key': Deno.env.get('CATASTO_API_KEY') }, signal: AbortSignal.timeout(10000) });
     if (!res.ok) return { found: false };
     const data = await res.json();
     if (!data.found || !data.parcels?.length) return { found: false };

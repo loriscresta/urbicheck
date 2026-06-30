@@ -8,16 +8,13 @@
  */
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 
-const INTERNAL_API_BASE = Deno.env.get('CATASTO_API_URL');
-if (!INTERNAL_API_BASE) {
-  console.error('[fetchParcelGeometry] CATASTO_API_URL env var is not set');
-}
+const INTERNAL_API_BASE = 'https://catasto.urbicheck.it';
 
 async function fetchFromInternalApi(lat, lon) {
   if (!INTERNAL_API_BASE) return null;
   try {
     const url = `${INTERNAL_API_BASE}/parcel?lat=${lat}&lon=${lon}`;
-    const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
+    const res = await fetch(url, { headers: { 'X-Api-Key': Deno.env.get('CATASTO_API_KEY') }, signal: AbortSignal.timeout(8000) });
     if (!res.ok) return null;
     const data = await res.json();
     if (!data.found || !data.parcels?.length) return null;

@@ -4,7 +4,7 @@
 //   senza interrompere il flusso (l'app resta funzionante).
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 
-const AGENT_BASE = 'http://80.211.24.114:8001';
+const AGENT_BASE = 'https://catasto.urbicheck.it';
 
 Deno.serve(async (req) => {
   console.log('CATASTO_REDEPLOY_MARKER_v3', new Date().toISOString());
@@ -27,7 +27,7 @@ Deno.serve(async (req) => {
     console.log(`[lookupParcelByCoords] primario: ${primaryUrl}`);
 
     try {
-      const res = await fetch(primaryUrl, { headers: { 'User-Agent': 'UrbiCheck/1.0 (info@urbicheck.it)', 'Accept': 'application/json' }, signal: AbortSignal.timeout(6000) });
+      const res = await fetch(primaryUrl, { headers: { 'User-Agent': 'UrbiCheck/1.0 (info@urbicheck.it)', 'Accept': 'application/json', 'X-Api-Key': Deno.env.get('CATASTO_API_KEY') }, signal: AbortSignal.timeout(6000) });
       if (res.ok) {
         const data = await res.json();
         if (data.found && data.parcels?.length) {
@@ -51,14 +51,13 @@ Deno.serve(async (req) => {
         }
         // found=false → nessuna particella in questa posizione nella nostra DB
         console.log('[lookupParcelByCoords] Aruba: nessuna particella trovata (not in coverage)');
-        return Response.json({ found: false, _debug: 'server_reached_no_parcel', _base: AGENT_BASE, _status: res.status });
+        return Response.json({ found: false });
       }
       console.warn(`[lookupParcelByCoords] Aruba HTTP ${res.status} — fallback Catastomappe`);
-      const _body = await res.text().catch(() => '');
-      return Response.json({ found: false, _debug: 'http_error', _status: res.status, _base: AGENT_BASE, _server: res.headers.get('server'), _ct: res.headers.get('content-type'), _body: (_body || '').slice(0, 300) });
+      return Response.json({ found: false });
     } catch (primaryErr) {
       console.warn(`[lookupParcelByCoords] Aruba irraggiungibile (${primaryErr.message}) — fallback Catastomappe`);
-      return Response.json({ found: false, _debug: 'fetch_error', _err: String(primaryErr && primaryErr.message), _base: AGENT_BASE });
+      return Response.json({ found: false });
     }
 
   } catch (error) {
