@@ -1,10 +1,10 @@
 // lookupParcelByCoords — trova foglio/particella da coordinate.
-// PRIMARIO: server catastale Aruba (http://80.211.24.114:8001/parcel) — 20M+ particelle (Piemonte, Liguria, Lombardia).
+// PRIMARIO: server catastale (endpoint da env CATASTO_API_URL) — 20M+ particelle (Piemonte, Liguria, Lombardia).
 // FALLBACK graceful: se il server è irraggiungibile o risponde con errore, restituisce found:false
 //   senza interrompere il flusso (l'app resta funzionante).
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 
-const AGENT_BASE = Deno.env.get('CATASTO_API_URL') || 'http://80.211.24.114:8001';
+const AGENT_BASE = Deno.env.get('CATASTO_API_URL');
 
 Deno.serve(async (req) => {
   try {
