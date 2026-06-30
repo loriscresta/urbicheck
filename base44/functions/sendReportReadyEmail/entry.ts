@@ -131,8 +131,15 @@ function buildEmailHtml({ userName, comune, foglio, particella, score, elementi,
 </html>`;
 }
 
-// Detect entity automation calls (trusted — admins only create automations)
-function isAutomationCall(payload) {
+// Detect entity automation calls (platform-invoked — trusted server-to-server)
+function isAutomationCall(req, payload) {
+  // Additional guard: require INTERNAL_AUTH_TOKEN header if set, falling back to
+  // platform automation detection (event.type + data) for backward compatibility.
+  const token = req.headers.get('x-internal-token');
+  const secret = Deno.env.get('INTERNAL_AUTH_TOKEN');
+  if (secret && token === secret) return true;
+  // Platform entity automations send event.type + data — content is irrelevant
+  // because all email data is always re-fetched from the DB via query_id below.
   return !!(payload?.event?.type && payload?.data);
 }
 
@@ -146,7 +153,7 @@ Deno.serve(async (req) => {
     try { requestingUser = await base44.auth.me(); } catch (_e) {}
 
     // Entity automations are trusted (admin-only to create)
-    const isAutomation = isAutomationCall(payload);
+    const isAutomation = isAutomationCall(req, payload);
 
     if (!requestingUser && !isAutomation) {
       return Response.json({ error: 'Unauthorized — user auth required' }, { status: 401 });
@@ -262,6 +269,7 @@ Deno.serve(async (req) => {
 
     return Response.json({ ok: true, sent_to: userEmail });
   } catch (error) {
-    return Response.json({ error: error.message }, { status: 500 });
+    console.error('[sendReportReadyEmail] error:', error.message);
+    return Response.json({ error: 'Errore interno' }, { status: 500 });
   }
 });
