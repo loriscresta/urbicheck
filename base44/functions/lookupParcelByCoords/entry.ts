@@ -4,7 +4,7 @@
 //   senza interrompere il flusso (l'app resta funzionante).
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 
-const AGENT_BASE = Deno.env.get('CATASTO_API_URL') || 'http://80.211.24.114:8001';
+const AGENT_BASE = 'http://80.211.24.114:8001';
 
 Deno.serve(async (req) => {
   try {

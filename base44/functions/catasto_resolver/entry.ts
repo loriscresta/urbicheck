@@ -881,7 +881,7 @@ Deno.serve(async (req) => {
   // se il WFS AdE non ha restituito geometria.
   if (query_id && queryRecord && !wfsResult?.geojson_polygon) {
     try {
-      const agentBase = Deno.env.get('CATASTO_API_URL') || 'http://80.211.24.114:8001';
+      const agentBase = 'http://80.211.24.114:8001';
       const lookupUrl = `${agentBase}/parcel/lookup?comune=${encodeURIComponent(nome_comune || queryRecord.comune)}&foglio=${encodeURIComponent(foglio)}&particella=${encodeURIComponent(particella)}`;
       console.log(`[catasto_resolver] catasto_agent lookup: ${lookupUrl}`);
       const agentRes = await fetchWithTimeout(lookupUrl, {}, 10000);

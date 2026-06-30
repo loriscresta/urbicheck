@@ -5,7 +5,7 @@
 // Admin-only, ripetibile/resumibile, sequenziale (rate-limit friendly).
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 
-const AGENT_BASE = Deno.env.get('CATASTO_API_URL') || 'http://80.211.24.114:8001';
+const AGENT_BASE = 'http://80.211.24.114:8001';
 const GOOGLE_KEY = Deno.env.get('GOOGLE_MAPS_API_KEY');
 const BETA_REGIONI = ['Piemonte', 'Liguria', 'Lombardia'];
 const DAYS_30 = 30 * 24 * 60 * 60 * 1000;
