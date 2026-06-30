@@ -1,6 +1,8 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 
-const PIXEL_ID = "1962386827973256";
+// Il Pixel ID è un identificatore pubblico (visibile lato browser). Letto da env per best practice,
+// con fallback al valore noto per non interrompere il tracking se il secret non è impostato.
+const PIXEL_ID = Deno.env.get("META_PIXEL_ID") || "1962386827973256";
 
 const ALLOWED_ORIGINS = [
   "https://urbicheck.it",
