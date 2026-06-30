@@ -1,14 +1,14 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 
-// Il Pixel ID è un identificatore pubblico (visibile lato browser). Letto da env per best practice,
-// con fallback al valore noto per non interrompere il tracking se il secret non è impostato.
-const PIXEL_ID = Deno.env.get("META_CONVERSIONS_PIXEL_ID") || "1405555848052349";
+// Pixel ID letto esclusivamente da variabile d'ambiente (nessun valore hardcoded).
+const PIXEL_ID = Deno.env.get("META_CONVERSIONS_PIXEL_ID");
 
-const ALLOWED_ORIGINS = [
-  "https://urbicheck.it",
-  "https://www.urbicheck.it",
-  "https://app--urbicheck--bfe5a741.base44.app",
-];
+// Origini CORS autorizzate, esternalizzate in env come lista separata da virgole
+// (es. "https://urbicheck.it,https://www.urbicheck.it"). Nessun valore hardcoded.
+const ALLOWED_ORIGINS = (Deno.env.get("ALLOWED_ORIGINS") || "")
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
 
 function getAllowedOrigin(req) {
   const origin = req.headers.get("origin") || "";
@@ -52,7 +52,12 @@ Deno.serve(async (req) => {
   try {
     const accessToken = Deno.env.get("META_CAPI_ACCESS_TOKEN");
     if (!accessToken) {
-      return Response.json({ error: "META_CAPI_ACCESS_TOKEN not configured" }, { status: 500 });
+      return Response.json({ error: "META_CAPI_ACCESS_TOKEN not configured" }, { status: 500, headers: corsHeaders });
+    }
+
+    if (!PIXEL_ID) {
+      console.error("[MetaCAPI] missing META_CONVERSIONS_PIXEL_ID");
+      return Response.json({ error: "META_CONVERSIONS_PIXEL_ID not configured" }, { status: 500, headers: corsHeaders });
     }
 
     const body = await req.json();
