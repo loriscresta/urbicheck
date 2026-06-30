@@ -10,6 +10,7 @@ import { CreditCard, ArrowUpRight, ArrowDownRight, Loader2, Zap, Trash2 } from "
 import { motion } from "framer-motion";
 import { stripeCheckout } from "@/functions/stripeCheckout";
 import { deleteUserData } from "@/functions/deleteUserData";
+import { notifyMakeCredit } from "@/functions/notifyMakeCredit";
 
 
 
@@ -50,11 +51,7 @@ export default function CreditsPage() {
         amount: amount,
         description: `Ricarica manuale admin — €${amount.toFixed(2)}`,
       });
-      fetch('https://hook.eu1.make.com/ymhq6x0siot8olv8l6ya6cjllpd8sfws', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_email: adminUser.email, amount: amount, type: 'purchase' })
-      }).catch(() => {});
+      notifyMakeCredit({ user_email: adminUser.email, amount: amount, type: 'purchase' }).catch(() => {});
       queryClient.invalidateQueries({ queryKey: ['userCredits'] });
       queryClient.invalidateQueries({ queryKey: ['transactions'] });
       setAutoReloadAmount('');
