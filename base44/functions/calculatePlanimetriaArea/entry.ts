@@ -17,16 +17,24 @@ Deno.serve(async (req) => {
     const { file_url, query_id, superficie_catasto } = await req.json();
 
     // ── QUERY OWNERSHIP: verifica che la query appartenga all'utente ──────
+    // Usa asServiceRole per leggere SEMPRE il record: con il client utente la RLS
+    // nasconderebbe le query altrui (q undefined) facendo saltare il controllo 403,
+    // mentre più sotto asServiceRole le aggiornerebbe comunque (IDOR). Qui neghiamo
+    // esplicitamente se il record non esiste o non appartiene all'utente.
     if (query_id) {
+      let ownerQuery;
       try {
-        const queries = await base44.entities.CadastralQuery.filter({ id: query_id });
-        const q = queries[0];
-        if (q && q.created_by_id !== user.id && user.role !== 'admin') {
-          return Response.json({ error: 'Forbidden — query non appartiene a questo utente' }, { status: 403 });
-        }
+        const queries = await base44.asServiceRole.entities.CadastralQuery.filter({ id: query_id });
+        ownerQuery = queries[0];
       } catch (_e) {
         console.warn('[calculatePlanimetriaArea] ownership check failed:', _e.message);
+        return Response.json({ error: 'Errore verifica proprietà query' }, { status: 500 });
+      }
+      if (!ownerQuery) {
         return Response.json({ error: 'Query non trovata' }, { status: 404 });
+      }
+      if (ownerQuery.created_by_id !== user.id && user.role !== 'admin') {
+        return Response.json({ error: 'Forbidden — query non appartiene a questo utente' }, { status: 403 });
       }
     }
     if (!file_url) return Response.json({ error: 'file_url richiesto' }, { status: 400 });
