@@ -51,17 +51,14 @@ Deno.serve(async (req) => {
         }
         // found=false → nessuna particella in questa posizione nella nostra DB
         console.log('[lookupParcelByCoords] Aruba: nessuna particella trovata (not in coverage)');
-        return Response.json({ found: false });
+        return Response.json({ found: false, _debug: 'server_reached_no_parcel', _base: AGENT_BASE, _status: res.status });
       }
       console.warn(`[lookupParcelByCoords] Aruba HTTP ${res.status} — fallback Catastomappe`);
+      return Response.json({ found: false, _debug: 'http_error', _status: res.status, _base: AGENT_BASE });
     } catch (primaryErr) {
       console.warn(`[lookupParcelByCoords] Aruba irraggiungibile (${primaryErr.message}) — fallback Catastomappe`);
+      return Response.json({ found: false, _debug: 'fetch_error', _err: String(primaryErr && primaryErr.message), _base: AGENT_BASE });
     }
-
-    // ── FALLBACK graceful ──────────────────────────────────────────────────
-    // Il server Aruba ha risposto con HTTP error — nessuna altra fonte disponibile.
-    // Restituiamo found:false per non interrompere il flusso dell'app.
-    return Response.json({ found: false });
 
   } catch (error) {
     console.error('[lookupParcelByCoords] errore:', error.message);
