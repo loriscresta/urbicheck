@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { base44 } from "@/api/base44Client";
+import { notifyMakeCredit } from "@/functions/notifyMakeCredit";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { it } from "date-fns/locale";
@@ -68,11 +69,7 @@ function AddCreditsForm({ userEmail, onDone }) {
       await base44.entities.UserCredits.create({ user_email: userEmail, balance: amt, total_spent: 0, total_queries: 0 });
     }
     await base44.entities.CreditTransaction.create({ user_email: userEmail, type: "purchase", amount: amt, description: reason || `Crediti aggiunti da admin` });
-    fetch('https://hook.eu1.make.com/ymhq6x0siot8olv8l6ya6cjllpd8sfws', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ user_email: userEmail, amount: amt, type: 'purchase' })
-    }).catch(() => {});
+    notifyMakeCredit({ user_email: userEmail, amount: amt, type: 'purchase' }).catch(() => {});
     qc.invalidateQueries({ queryKey: ["adminCredits"] });
     toast({ title: `+€${amt.toFixed(2)} aggiunti a ${userEmail}` });
     setLoading(false);
