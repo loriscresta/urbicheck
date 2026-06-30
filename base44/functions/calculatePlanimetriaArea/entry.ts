@@ -122,6 +122,6 @@ IMPORTANTE: non inventare valori se non riesci a leggere nulla. In quel caso res
 
   } catch (error) {
     console.error('[planimetria-v3] errore:', error.message);
-    return Response.json({ error: error.message, area_mq: null }, { status: 500 });
+    return Response.json({ error: "Errore interno durante l'analisi della planimetria", area_mq: null }, { status: 500 });
   }
 });
