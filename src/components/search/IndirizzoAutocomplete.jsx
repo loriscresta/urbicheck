@@ -34,7 +34,7 @@ function formatSuggestionDisplay(item) {
 
 const NOMINATIM_BASE = "https://nominatim.openstreetmap.org/search?countrycodes=it&format=json&addressdetails=1";
 
-export default function IndirizzoAutocomplete({ onComuneFound, onParcelFound, onResetParcel, onResetComune, initialAddress }) {
+export default function IndirizzoAutocomplete({ onComuneFound, onParcelFound, onResetParcel, onResetComune, initialAddress, onAddressResolved }) {
   const [addressQuery, setAddressQuery] = useState("");
   const [addressSuggestions, setAddressSuggestions] = useState([]);
   const [mapCoords, setMapCoords] = useState(null);
@@ -147,6 +147,7 @@ export default function IndirizzoAutocomplete({ onComuneFound, onParcelFound, on
       if (d && d.found !== false && d.lat != null && d.lng != null && isFinite(d.lat) && isFinite(d.lng)) {
         const comune = d.comune || "";
         if (comune) { setComuneTrovato(comune); onComuneFound?.(comune); }
+        onAddressResolved?.(d.formatted_address || queryString);
         setMapCoords({ lat: d.lat, lon: d.lng });
         await doParcelLookup(d.lat, d.lng);
         return;
@@ -272,11 +273,13 @@ export default function IndirizzoAutocomplete({ onComuneFound, onParcelFound, on
       onComuneFound?.(comune);
     }
 
-    const lat = parseFloat(item.lat);
-    const lon = parseFloat(item.lon);
-    setMapCoords({ lat, lon });
-
-    await doParcelLookup(lat, lon);
+    // Ri-geocodifica l'indirizzo scelto via Google (ROOFTOP sul civico) per la massima precisione,
+    // invece di usare le coordinate — spesso imprecise — del suggerimento Nominatim.
+    const a = item.address || {};
+    const full = (a.road && a.house_number)
+      ? `${a.road} ${a.house_number}, ${a.town || a.city || a.village || comune}`
+      : item.display_name;
+    await geocodeAndResolve(full);
   };
 
   const handleClear = () => {
