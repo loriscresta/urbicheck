@@ -21,8 +21,53 @@ async function getSiglaProvincia(comune, regione, query) {
   } catch (_e) { return null; }
 }
 
+const NTA_SERVICE_URL = "https://urbicheck-prg-agent-production.up.railway.app";
+
+// ── Tier -1 — NTA live dal microservizio UrbiCheck (fonte: PDF NTA comunale) ──
+async function resolveNtaFromService(comune, query) {
+  if (!comune) return null;
+  const comuneKey = comune.trim().replace(/\s+/g, "_");
+  const dest = query?.report_data?.wfs_liguria?.risultati?.zona_urbanistica?.destinazione
+            || query?.report_data?.zonizzazione?.destinazione_prevalente || null;
+  if (!dest) return null;
+  const r = await fetch(`${NTA_SERVICE_URL}/nta/match`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ comune: comuneKey, destinazione: dest }),
+  });
+  if (!r.ok) return null;
+  const data = await r.json();
+  if (!data?.trovato || !data?.match) return null;
+  const z = data.match;
+  const p = z.parametri || {};
+  const ifVal = p.indice_fabbric_fondiario_If?.valore ?? p.indice_util_fondiaria_Uf?.valore ?? p.indice_util_territoriale_Ut?.valore ?? null;
+  const ifUn = p.indice_fabbric_fondiario_If ? "mc/mq" : ((p.indice_util_fondiaria_Uf || p.indice_util_territoriale_Ut) ? "mq/mq" : "");
+  return {
+    IF: ifVal != null ? `${ifVal} ${ifUn}`.trim() : null,
+    RC: p.rapporto_copertura_max_pct != null ? `${p.rapporto_copertura_max_pct}%` : null,
+    Hmax: p.altezza_max_m != null ? `${p.altezza_max_m} m` : null,
+    Dc: p.distanza_min_confini_m != null ? `${p.distanza_min_confini_m} m` : null,
+    Df: null,
+    Ds: p.distanza_min_strade_m != null ? `${p.distanza_min_strade_m} m` : null,
+    strumento: z.riferimento || "NTA comunale",
+    fonte: `NTA ${comune} — ${z.articolo}`,
+    note: z.note || (z.destinazioni_ammesse?.length ? `Destinazioni ammesse: ${z.destinazioni_ammesse.slice(0, 6).join("; ")}` : null),
+    fonte_tipo: "diretta",
+    nomeZona: z.nome,
+    zonaWfs: dest,
+    disclaimer: null,
+    capoluogo: null,
+  };
+}
+
 // ── 4-level cascade (async per AI) ─────────────────────────────────────────
 async function resolveNta(comune, regione, query) {
+  // Tier -1 — NTA live dal microservizio (indici reali dal PDF NTA comunale)
+  try {
+    const svc = await resolveNtaFromService(comune, query);
+    if (svc && (svc.IF || svc.Hmax || svc.RC)) return svc;
+  } catch (_e) { /* fallback ai tier locali */ }
+
   // Tier 0 — NTA_LOOKUP database reale PRG/PGT/PUC (massima priorità)
   const zonaFromReport = query?.report_data?.zonizzazione?.zona_codice || null;
   const ntaDbResult = lookupNTA(comune, zonaFromReport);
