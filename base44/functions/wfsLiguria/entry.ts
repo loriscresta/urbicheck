@@ -561,13 +561,16 @@ async function queryPAIIspra(lat, lon) {
 // ============================================================
 async function runAnalisiLiguria({ comune, provincia, indirizzo, comuneLower, prefill_lat, prefill_lon }) {
   let lat = null, lon = null, x3003 = null, y3003 = null, geocodingError = null;
-  if (indirizzo) {
+  // PRIORITA': centroide della particella dal catasto (accurato) sopra il geocoding dell'indirizzo (approssimato).
+  if (prefill_lat !== null && prefill_lat !== undefined && !isNaN(Number(prefill_lat))) {
+    lat = Number(prefill_lat); lon = Number(prefill_lon);
+  }
+  if (lat === null && indirizzo) {
     try {
       const coords = await geocodeAddress(indirizzo, comune, provincia, 'Liguria');
       if (!coords.isFallbackCapoluogo) { lat = coords.lat; lon = coords.lon; }
     } catch (_e) {}
   }
-  if (lat === null) { lat = prefill_lat || null; lon = prefill_lon || null; }
   let pai = [{ layer: 'Rischio idrogeologico', trovato: false, errore: 'Non eseguito' }, { layer: 'Rischio idraulico', trovato: false, errore: 'Non eseguito' }];
   let paiArpa = [];
   let overpassResult = { railways: [], waterways: [], lakes: [], overpass_ok: false };
