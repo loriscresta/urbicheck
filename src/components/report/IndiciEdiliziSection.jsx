@@ -24,10 +24,11 @@ async function getSiglaProvincia(comune, regione, query) {
 const NTA_SERVICE_URL = "https://urbicheck-prg-agent-production.up.railway.app";
 
 // ── Tier -1 — NTA live dal microservizio UrbiCheck (fonte: PDF NTA comunale) ──
-async function resolveNtaFromService(comune, query) {
+async function resolveNtaFromService(comune, query, wfsZona) {
   if (!comune) return null;
   const comuneKey = comune.trim().replace(/\s+/g, "_");
-  const dest = query?.report_data?.wfs_liguria?.risultati?.zona_urbanistica?.destinazione
+  const dest = wfsZona?.destinazione
+            || query?.report_data?.wfs_liguria?.risultati?.zona_urbanistica?.destinazione
             || query?.report_data?.zonizzazione?.destinazione_prevalente || null;
   if (!dest) return null;
   const r = await fetch(`${NTA_SERVICE_URL}/nta/match`, {
@@ -61,10 +62,10 @@ async function resolveNtaFromService(comune, query) {
 }
 
 // ── 4-level cascade (async per AI) ─────────────────────────────────────────
-async function resolveNta(comune, regione, query) {
+async function resolveNta(comune, regione, query, wfsZona) {
   // Tier -1 — NTA live dal microservizio (indici reali dal PDF NTA comunale)
   try {
-    const svc = await resolveNtaFromService(comune, query);
+    const svc = await resolveNtaFromService(comune, query, wfsZona);
     if (svc && (svc.IF || svc.Hmax || svc.RC)) return svc;
   } catch (_e) { /* fallback ai tier locali */ }
 
@@ -337,10 +338,10 @@ export default function IndiciEdiliziSection({ indici, comune, query, report, wf
   useEffect(() => {
     if (!comuneEffettivo) { setLoading(false); return; }
     setLoading(true);
-    resolveNta(comuneEffettivo, regioneEffettiva, query)
+    resolveNta(comuneEffettivo, regioneEffettiva, query, wfsZonaUrbanistica)
       .then(result => { setNta(result); if (onNtaResolved) onNtaResolved(result); })
       .finally(() => setLoading(false));
-  }, [comuneEffettivo, regioneEffettiva]);
+  }, [comuneEffettivo, regioneEffettiva, wfsZonaUrbanistica?.destinazione]);
 
   if (!indici) return null;
 
