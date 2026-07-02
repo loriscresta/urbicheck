@@ -292,8 +292,8 @@ export default function IndirizzoAutocomplete({ onComuneFound, onParcelFound, on
       <div style={{ position: "relative" }}>
         <div className="flex items-center gap-1.5 mb-1">
           <MapPin className="w-3.5 h-3.5 text-primary" />
-          <label className="text-xs font-medium" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
-            Cerca per indirizzo <span style={{ color: "#888", fontSize: "0.85em" }}>(opzionale)</span>
+          <label className="text-sm font-bold" style={{ fontFamily: "'IBM Plex Mono', monospace", color: "#1A3A6B" }}>
+            Cerca il tuo immobile per indirizzo
           </label>
         </div>
 
