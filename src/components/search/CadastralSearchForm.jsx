@@ -100,6 +100,7 @@ export default function CadastralSearchForm({ onSubmit, isLoading, submitLabel =
   const [prezzoBaseAsta, setPrezzoBaseAsta] = useState("");
   const [batchPertinenze, setBatchPertinenze] = useState(null); // null=unasked, true=yes, false=no
   const [accordionOpen, setAccordionOpen] = useState(false);
+  const [manualMode, setManualMode] = useState(false);
 
   // Financial fields
   const [prezzoAcquisto, setPrezzoAcquisto] = useState("");
@@ -190,6 +191,8 @@ export default function CadastralSearchForm({ onSubmit, isLoading, submitLabel =
   const hasSufficientBalance = userBalance === null || userBalance >= pricing.totalPrice;
 
   const isValid = selectedComune && parcels.every(p => p.foglio && p.particella) && finalita && finDataFilled && totalUnits <= MAX_UNITS && (!isBatch || batchPertinenze !== null);
+  // Immobile individuato automaticamente dall'indirizzo (comune + foglio + particella del primo immobile)
+  const autoFilled = !!(selectedComune && parcels[0]?.foglio && parcels[0]?.particella && !isBatch);
 
   // ── Parcel helpers ──────────────────────────────────────────────────────────
   const updateParcel = (pid, field, value) =>
@@ -385,37 +388,67 @@ export default function CadastralSearchForm({ onSubmit, isLoading, submitLabel =
         onResetComune={() => setSelectedComune(null)}
       />
 
-      {/* Comune */}
-      <ComuneAutocomplete selectedComune={selectedComune} onSelect={setSelectedComune} required />
-
-      {/* Essential cadastral fields */}
-      <div>
-        <div className="flex items-center justify-between mb-3">
-          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Dati catastali *</p>
-        </div>
-        <div className="grid grid-cols-3 gap-2">
-          <div className="space-y-1">
-            <Label className="text-xs">Foglio *</Label>
-            <Input value={parcels[0].foglio} onChange={e => updateParcel(parcels[0].id, 'foglio', e.target.value)} placeholder="es. 15" />
-          </div>
-          <div className="space-y-1">
-            <Label className="text-xs">Particella *</Label>
-            <Input value={parcels[0].particella} onChange={e => updateParcel(parcels[0].id, 'particella', e.target.value)} placeholder="es. 342" />
-          </div>
-          <div className="space-y-1">
-            <div className="flex items-center gap-1">
-              <Label className="text-xs">Sezione</Label>
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild><Info className="w-3 h-3 text-muted-foreground cursor-help" /></TooltipTrigger>
-                  <TooltipContent className="max-w-xs text-xs">La sezione catastale (A, B, C…) è visibile sulla tua visura. Lascia vuoto se non presente.</TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
+      {/* Immobile individuato automaticamente dall'indirizzo */}
+      {autoFilled && !manualMode && (
+        <div className="rounded-lg border-2 border-emerald-300 bg-emerald-50 p-4">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-start gap-2">
+              <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-bold text-emerald-900" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>Immobile individuato</p>
+                <p className="text-xs text-emerald-800 mt-1" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
+                  {selectedComune?.nome}{selectedComune?.sigla_provincia ? ` (${selectedComune.sigla_provincia})` : ''} · Foglio <strong>{parcels[0].foglio}</strong> · Particella <strong>{parcels[0].particella}</strong>{parcels[0].sezione ? ` · Sez. ${parcels[0].sezione}` : ''}
+                </p>
+                <p className="text-[10px] text-emerald-700 mt-1">Controlla che il pin sulla mappa sia sull'immobile giusto. Se serve, modifica.</p>
+              </div>
             </div>
-            <Input value={parcels[0].sezione} onChange={e => updateParcel(parcels[0].id, 'sezione', e.target.value.toUpperCase())} placeholder="es. A, PL" />
+            <button type="button" onClick={() => setManualMode(true)} className="text-[11px] font-semibold text-emerald-800 underline whitespace-nowrap" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>Modifica</button>
           </div>
         </div>
-      </div>
+      )}
+
+      {/* Inserimento manuale: fallback quando l'indirizzo non basta, o su richiesta */}
+      {(!autoFilled || manualMode) && (
+        <div className="space-y-6">
+          {!autoFilled && (
+            <p className="text-xs text-muted-foreground" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
+              Cerca l'indirizzo qui sopra per compilare tutto in automatico, oppure inserisci i dati catastali a mano:
+            </p>
+          )}
+
+          {/* Comune */}
+          <ComuneAutocomplete selectedComune={selectedComune} onSelect={setSelectedComune} required />
+
+          {/* Essential cadastral fields */}
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Dati catastali *</p>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              <div className="space-y-1">
+                <Label className="text-xs">Foglio *</Label>
+                <Input value={parcels[0].foglio} onChange={e => updateParcel(parcels[0].id, 'foglio', e.target.value)} placeholder="es. 15" />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Particella *</Label>
+                <Input value={parcels[0].particella} onChange={e => updateParcel(parcels[0].id, 'particella', e.target.value)} placeholder="es. 342" />
+              </div>
+              <div className="space-y-1">
+                <div className="flex items-center gap-1">
+                  <Label className="text-xs">Sezione</Label>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild><Info className="w-3 h-3 text-muted-foreground cursor-help" /></TooltipTrigger>
+                      <TooltipContent className="max-w-xs text-xs">La sezione catastale (A, B, C…) è visibile sulla tua visura. Lascia vuoto se non presente.</TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </div>
+                <Input value={parcels[0].sezione} onChange={e => updateParcel(parcels[0].id, 'sezione', e.target.value.toUpperCase())} placeholder="es. A, PL" />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Finalità */}
       <div className="space-y-1.5">
