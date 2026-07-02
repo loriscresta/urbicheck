@@ -364,6 +364,7 @@ export default function CadastralSearchForm({ onSubmit, isLoading, submitLabel =
       {/* Cerca per indirizzo */}
       <IndirizzoAutocomplete
         initialAddress={initialAddress}
+        onAddressResolved={(addr) => setParcels(ps => ps.map((p, i) => i === 0 ? { ...p, indirizzo: addr } : p))}
         onComuneFound={(comuneName) => {
           base44.entities.ComuneItalia.filter({ nome: comuneName }, "-created_date", 1).then(results => {
             if (results[0]) setSelectedComune(results[0]);
