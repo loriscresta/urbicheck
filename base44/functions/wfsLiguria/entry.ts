@@ -722,7 +722,11 @@ async function runAnalisiPiemonte({ comune, provincia, indirizzo, comuneLower, p
   let paiResult = [];
   let overpassResult = { railways: [], waterways: [], lakes: [], overpass_ok: false };
 
-  if (indirizzo) {
+  // PRIORITA': centroide della particella dal catasto (accurato) sopra il geocoding dell'indirizzo (approssimato).
+  if (prefill_lat !== null && prefill_lat !== undefined && !isNaN(Number(prefill_lat))) {
+    lat = Number(prefill_lat); lon = Number(prefill_lon);
+  }
+  if (lat === null && indirizzo) {
     try {
       const coords = await geocodeAddress(indirizzo, comune, provincia, 'Piemonte');
       if (!coords.isFallbackCapoluogo) { lat = coords.lat; lon = coords.lon; }
@@ -730,7 +734,6 @@ async function runAnalisiPiemonte({ comune, provincia, indirizzo, comuneLower, p
       geocodingError = err.message;
     }
   }
-  if (lat === null) { lat = prefill_lat || null; lon = prefill_lon || null; }
   if (lat === null && !indirizzo) {
     try {
       const coords = await geocodeAddress(null, comune, provincia, 'Piemonte');
