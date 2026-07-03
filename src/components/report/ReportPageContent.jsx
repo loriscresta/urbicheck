@@ -564,10 +564,9 @@ export default function ReportPageContent({ query, refetch = () => {}, isPublicV
 
         {/* Zonizzazione */}
         {r.zonizzazione && (
-          <ReportSection icon={MapPin} title="Zonizzazione Urbanistica" delay={0.04}>
-            <div className="mb-4"><ZonaBadge colore={r.zonizzazione.colore} /></div>
-            <DataRow label="Categoria generale" value={r.zonizzazione.destinazione_prevalente} />
-            <DataRow label="Zona" value={r.zonizzazione.zona_codice} />
+          <ReportSection icon={MapPin} title="Fattibilità urbanistica" delay={0.04}>
+            <div className="mb-2"><ZonaBadge colore={r.zonizzazione.colore} /></div>
+            <p className="text-xs text-muted-foreground mb-2">Sintesi di fattibilità. Zona, destinazione d'uso e indici di dettaglio nel <strong>Quadro Urbanistico</strong> qui sotto.</p>
             {r.prg_lookup_status && <div className="mt-2"><PRGStatusBadge status={r.prg_lookup_status} /></div>}
             {showPrgMismatchNote && (
               <div className="mt-3 p-3 rounded-lg border border-amber-300 bg-amber-50 flex items-start gap-2">
@@ -677,7 +676,7 @@ export default function ReportPageContent({ query, refetch = () => {}, isPublicV
         {r.quadro_urbanistico && (() => {
           // Zona WMS mosaicatura (fonte primaria) vs lookup NTA statico
           const wmsZonaCodice = wfsRis?.zona_urbanistica?.zona_codice || null;
-          const wmsDescrizione = wfsRis?.zona_urbanistica?.destinazione_uso || wfsRis?.zona_urbanistica?.messaggio || null;
+          const wmsDescrizione = (wfsRis?.zona_urbanistica?.destinazione_uso || wfsRis?.zona_urbanistica?.messaggio || '').replace(/\s*[—-]\s*voce non definita/gi, '').trim() || null;
           const wmsDisponibile = !!(wfsRis?.zona_urbanistica?.disponibile);
           const ntaZona = resolvedNta?.nomeZona || cleanVal(r.quadro_urbanistico.zona_urbanistica);
           const ntaDest = resolvedNta ? (resolvedNta.nomeZona?.toLowerCase().includes('resid') ? 'Residenziale' : cleanVal(r.quadro_urbanistico.destinazione_uso)) : cleanVal(r.quadro_urbanistico.destinazione_uso);
@@ -700,7 +699,7 @@ export default function ReportPageContent({ query, refetch = () => {}, isPublicV
               {wmsDisponibile && wmsZonaCodice && (
                 <div className="mb-3 flex items-center gap-2 px-3 py-1.5 text-xs rounded bg-emerald-50 border border-emerald-200 text-emerald-800">
                   <CheckCircle2 className="w-3 h-3 shrink-0" />
-                  <span>Fonte primaria: <strong>Mosaicatura PRG Piemonte (WMS ufficiale)</strong>{ntaZona && ntaZona !== zonaDisplay ? <span className="ml-1 text-emerald-700"> · confermato da database NTA UrbiCheck</span> : null}</span>
+                  <span>Fonte: <strong>Mosaicatura PRG Piemonte (WMS)</strong> + NTA comunale (UrbiCheck)</span>
                 </div>
               )}
               {hasDiscordanza && (
