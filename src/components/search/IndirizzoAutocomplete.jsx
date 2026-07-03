@@ -256,29 +256,26 @@ export default function IndirizzoAutocomplete({ onComuneFound, onParcelFound, on
 
   // ── Selezione indirizzo (da dropdown o da geocoding iniziale) ───────────
   const selectAddress = async (item) => {
-    // (a) Resetta prima lo stato precedente, poi imposta i nuovi valori
+    // Cattura il testo digitato PRIMA di sovrascriverlo: contiene il civico che l'utente ha scritto
+    // (i suggerimenti Nominatim spesso non riportano il numero civico).
+    const typedText = addressQuery;
     resetState();
-    setAddressQuery(item.display_name);
     setAddressSuggestions([]);
 
-    const comune =
-      item.address?.city ||
-      item.address?.town ||
-      item.address?.village ||
-      item.address?.municipality ||
-      "";
-
+    const a = item.address || {};
+    const comune = a.city || a.town || a.village || a.municipality || "";
     if (comune) {
       setComuneTrovato(comune);
       onComuneFound?.(comune);
     }
 
-    // Ri-geocodifica l'indirizzo scelto via Google (ROOFTOP sul civico) per la massima precisione,
-    // invece di usare le coordinate — spesso imprecise — del suggerimento Nominatim.
-    const a = item.address || {};
-    const full = (a.road && a.house_number)
-      ? `${a.road} ${a.house_number}, ${a.town || a.city || a.village || comune}`
-      : item.display_name;
+    // Combina la via del suggerimento col civico digitato dall'utente, poi ri-geocodifica via Google
+    // (ROOFTOP sul civico) invece di usare le coordinate — spesso solo a livello via — di Nominatim.
+    const road = a.road || (item.display_name || "").split(",")[0];
+    const city = a.town || a.city || a.village || a.municipality || comune || "";
+    const typedNum = parseAddressInput(typedText).housenumber || a.house_number || "";
+    const full = typedNum ? `${road} ${typedNum}, ${city}` : (item.display_name || "");
+    setAddressQuery(full);
     await geocodeAndResolve(full);
   };
 
