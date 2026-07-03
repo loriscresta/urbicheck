@@ -110,9 +110,8 @@ Deno.serve(async (req) => {
             snap_dist_m: snapDistM,
           });
         }
-        // found=false → nessuna particella in questa posizione nella nostra DB
-        console.log('[lookupParcelByCoords] Aruba: nessuna particella trovata (not in coverage)');
-        return Response.json({ found: false });
+        // found=false → vuoto Catasto Terreni (tipico del costruito urbano): prosegui verso il WFS AdE
+        console.log('[lookupParcelByCoords] catasto-agent: nessuna particella (Terreni) — provo WFS AdE');
       }
       console.warn(`[lookupParcelByCoords] Aruba HTTP ${res.status} — provo WFS AdE`);
     } catch (primaryErr) {
