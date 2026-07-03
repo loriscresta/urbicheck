@@ -205,15 +205,19 @@ export default function SearchPage() {
       : formData;
     const { prezzo_acquisto, superficie, stato_conservativo, destinazione_obiettivo, spese_accessorie,
       categoria_catastale, superficie_mq, rendita_catastale, vani, indirizzo_catastale,
-      visura_uploaded, intestatari_visura, _snap_info, _aruba_geometry, ...cadastralData } = enrichedFormData;
+      visura_uploaded, intestatari_visura, _snap_info, _aruba_geometry,
+      prefill_lat: _pfLatRaw, prefill_lon: _pfLonRaw, ...cadastralData } = enrichedFormData;
     const fin_data = { prezzo_acquisto, superficie, stato_conservativo, destinazione_obiettivo, spese_accessorie };
 
     const enrichment = await callUrbiCheckEnrichment(enrichedFormData);
     const reportData = await generateReport(enrichedFormData, enrichment);
 
-    // Geocoding Google sempre prioritario: sovrascrive sempre centroid_lat/lng
-    const _geoLat = enrichment?.geocoding?.lat;
-    const _geoLon = enrichment?.geocoding?.lon ?? enrichment?.geocoding?.lng ?? null;
+    // Punto preciso dalla ricerca per indirizzo (geocode Google + particella WFS): ha PRIORITA'
+    // sul geocoding Nominatim dell'enrichment, che su Foglio/Particella ambigui cade sul comune.
+    const _pfLat = Number(_pfLatRaw), _pfLon = Number(_pfLonRaw);
+    const hasSearchPoint = isFinite(_pfLat) && isFinite(_pfLon) && isValidItalianCoord(_pfLat, _pfLon);
+    const _geoLat = hasSearchPoint ? _pfLat : enrichment?.geocoding?.lat;
+    const _geoLon = hasSearchPoint ? _pfLon : (enrichment?.geocoding?.lon ?? enrichment?.geocoding?.lng ?? null);
     const geocodingCoords = (_geoLat && isValidItalianCoord(_geoLat, _geoLon)) ? {
       centroid_lat: _geoLat,
       centroid_lng: _geoLon,
