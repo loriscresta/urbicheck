@@ -41,30 +41,37 @@ function parseGmlId(gmlId) {
   return { belfiore, foglio, particella };
 }
 async function wfsAdeLookup(lat, lon) {
-  const d = 0.0008;
-  const bbox = `${lat - d},${lon - d},${lat + d},${lon + d}`;
-  const url = `${WFS_ADE_BASE}?language=ita&SERVICE=WFS&VERSION=2.0.0&TYPENAMES=CP:CadastralParcel&SRSNAME=urn:ogc:def:crs:EPSG::6706&BBOX=${bbox}&REQUEST=GetFeature&COUNT=50`;
-  let xml;
-  try {
-    const res = await fetch(url, { headers: { 'Accept': 'application/xml, text/xml', 'User-Agent': 'UrbiCheck/1.0 (info@urbicheck.it)' }, signal: AbortSignal.timeout(12000) });
-    if (!res.ok) return null;
-    xml = await res.text();
-  } catch (_e) { return null; }
   const featRe = /<CP:CadastralParcel[^>]*gml:id="([^"]+)"[^>]*>([\s\S]*?)<\/CP:CadastralParcel>/g;
-  let m, best = null, bestDist = Infinity;
-  while ((m = featRe.exec(xml)) !== null) {
-    const ring = extractRing(m[2]);
-    if (!ring) continue;
-    const info = parseGmlId(m[1]);
-    if (info.foglio == null) continue;
-    if (pointInRing(lon, lat, ring)) {
-      return { ...info, ring, centroid: ringCentroid(ring), snapped: false, dist_m: 0 };
+  let best = null, bestDist = Infinity;
+  // BBOX progressivo + retry: il WFS AdE è a volte intermittente e il geocode può cadere sulla strada.
+  for (const d of [0.0008, 0.0018, 0.004]) {
+    const bbox = `${lat - d},${lon - d},${lat + d},${lon + d}`;
+    const url = `${WFS_ADE_BASE}?language=ita&SERVICE=WFS&VERSION=2.0.0&TYPENAMES=CP:CadastralParcel&SRSNAME=urn:ogc:def:crs:EPSG::6706&BBOX=${bbox}&REQUEST=GetFeature&COUNT=100`;
+    let xml = null;
+    for (let attempt = 0; attempt < 2 && !xml; attempt++) {
+      try {
+        const res = await fetch(url, { headers: { 'Accept': 'application/xml, text/xml', 'User-Agent': 'UrbiCheck/1.0 (info@urbicheck.it)' }, signal: AbortSignal.timeout(12000) });
+        if (res.ok) xml = await res.text();
+      } catch (_e) { /* retry sul WFS intermittente */ }
     }
-    const c = ringCentroid(ring);
-    const dist = Math.sqrt((c.lat - lat) ** 2 + (c.lon - lon) ** 2) * 111000;
-    if (dist < bestDist) { bestDist = dist; best = { ...info, ring, centroid: c, snapped: true, dist_m: Math.round(dist) }; }
+    if (!xml) continue;
+    featRe.lastIndex = 0;
+    let m;
+    while ((m = featRe.exec(xml)) !== null) {
+      const ring = extractRing(m[2]);
+      if (!ring) continue;
+      const info = parseGmlId(m[1]);
+      if (info.foglio == null) continue;
+      if (pointInRing(lon, lat, ring)) {
+        return { ...info, ring, centroid: ringCentroid(ring), snapped: false, dist_m: 0 };
+      }
+      const c = ringCentroid(ring);
+      const dist = Math.sqrt((c.lat - lat) ** 2 + (c.lon - lon) ** 2) * 111000;
+      if (dist < bestDist) { bestDist = dist; best = { ...info, ring, centroid: c, snapped: true, dist_m: Math.round(dist) }; }
+    }
+    if (best && best.dist_m <= 45) break; // candidato vicino trovato: non serve allargare oltre
   }
-  return (best && best.dist_m <= 40) ? best : null;
+  return (best && best.dist_m <= 45) ? best : null;
 }
 
 Deno.serve(async (req) => {
