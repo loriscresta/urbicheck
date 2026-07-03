@@ -411,6 +411,9 @@ function getCduLinks(comuneNome) {
 
 // ── Zona Urbanistica Card ──
 function ZonaUrbanisticaCard({ data, comuneNome, ntaZona, ntaDest }) {
+  // Zona unificata: l'unica sezione autorevole è il "Quadro Urbanistico" della scheda principale.
+  // Questa card di pag.5 era un doppione → disattivata.
+  return null;
   if (!data) return null;
   const cduInfo = !data.disponibile ? getCduLinks(comuneNome) : null;
   // Mostra dato NTA come primario, mosaicatura WMS come nota secondaria
