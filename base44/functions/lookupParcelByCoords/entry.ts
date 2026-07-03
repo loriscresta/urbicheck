@@ -137,6 +137,7 @@ Deno.serve(async (req) => {
       });
     }
 
+    return Response.json({ found: false });
   } catch (error) {
     console.error('[lookupParcelByCoords] errore:', error.message);
     return Response.json({ found: false, error: error.message }, { status: 500 });
