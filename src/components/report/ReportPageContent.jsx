@@ -270,6 +270,10 @@ export default function ReportPageContent({ query, refetch = () => {}, isPublicV
   };
 
   const r = query.report_data || {};
+  // Difesa universale: un OGGETTO non deve mai finire renderizzato come figlio React (error #31).
+  const _asText = (v) => (v && typeof v === 'object' && !React.isValidElement(v)
+    ? (v.destinazione || v.messaggio || v.nome || v.zona_codice || v.destinazione_uso || v.descrizione || null)
+    : v);
   const isAsta = query.finalita === "asta_giudiziaria";
   const ntaLocal = INDICI_NTA_LOCAL[query.comune] || null;
   const isPiemonte = (query.regione || '').toLowerCase().includes('piemonte');
@@ -505,7 +509,7 @@ export default function ReportPageContent({ query, refetch = () => {}, isPublicV
               <Button key={s.sezione || 'principale'} variant="outline" className="border-amber-400 text-amber-800 hover:bg-amber-100 text-left h-auto py-3 px-4 flex flex-col items-start gap-0.5" onClick={() => handleSelezioneSezione(s.sezione)}>
                 <span className="font-bold text-sm">{s.sezione ? `Sezione INSPIRE: ${s.sezione}` : 'Sezione principale'}</span>
                 <span className="text-xs font-mono">📍 {s.lat?.toFixed(5)}, {s.lon?.toFixed(5)}</span>
-                {s.zona && <span className="text-xs text-amber-700 mt-0.5">{s.zona}</span>}
+                {_asText(s.zona) && <span className="text-xs text-amber-700 mt-0.5">{_asText(s.zona)}</span>}
               </Button>
             ))}
           </div>
@@ -580,7 +584,7 @@ export default function ReportPageContent({ query, refetch = () => {}, isPublicV
                 <p className="text-xs text-amber-900">⚠️ <strong>Possibile disallineamento PRG:</strong> La zonizzazione dal mosaico regionale indica un'area per servizi/impianti (codice 19), ma la categoria catastale risulta residenziale ({categoriaRaw}). <strong>Richiedere il CDU al Comune per conferma ufficiale.</strong></p>
               </div>
             )}
-            {r.zonizzazione.descrizione && <div className="mt-3 p-3 bg-muted/50 rounded-lg"><p className="text-sm text-muted-foreground">{r.zonizzazione.descrizione}</p></div>}
+            {_asText(r.zonizzazione.descrizione) && <div className="mt-3 p-3 bg-muted/50 rounded-lg"><p className="text-sm text-muted-foreground">{_asText(r.zonizzazione.descrizione)}</p></div>}
           </ReportSection>
         )}
 
