@@ -678,8 +678,14 @@ export default function ReportPageContent({ query, refetch = () => {}, isPublicV
           const wmsZonaCodice = wfsRis?.zona_urbanistica?.zona_codice || null;
           const wmsDescrizione = (wfsRis?.zona_urbanistica?.destinazione_uso || wfsRis?.zona_urbanistica?.messaggio || '').replace(/\s*[—-]\s*voce non definita/gi, '').trim() || null;
           const wmsDisponibile = !!(wfsRis?.zona_urbanistica?.disponibile);
-          const ntaZona = resolvedNta?.nomeZona || cleanVal(r.quadro_urbanistico.zona_urbanistica);
-          const ntaDest = resolvedNta ? (resolvedNta.nomeZona?.toLowerCase().includes('resid') ? 'Residenziale' : cleanVal(r.quadro_urbanistico.destinazione_uso)) : cleanVal(r.quadro_urbanistico.destinazione_uso);
+          // Coercizione a testo: alcuni campi (zona/destinazione) possono arrivare come OGGETTO
+          // dal PRG agent ({destinazione, caratteristica, area_mq}) → mai passarli come figli React.
+          const _txt = (v) => (v == null ? null : (typeof v === 'object'
+            ? (v.destinazione || v.messaggio || v.zona_codice || v.nome || v.destinazione_uso || v.descrizione || null)
+            : String(v)));
+          const _nomeZ = _txt(resolvedNta?.nomeZona);
+          const ntaZona = _nomeZ || _txt(cleanVal(r.quadro_urbanistico.zona_urbanistica));
+          const ntaDest = resolvedNta ? ((_nomeZ || '').toLowerCase().includes('resid') ? 'Residenziale' : _txt(cleanVal(r.quadro_urbanistico.destinazione_uso))) : _txt(cleanVal(r.quadro_urbanistico.destinazione_uso));
 
           // Discordanza: WMS dice qualcosa di diverso dal NTA/AI
           const hasDiscordanza = wmsDisponibile && wmsZonaCodice && ntaZona &&
@@ -687,12 +693,12 @@ export default function ReportPageContent({ query, refetch = () => {}, isPublicV
             !wmsZonaCodice.toLowerCase().includes(ntaZona.toLowerCase());
 
           // Scegli la zona da mostrare: WMS (fonte ufficiale) se disponibile, altrimenti NTA/AI
-          const zonaDisplay = wmsDisponibile && wmsZonaCodice
+          const zonaDisplay = _txt(wmsDisponibile && wmsZonaCodice
             ? `${wmsZonaCodice}${wmsDescrizione ? ` — ${wmsDescrizione}` : ''}`
-            : ntaZona || null;
-          const destDisplay = wmsDisponibile && wmsDescrizione
+            : ntaZona) || null;
+          const destDisplay = _txt(wmsDisponibile && wmsDescrizione
             ? wmsDescrizione
-            : ntaDest || null;
+            : ntaDest) || null;
 
           return (
             <ReportSection icon={FileText} title="Quadro Urbanistico (PRG/PUC)" delay={0.1}>
