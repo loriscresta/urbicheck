@@ -263,7 +263,7 @@ export default function ReportPageContent({ query, refetch = () => {}, isPublicV
 
   const handleDownloadPDF = async () => {
     setIsDownloadingPDF(true);
-    const { doc, reportNum } = await generatePDF(query, financialSnapshot, staticMapUrl);
+    const { doc, reportNum } = await generatePDF(query, financialSnapshot, staticMapUrl, resolvedNta);
     doc.save(`URBICHECK_${query.comune}_${reportNum}.pdf`);
     setIsDownloadingPDF(false);
     toast({ title: "PDF scaricato ✓", description: `Scheda ${reportNum} salvata.` });
