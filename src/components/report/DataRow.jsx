@@ -1,6 +1,11 @@
 import React from "react";
 
 export default function DataRow({ label, value }) {
+  // Difesa contro oggetti passati per errore come valore (evita React error #31).
+  if (value && typeof value === 'object' && !React.isValidElement(value)) {
+    value = value.destinazione || value.messaggio || value.zona_codice || value.nome
+      || value.destinazione_uso || value.descrizione || value.label || null;
+  }
   const isNull = value === null || value === undefined || value === 'null' || value === '' || value === 'undefined';
   if (isNull) return null;
   return (
