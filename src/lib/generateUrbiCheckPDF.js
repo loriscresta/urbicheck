@@ -111,7 +111,7 @@ import { findInNta, lookupNTA } from './ntaDatabase.js';
 import { buildStaticMapUrl } from '../components/report/StaticParcellaMap';
 import { fetchMapImage } from '../functions/fetchMapImage';
 
-export async function generatePDF(query, financialSnapshot, staticMapUrl = null) {
+export async function generatePDF(query, financialSnapshot, staticMapUrl = null, resolvedNta = null) {
   await loadJsPDF();
   const { jsPDF } = window.jspdf;
   const r = query.report_data || {};
@@ -259,7 +259,8 @@ export async function generatePDF(query, financialSnapshot, staticMapUrl = null)
   doc.setTextColor(255, 255, 255);
   doc.setFontSize(11);
   doc.setFont("helvetica", "bold");
-  const zonaNome = r.zonizzazione?.zona_codice || r.zonizzazione?.destinazione_prevalente || "Zona urbanistica";
+  const _useNta = !!(resolvedNta && (resolvedNta.IF || resolvedNta.Hmax || resolvedNta.RC));
+  const zonaNome = (_useNta && resolvedNta.nomeZona) || r.zonizzazione?.zona_codice || r.zonizzazione?.destinazione_prevalente || "Zona urbanistica";
   doc.text(zonaNome, margin + 6, y + 8);
   y += 18;
 
@@ -276,14 +277,21 @@ export async function generatePDF(query, financialSnapshot, staticMapUrl = null)
     y += 2;
   }
 
-  // Disclaimer AI data for zonizzazione
-  doc.setTextColor(150, 100, 0);
+  // Fonte dati: NTA reale (servizio) se disponibile, altrimenti stima AI
   doc.setFontSize(7.5);
   doc.setFont("helvetica", "italic");
-  doc.text("AVVISO: Zona/Codice e indici edilizi sono stime AI orientative — NON provengono da WFS ufficiale.", margin + 2, y);
-  y += 5;
-  doc.text("Richiedere il Certificato Urbanistico (CU) al Comune per dati ufficiali verificati.", margin + 2, y);
-  y += 7;
+  if (_useNta) {
+    doc.setTextColor(80, 100, 80);
+    doc.text("Dati estratti dalle Norme Tecniche di Attuazione (NTA) del piano urbanistico vigente. Verificare la sub-zona con CDU al Comune.", margin + 2, y, { maxWidth: 166 });
+    y += 8;
+  } else {
+    doc.setTextColor(150, 100, 0);
+    doc.text("AVVISO: Zona/Codice e indici edilizi sono stime AI orientative — NON provengono da WFS ufficiale.", margin + 2, y);
+    y += 5;
+    doc.text("Richiedere il Certificato Urbanistico (CU) al Comune per dati ufficiali verificati.", margin + 2, y);
+    y += 7;
+  }
+  doc.setTextColor(50, 50, 50);
 
   const ie = r.indici_edilizi || {};
   const ND = "Da verificare con CDU al Comune";
@@ -298,7 +306,14 @@ export async function generatePDF(query, financialSnapshot, staticMapUrl = null)
     return ND;
   };
 
-  const indici = [
+  const indici = _useNta ? [
+    ["Indice di Fabbricabilita' (IF)", resolvedNta.IF || ND, ""],
+    ["Rapporto di Copertura (RC)", resolvedNta.RC || ND, ""],
+    ["Altezza massima (H max)", resolvedNta.Hmax || ND, ""],
+    ["Distanza dai confini", resolvedNta.Dc || ND, ""],
+    ["Distanza dalla strada", resolvedNta.Ds || ND, ""],
+    ["Distanza tra fabbricati", resolvedNta.Df || ND, ""],
+  ] : [
     ["Indice di Fabbricabilita' (IF)", getIndice(ie.if_mc_mq, 'IF'), "m³/m²"],
     ["Rapporto di Copertura (RC)", getIndice(ie.rc_percentuale, 'RC'), "%"],
     ["Altezza massima (H max)", getIndice(ie.h_max, 'Hmax'), "m"],
@@ -320,10 +335,10 @@ export async function generatePDF(query, financialSnapshot, staticMapUrl = null)
     y += 8;
   });
   // Fonte NTA se dati dal database interno
-  if (ntaDb) {
+  const _fonteInd = _useNta ? (resolvedNta.fonte || resolvedNta.strumento) : (ntaDb ? (ntaDb.fonte || ntaDb.strumento || 'Database NTA UrbiCheck') : null);
+  if (_fonteInd) {
     doc.setFont("helvetica", "italic"); doc.setFontSize(7.5); doc.setTextColor(80, 100, 80);
-    const ntaFonte = ntaDb.fonte || ntaDb.strumento || 'Database NTA UrbiCheck';
-    doc.text("Fonte indici: " + ntaFonte + " — verificare sempre con CDU ufficiale.", margin + 2, y, { maxWidth: 166 });
+    doc.text("Fonte indici: " + _fonteInd + " — verificare sempre con CDU ufficiale.", margin + 2, y, { maxWidth: 166 });
     y += 5; doc.setTextColor(50, 50, 50);
   }
 
