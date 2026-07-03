@@ -142,7 +142,10 @@ export default function IndirizzoAutocomplete({ onComuneFound, onParcelFound, on
 
   // ── Geocoding a cascata (backend: Google primario → Nominatim fallback) ──
   // La chiave Google resta lato server. Le coordinate alimentano lookupParcelByCoords.
-  const geocodeAndResolve = async (queryString) => {
+  const geocodeAndResolve = async (queryStringRaw) => {
+    // Normalizza l'input: collassa spazi, uniforma le virgole. Google è già indipendente
+    // dall'ordine (via/civico/comune), questa è solo pulizia per un risultato deterministico.
+    const queryString = String(queryStringRaw || '').replace(/\s+/g, ' ').replace(/\s*,\s*/g, ', ').trim();
     try {
       const res = await geocodeAddressCascade({ address: queryString });
       const d = res?.data || res;
