@@ -101,6 +101,7 @@ export default function CadastralSearchForm({ onSubmit, isLoading, submitLabel =
   const [batchPertinenze, setBatchPertinenze] = useState(null); // null=unasked, true=yes, false=no
   const [accordionOpen, setAccordionOpen] = useState(false);
   const [manualMode, setManualMode] = useState(false);
+  const [resolvedPoint, setResolvedPoint] = useState(null); // punto preciso (lat/lon) dalla ricerca indirizzo
 
   // Financial fields
   const [prezzoAcquisto, setPrezzoAcquisto] = useState("");
@@ -328,6 +329,8 @@ export default function CadastralSearchForm({ onSubmit, isLoading, submitLabel =
         indirizzo_immobile: p.indirizzo?.trim() || undefined,
         _snap_info: snapInfo || undefined,
         _aruba_geometry: arubaGeometry || undefined,
+        prefill_lat: resolvedPoint?.lat,
+        prefill_lon: resolvedPoint?.lon,
       });
     } else {
       // Batch mode — enrich units with per-sub visura data when available
@@ -373,9 +376,10 @@ export default function CadastralSearchForm({ onSubmit, isLoading, submitLabel =
             if (results[0]) setSelectedComune(results[0]);
           }).catch(() => {});
         }}
-        onParcelFound={({ foglio, particella, sezione, snapped, snap_dist_m, geometry_geojson }) => {
+        onParcelFound={({ foglio, particella, sezione, snapped, snap_dist_m, geometry_geojson, centroid_lat, centroid_lon }) => {
           setSnapInfo(snapped ? { snapped: true, snap_dist_m: snap_dist_m ?? null } : null);
           if (geometry_geojson) setArubaGeometry(geometry_geojson);
+          if (centroid_lat != null && centroid_lon != null) setResolvedPoint({ lat: Number(centroid_lat), lon: Number(centroid_lon) });
           setParcels(ps => {
             if (!ps.length) return [{ ...newParcel(foglio, particella), sezione: sezione || "" }];
             return ps.map((p, i) => i === 0 ? { ...p, foglio, particella, sezione: sezione || p.sezione } : p);
@@ -384,6 +388,7 @@ export default function CadastralSearchForm({ onSubmit, isLoading, submitLabel =
         onResetParcel={() => {
           setParcels(ps => ps.map((p, i) => i === 0 ? { ...p, foglio: "", particella: "", sezione: "" } : p));
           setArubaGeometry(null);
+          setResolvedPoint(null);
         }}
         onResetComune={() => setSelectedComune(null)}
       />
