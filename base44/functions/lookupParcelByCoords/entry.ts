@@ -5,6 +5,67 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 
 const AGENT_BASE = 'https://catasto.urbicheck.it';
+const WFS_ADE_BASE = 'https://wfs.cartografia.agenziaentrate.gov.it/inspire/wfs/owfs01.php';
+
+// ── Fallback WFS Agenzia Entrate (INSPIRE): il catasto-agent usa il Catasto Terreni,
+//    vuoto sul costruito urbano; il WFS AdE contiene anche le particelle urbane. ──
+function extractRing(content) {
+  const m = content.match(/<gml:posList[^>]*>([\s\S]*?)<\/gml:posList>/);
+  if (!m) return null;
+  const nums = m[1].trim().split(/\s+/).map(Number).filter(n => isFinite(n));
+  if (nums.length < 6) return null;
+  const ring = [];
+  for (let i = 0; i + 1 < nums.length; i += 2) ring.push([nums[i + 1], nums[i]]); // SRS 6706: posList = lat lon -> [lon,lat]
+  return ring.length >= 3 ? ring : null;
+}
+function pointInRing(lon, lat, ring) {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const xi = ring[i][0], yi = ring[i][1], xj = ring[j][0], yj = ring[j][1];
+    if (((yi > lat) !== (yj > lat)) && (lon < (xj - xi) * (lat - yi) / (yj - yi) + xi)) inside = !inside;
+  }
+  return inside;
+}
+function ringCentroid(ring) {
+  let sx = 0, sy = 0;
+  for (const [lo, la] of ring) { sx += lo; sy += la; }
+  return { lon: sx / ring.length, lat: sy / ring.length };
+}
+function parseGmlId(gmlId) {
+  const parts = gmlId.split('.');
+  const particella = parts[parts.length - 1];
+  const key = parts[parts.length - 2] || '';
+  const belfiore = key.slice(0, 4).toUpperCase();
+  const mf = key.match(/_(\d{4})/);
+  const foglio = mf ? parseInt(mf[1], 10) : null;
+  return { belfiore, foglio, particella };
+}
+async function wfsAdeLookup(lat, lon) {
+  const d = 0.0008;
+  const bbox = `${lat - d},${lon - d},${lat + d},${lon + d}`;
+  const url = `${WFS_ADE_BASE}?language=ita&SERVICE=WFS&VERSION=2.0.0&TYPENAMES=CP:CadastralParcel&SRSNAME=urn:ogc:def:crs:EPSG::6706&BBOX=${bbox}&REQUEST=GetFeature&COUNT=50`;
+  let xml;
+  try {
+    const res = await fetch(url, { headers: { 'Accept': 'application/xml, text/xml', 'User-Agent': 'UrbiCheck/1.0 (info@urbicheck.it)' }, signal: AbortSignal.timeout(12000) });
+    if (!res.ok) return null;
+    xml = await res.text();
+  } catch (_e) { return null; }
+  const featRe = /<CP:CadastralParcel[^>]*gml:id="([^"]+)"[^>]*>([\s\S]*?)<\/CP:CadastralParcel>/g;
+  let m, best = null, bestDist = Infinity;
+  while ((m = featRe.exec(xml)) !== null) {
+    const ring = extractRing(m[2]);
+    if (!ring) continue;
+    const info = parseGmlId(m[1]);
+    if (info.foglio == null) continue;
+    if (pointInRing(lon, lat, ring)) {
+      return { ...info, ring, centroid: ringCentroid(ring), snapped: false, dist_m: 0 };
+    }
+    const c = ringCentroid(ring);
+    const dist = Math.sqrt((c.lat - lat) ** 2 + (c.lon - lon) ** 2) * 111000;
+    if (dist < bestDist) { bestDist = dist; best = { ...info, ring, centroid: c, snapped: true, dist_m: Math.round(dist) }; }
+  }
+  return (best && best.dist_m <= 40) ? best : null;
+}
 
 Deno.serve(async (req) => {
   console.log('CATASTO_REDEPLOY_MARKER_v3', new Date().toISOString());
@@ -53,11 +114,28 @@ Deno.serve(async (req) => {
         console.log('[lookupParcelByCoords] Aruba: nessuna particella trovata (not in coverage)');
         return Response.json({ found: false });
       }
-      console.warn(`[lookupParcelByCoords] Aruba HTTP ${res.status} — fallback Catastomappe`);
-      return Response.json({ found: false });
+      console.warn(`[lookupParcelByCoords] Aruba HTTP ${res.status} — provo WFS AdE`);
     } catch (primaryErr) {
-      console.warn(`[lookupParcelByCoords] Aruba irraggiungibile (${primaryErr.message}) — fallback Catastomappe`);
-      return Response.json({ found: false });
+      console.warn(`[lookupParcelByCoords] catasto-agent non disponibile (${primaryErr.message}) — provo WFS AdE`);
+    }
+
+    // ── FALLBACK: WFS catastale Agenzia Entrate (INSPIRE) — copre il costruito urbano ──
+    const w = await wfsAdeLookup(Number(lat), Number(lon));
+    if (w) {
+      console.log(`[lookupParcelByCoords] OK (WFS AdE): foglio=${w.foglio} part=${w.particella} snapped=${w.snapped}`);
+      return Response.json({
+        found: true,
+        foglio: w.foglio,
+        particella: String(w.particella),
+        sezione: null,
+        comune_code: w.belfiore,
+        centroid_lat: w.centroid.lat,
+        centroid_lon: w.centroid.lon,
+        geometry_geojson: { type: 'Polygon', coordinates: [w.ring] },
+        fonte: 'wfs_ade_inspire',
+        snapped: w.snapped,
+        snap_dist_m: w.snapped ? w.dist_m : null,
+      });
     }
 
   } catch (error) {
