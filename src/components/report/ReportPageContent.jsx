@@ -53,7 +53,13 @@ function detectCategoriaGroup(cat) {
 }
 
 function cleanVal(val) {
-  if (!val || typeof val !== 'string') return val;
+  // Coercizione difensiva: se arriva un OGGETTO (es. zona {destinazione, caratteristica, area_mq}
+  // dal PRG agent) estrai il testo — non deve mai finire renderizzato come figlio React.
+  if (val && typeof val === 'object') {
+    val = val.destinazione || val.messaggio || val.zona_codice || val.nome || val.destinazione_uso || val.descrizione || null;
+  }
+  if (val == null) return null;
+  if (typeof val !== 'string') return val;
   if (/stima orientativa|verificare su visura|verificare su nta|disponibile su visura|richiedi visura/i.test(val)) return null;
   return val;
 }
