@@ -737,9 +737,10 @@ function VincoliPRGCard({ vincoli, mod_intervento, caratt_storica, fonte }) {
         <div style={{ borderTop: `1px solid ${cfg.border}`, padding: '0.75rem 1rem' }}>
           <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.6rem', fontWeight: 700, color: '#7A7268', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '0.4rem' }}>Caratterizzazione Storica</p>
           <div className="flex flex-wrap gap-1">
-            {caratt_storica.map((c, i) => (
-              <Badge key={i} className="text-[10px] bg-amber-50 text-amber-800 border-amber-200">{c}</Badge>
-            ))}
+            {caratt_storica.map((c, i) => {
+              const label = (c && typeof c === 'object') ? (c.caratteristica || c.destinazione || c.descrizione || '') : c;
+              return label ? <Badge key={i} className="text-[10px] bg-amber-50 text-amber-800 border-amber-200">{label}</Badge> : null;
+            })}
           </div>
         </div>
       )}
