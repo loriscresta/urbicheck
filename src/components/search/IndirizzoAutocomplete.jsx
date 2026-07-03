@@ -101,6 +101,8 @@ export default function IndirizzoAutocomplete({ onComuneFound, onParcelFound, on
           snapped: data.snapped || false,
           snap_dist_m: data.snap_dist_m ?? null,
           geometry_geojson: data.geometry_geojson || null,
+          centroid_lat: (data.centroid_lat ?? lat),
+          centroid_lon: (data.centroid_lon ?? lon),
         });
       } else {
         setParcelStatus("not_found");
