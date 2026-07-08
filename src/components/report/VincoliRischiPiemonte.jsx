@@ -285,11 +285,13 @@ export function FerroviaCard({ data, comune, regione }) {
   const hasFerr = trovati.length > 0;
   const notaDismessa = !hasFerr && FERROVIA_DISMESSA_COMUNI[comuneLower];
   const showLombardiaWarning = !hasFerr && !notaDismessa && isCapoluogoLombardia;
+  // Overpass fallito: fonte_ok===false → NON mostrare verde 'nessuna ferrovia' (falso negativo)
+  const nonVerificato = !hasFerr && !notaDismessa && !showLombardiaWarning && data?.fonte_ok === false;
 
   // Se nessun dato WFS e nessuna nota statica e non è capoluogo lombardo, non mostrare
   if (!data && !notaDismessa && !showLombardiaWarning) return null;
 
-  const isWarning = hasFerr || notaDismessa || showLombardiaWarning;
+  const isWarning = hasFerr || notaDismessa || showLombardiaWarning || nonVerificato;
   return (
     <div className={`rounded border p-4 flex items-start gap-3 ${isWarning ? "border-amber-300 bg-amber-50" : "border-emerald-300 bg-emerald-50"}`}>
       <div className={`w-8 h-8 rounded flex items-center justify-center shrink-0 ${isWarning ? "bg-amber-100" : "bg-emerald-100"}`}>
@@ -323,6 +325,11 @@ export function FerroviaCard({ data, comune, regione }) {
               className="text-[11px] text-primary flex items-center gap-1 mt-2 hover:underline">
               <ExternalLink className="w-3 h-3" /> Mappa rete RFI →
             </a>
+          </div>
+        ) : nonVerificato ? (
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+            <span className="text-sm font-medium text-amber-800">⚠ Verifica ferrovia non disponibile — dato OSM/Overpass non raggiungibile. Controllare su mappa RFI.</span>
           </div>
         ) : (
           <div className="flex items-center gap-2">
