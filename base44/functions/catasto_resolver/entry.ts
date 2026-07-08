@@ -293,19 +293,35 @@ async function checkRailwayVicinity(lat, lon, regione = '') {
 
   // FIX: include disused/abandoned — ferrovia Asti-Alba turistica è taggata disused in OSM
   const q = `[out:json][timeout:15];(way["railway"~"rail|narrow_gauge|tram|light_rail|subway|preserved|monorail|disused|abandoned"](around:500,${lat},${lon}););out body tags;>;out skel qt;`;
-  try {
-    const res = await fetchWithTimeout('https://overpass-api.de/api/interpreter', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: `data=${encodeURIComponent(q)}`,
-    }, 15000);
-    if (!res.ok) { console.warn('Overpass railway HTTP', res.status); return null; }
-    const data = await res.json();
+  const RAIL_MIRRORS = [
+    'https://overpass-api.de/api/interpreter',
+    'https://overpass.osm.ch/api/interpreter',
+    'https://lz4.overpass-api.de/api/interpreter',
+    'https://overpass.private.coffee/api/interpreter',
+  ];
+  let data = null;
+  for (let mi = 0; mi < RAIL_MIRRORS.length; mi++) {
+    try {
+      const res = await fetchWithTimeout(RAIL_MIRRORS[mi], {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: `data=${encodeURIComponent(q)}`,
+      }, 15000);
+      if (!res.ok) { console.warn('Overpass railway HTTP', res.status, RAIL_MIRRORS[mi]); continue; }
+      const j = await res.json();
+      // 200 con remark di timeout/overload → non affidabile: prova il prossimo mirror
+      if (j && typeof j.remark === 'string' && /(timed out|timeout|runtime error|rate_limited|too many)/i.test(j.remark)) continue;
+      data = j; break;
+    } catch (_e) { /* prova il prossimo mirror */ }
+  }
+  // Nessun mirror affidabile → dato NON verificato (mai un falso 'nessuna ferrovia')
+  if (!data) return { presente: false, fonte_ok: false, non_verificato: true };
+  {
     const elements = data.elements || [];
     const nodes = {};
     for (const el of elements) { if (el.type === 'node') nodes[el.id] = el; }
     const ways = elements.filter(e => e.type === 'way');
-    if (!ways.length) return { presente: false };
+    if (!ways.length) return { presente: false, fonte_ok: true };
 
     let bestAttiva = null, bestStorica = null, bestMetro = null, bestTram = null, bestDismessa = null;
 
@@ -422,10 +438,8 @@ async function checkRailwayVicinity(lat, lon, regione = '') {
       // backward compat
       distanza_m: ferrovia_attiva?.distanza_m ?? ferrovia_dismessa?.distanza_m ?? metro?.distanza_m ?? tram?.distanza_m ?? ferrovia_storica?.distanza_m ?? null,
       tipo: ferrovia_attiva ? ferrovia_attiva.tipo : ferrovia_dismessa ? 'dismessa_da_verificare' : 'nessuna',
+      fonte_ok: true,
     };
-  } catch (e) {
-    console.warn('Overpass railway error:', e.message);
-    return null;
   }
 }
 
