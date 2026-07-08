@@ -464,7 +464,12 @@ out skel qt;`;
         body: new URLSearchParams({ data: q }).toString(),
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       }, 20000);
+      // Mirror sovraccarico / errore HTTP (429, 504, ...) → NON affidabile: prova il prossimo mirror.
+      if (!res.ok) continue;
       const data = await res.json();
+      // Overpass sotto carico risponde 200 con un "remark" di timeout e risultati parziali/vuoti:
+      // trattarlo come "nessuna ferrovia" produce falsi negativi. Scarta e passa al mirror successivo.
+      if (data && typeof data.remark === 'string' && /(timed out|timeout|runtime error|rate_limited|too many)/i.test(data.remark)) continue;
       const railways = [], waterways = [], lakes = [], seen = new Set();
       for (const el of (data.elements || [])) {
         if (!el.tags) continue;
