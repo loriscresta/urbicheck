@@ -94,6 +94,7 @@ Deno.serve(async (req) => {
     const primaryUrl = `${AGENT_BASE}/parcel?lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}&limit=1`;
     console.log(`[lookupParcelByCoords] primario: ${primaryUrl}`);
 
+    let arubaResult = null;
     try {
       const res = await fetch(primaryUrl, { headers: { 'User-Agent': 'UrbiCheck/1.0 (info@urbicheck.it)', 'Accept': 'application/json', 'X-Api-Key': Deno.env.get('CATASTO_API_KEY') }, signal: AbortSignal.timeout(6000) });
       if (res.ok) {
@@ -103,7 +104,7 @@ Deno.serve(async (req) => {
           const isSnapped = data.snapped === true || p.snapped === true;
           const snapDistM = isSnapped ? Math.round(p.dist_m ?? 0) : null;
           console.log(`[lookupParcelByCoords] OK (Aruba): foglio=${p.foglio} part=${p.particella} snapped=${isSnapped} dist_m=${snapDistM}`);
-          return Response.json({
+          arubaResult = {
             found: true,
             foglio: p.foglio != null ? Number(p.foglio) : null,
             particella: p.particella != null ? String(p.particella) : null,
@@ -115,7 +116,12 @@ Deno.serve(async (req) => {
             fonte: 'catasto_agent',
             snapped: isSnapped,
             snap_dist_m: snapDistM,
-          });
+          };
+          // Match ESATTO (punto dentro la particella) → usa subito.
+          if (!isSnapped) return Response.json(arubaResult);
+          // Agganciata per prossimità (rischio particella sbagliata, es. area a parcheggio):
+          // prima provo il WFS AdE, che sul costruito urbano puo contenere ESATTAMENTE il punto.
+          console.log('[lookupParcelByCoords] Aruba snapped — provo WFS AdE per match esatto');
         }
         // found=false → vuoto Catasto Terreni (tipico del costruito urbano): prosegui verso il WFS AdE
         console.log('[lookupParcelByCoords] catasto-agent: nessuna particella (Terreni) — provo WFS AdE');
@@ -125,23 +131,37 @@ Deno.serve(async (req) => {
       console.warn(`[lookupParcelByCoords] catasto-agent non disponibile (${primaryErr.message}) — provo WFS AdE`);
     }
 
-    // ── FALLBACK: WFS catastale Agenzia Entrate (INSPIRE) — copre il costruito urbano ──
+    // ── FALLBACK / MATCH ESATTO: WFS catastale Agenzia Entrate (INSPIRE) — copre il costruito urbano ──
     const w = await wfsAdeLookup(Number(lat), Number(lon));
-    if (w) {
-      console.log(`[lookupParcelByCoords] OK (WFS AdE): foglio=${w.foglio} part=${w.particella} snapped=${w.snapped}`);
-      return Response.json({
-        found: true,
-        foglio: w.foglio,
-        particella: String(w.particella),
-        sezione: null,
-        comune_code: w.belfiore,
-        centroid_lat: w.centroid.lat,
-        centroid_lon: w.centroid.lon,
-        geometry_geojson: { type: 'Polygon', coordinates: [w.ring] },
-        fonte: 'wfs_ade_inspire',
-        snapped: w.snapped,
-        snap_dist_m: w.snapped ? w.dist_m : null,
-      });
+    const wfsResponse = w ? {
+      found: true,
+      foglio: w.foglio,
+      particella: String(w.particella),
+      sezione: null,
+      comune_code: w.belfiore,
+      centroid_lat: w.centroid.lat,
+      centroid_lon: w.centroid.lon,
+      geometry_geojson: { type: 'Polygon', coordinates: [w.ring] },
+      fonte: 'wfs_ade_inspire',
+      snapped: w.snapped,
+      snap_dist_m: w.snapped ? w.dist_m : null,
+    } : null;
+
+    // Preferenza: match ESATTO del WFS (punto DENTRO la particella) rispetto a una particella
+    // agganciata per prossimita dall'Aruba (che sul Catasto Terreni puo puntare a parcheggi/aree limitrofe).
+    if (wfsResponse && !w.snapped) {
+      console.log(`[lookupParcelByCoords] WFS AdE match ESATTO: foglio=${w.foglio} part=${w.particella} (preferito allo snap Aruba)`);
+      return Response.json(wfsResponse);
+    }
+    // Nessun match esatto WFS: usa il risultato Aruba (anche se agganciato) se presente.
+    if (arubaResult) {
+      console.log('[lookupParcelByCoords] nessun match esatto WFS — uso risultato Aruba (snapped)');
+      return Response.json(arubaResult);
+    }
+    // Solo WFS (eventualmente agganciato) disponibile.
+    if (wfsResponse) {
+      console.log(`[lookupParcelByCoords] OK (WFS AdE${w.snapped ? ', snapped' : ''}): foglio=${w.foglio} part=${w.particella}`);
+      return Response.json(wfsResponse);
     }
 
     return Response.json({ found: false });
