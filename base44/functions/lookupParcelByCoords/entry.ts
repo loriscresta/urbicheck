@@ -62,6 +62,9 @@ async function wfsAdeLookup(lat, lon) {
       if (!ring) continue;
       const info = parseGmlId(m[1]);
       if (info.foglio == null) continue;
+      // Scarta particelle non numeriche (STRADA/ACQUA): sono sedime stradale/acque, non mappali edificabili.
+      // Senza questo, un punto geocodificato sulla via verrebbe agganciato alla particella-strada.
+      if (!/^\d+$/.test(String(info.particella || ''))) continue;
       if (pointInRing(lon, lat, ring)) {
         return { ...info, ring, centroid: ringCentroid(ring), snapped: false, dist_m: 0 };
       }
