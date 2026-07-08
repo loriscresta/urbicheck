@@ -370,6 +370,7 @@ export default function ReportPageContent({ query, refetch = () => {}, isPublicV
     } else if (vf.presente && vf.tipo && !['nessuna','storica','assente'].includes(vf.tipo) && !vf.ferrovia_attiva) {
       vincoloFerroviarioEffettivo = { presente: true, dettagli: vf.tipo === 'assoluta' ? `Fascia di rispetto ferroviaria ASSOLUTA — DPR 753/1980. Distanza: ${vf.distanza_m}m.` : `Vincolo ferroviario DPR 753/1980. Distanza: ${vf.distanza_m}m.` };
     }
+    if (!vincoloFerroviarioEffettivo && vf.fonte_ok === false) vincoloFerroviarioEffettivo = { presente: false, non_verificato: true, dettagli: 'Verifica ferrovia non disponibile — dato OpenStreetMap/Overpass non raggiungibile al momento. Controllare manualmente sulla mappa RFI.' };
     if (vf.ferrovia_storica?.presente) ferroviaStoricaCard = vf.ferrovia_storica;
     if (vf.metro?.presente) metroCard = vf.metro;
     if (vf.tram?.presente) tramCard = vf.tram;
