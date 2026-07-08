@@ -291,15 +291,18 @@ function FerroviaCard({ data, comune }) {
   const trovati = dati.filter(d => d.trovato);
   // Se il lookup statico trova una ferrovia, prevale sempre su Overpass
   const hasFerr = trovati.length > 0 || !!staticMatch;
+  // Overpass fallito: fonte_ok===false → non dichiarare 'nessuna ferrovia' (falso negativo)
+  const nonVerificato = !hasFerr && data?.fonte_ok === false;
+  const warn = hasFerr || nonVerificato;
 
   if (!data && !staticMatch) return null;
 
   return (
-    <div style={{ border: `1px solid ${hasFerr ? '#fde68a' : '#6ee7b7'}`, background: hasFerr ? '#fffbeb' : '#f0fdf4' }}>
+    <div style={{ border: `1px solid ${warn ? '#fde68a' : '#6ee7b7'}`, background: warn ? '#fffbeb' : '#f0fdf4' }}>
       <div className="flex items-start justify-between p-4 gap-3">
         <div className="flex items-start gap-3">
-          <div style={{ width: 32, height: 32, background: hasFerr ? '#fef3c7' : '#d1fae5', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-            <Train className="w-4 h-4" style={{ color: hasFerr ? '#d97706' : '#059669' }} />
+          <div style={{ width: 32, height: 32, background: warn ? '#fef3c7' : '#d1fae5', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <Train className="w-4 h-4" style={{ color: warn ? '#d97706' : '#059669' }} />
           </div>
           <div>
             <p style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: '0.7rem', fontWeight: 700, color: '#1C1A17', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
@@ -312,6 +315,8 @@ function FerroviaCard({ data, comune }) {
         </div>
         {hasFerr
           ? <Badge className="text-[10px] bg-amber-100 text-amber-800 border-amber-200 whitespace-nowrap">⚠ Ferrovia rilevata</Badge>
+          : nonVerificato
+          ? <Badge className="text-[10px] bg-amber-100 text-amber-800 border-amber-200 whitespace-nowrap">⚠ Verifica non disponibile</Badge>
           : <Badge className="text-[10px] bg-emerald-100 text-emerald-800 border-emerald-200 whitespace-nowrap">✓ Nessuna entro 250m</Badge>
         }
       </div>
