@@ -453,6 +453,7 @@ out skel qt;`;
     'https://overpass-api.de/api/interpreter',
     'https://overpass.osm.ch/api/interpreter',
     'https://lz4.overpass-api.de/api/interpreter',
+    'https://overpass.private.coffee/api/interpreter',
   ];
 
   for (let mirrorIdx = 0; mirrorIdx < OVERPASS_MIRRORS.length; mirrorIdx++) {
