@@ -356,6 +356,9 @@ export default function ReportPageContent({ query, refetch = () => {}, isPublicV
     // Fonte unica: solo dati Overpass (server-side) — raggio 250m uniforme
     if (ferrorieTrovate.length > 0) {
       vincoloFerroviarioEffettivo = { presente: true, dettagli: ferrorieTrovate.map(d => `${d.nome} — fascia rispetto 30m (DPR 753/1980)`).join(' | ') };
+    } else if (wfsFerroviario.fonte_ok === false) {
+      // Overpass non affidabile → NON dichiarare 'nessuna ferrovia' (rischio falso negativo)
+      vincoloFerroviarioEffettivo = { presente: false, non_verificato: true, dettagli: 'Verifica ferrovia non disponibile — dato OpenStreetMap/Overpass non raggiungibile al momento. Controllare manualmente sulla mappa RFI prima di qualsiasi valutazione.' };
     } else {
       vincoloFerroviarioEffettivo = { presente: false, dettagli: 'Nessuna ferrovia nelle vicinanze — nessun vincolo DPR 753/1980.' };
     }
@@ -643,6 +646,14 @@ export default function ReportPageContent({ query, refetch = () => {}, isPublicV
               {!isNewStructure && vincoloFerroviarioEffettivo && (
                 vincoloFerroviarioEffettivo.presente
                   ? <VincoloCard label="Vincolo Ferroviario (DPR 753/1980)" presente={true} dettagli={vincoloFerroviarioEffettivo.dettagli} unverified={!hasVerifiedVincoli} />
+                  : vincoloFerroviarioEffettivo.non_verificato
+                  ? <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 flex items-start gap-2">
+                      <span className="text-base leading-none mt-0.5">⚠️</span>
+                      <div>
+                        <p className="text-xs font-semibold text-amber-800">Verifica ferrovia non disponibile</p>
+                        <p className="text-[10px] text-amber-700 mt-0.5">{vincoloFerroviarioEffettivo.dettagli}</p>
+                      </div>
+                    </div>
                   : <div className="rounded-lg border border-emerald-300 bg-emerald-50 p-3 flex items-center gap-2">
                       <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
                       <div>
