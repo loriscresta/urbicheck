@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { chargeReport } from '@/functions/chargeReport';
 import { Link, useNavigate } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
+import { trackEvent } from "@/lib/metaPixel";
 import { useQuery } from "@tanstack/react-query";
 import { Loader2, Unlock, ArrowLeft, AlertTriangle, CreditCard, Lock, MapPin, Shield, Building2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -140,6 +141,14 @@ export default function PaymentGate({ query, onPaid }) {
     setIsProcessing(true);
     try {
       const result = await chargeReport({ query_id: query.id });
+      // ── Tracking conversione Meta: Lead per report gratuito, Purchase (con valore) per report a pagamento ──
+      try {
+        if (isFreeReport) {
+          trackEvent("Lead", { customData: { content_name: "report_gratuito", value: 0, currency: "EUR" } });
+        } else {
+          trackEvent("Purchase", { customData: { value: effectivePrice, currency: "EUR", content_name: "report_urbicheck", content_type: isLaunchReport ? "launch" : "standard" } });
+        }
+      } catch (_) {}
       try { await refetchCredits(); } catch (_) {}
       onPaid();
     } catch (err) {
