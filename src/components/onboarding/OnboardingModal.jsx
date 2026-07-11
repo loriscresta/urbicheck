@@ -7,7 +7,7 @@ const STEPS = [
   {
     id: 1,
     title: "Benvenuto in UrbiCheck 👋",
-    subtitle: "La due diligence immobiliare in 60 secondi.",
+    subtitle: "I vincoli e l'urbanistica di ogni immobile, in 60 secondi.",
     content: (
       <div className="space-y-3 mt-4">
         {[
