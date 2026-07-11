@@ -30,7 +30,7 @@ export default function LegalTermini() {
                 ["Servizio", "La piattaforma web UrbiCheck e tutte le sue funzionalità"],
                 ["Titolare", "Dell'Aria Claudia Giuseppina (impresa individuale) — Via Costa 44, 15026 Carentino (AL) — P.IVA 02655840060"],
                 ["Utente", "Persona fisica o giuridica registrata che accede al Servizio"],
-                ["Report", "L'analisi urbanistica e catastale generata per una singola particella"],
+                ["Report", "Il report informativo su vincoli e strumenti urbanistici (PRG/PRGC, NTA) generato per una singola particella"],
                 ["Crediti", "Unità di pagamento prepagato per l'acquisto di analisi. Pacchetti da €2,99 a €99,00."],
               ].map(([termine, def]) => (
                 <li key={termine} className="flex gap-2"><span className="font-semibold shrink-0">{termine}:</span><span>{def}</span></li>
