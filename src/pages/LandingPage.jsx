@@ -52,7 +52,7 @@ const features = [
 
 const steps = [
   { n: "01", title: "Inserisci i dati catastali",        desc: "Comune, foglio, particella e finalità dell'analisi (acquisto, asta, investimento, ristrutturazione)." },
-  { n: "02", title: "UrbiCheck analizza in tempo reale", desc: "Interroga WFS regionali, ARPA, Overpass, catasto — gli stessi dati che usa un tecnico professionista." },
+  { n: "02", title: "UrbiCheck analizza in tempo reale", desc: "Interroga WFS regionali, ARPA, Overpass, catasto — le fonti pubbliche ufficiali, lette e messe insieme per te." },
   { n: "03", title: "Ricevi il report completo",         desc: "Scheda strutturata con vincoli, rischi, valutazione finanziaria in meno di 60 secondi." },
 ];
 
@@ -250,7 +250,7 @@ export default function LandingPage() {
             </h1>
 
             <p style={{ color: "rgba(244,239,230,0.75)", fontFamily: SERIF, fontSize: "1.05rem", lineHeight: 1.75, maxWidth: 600, marginBottom: "2.5rem" }}>
-              Inserisci un indirizzo e ottieni vincoli urbanistici, sismici, idrogeologici, paesaggistici e valutazione finanziaria. Senza aspettare il tecnico.
+              Inserisci un indirizzo e ottieni vincoli urbanistici, sismici, idrogeologici, paesaggistici e valutazione finanziaria. In autonomia, prima del tecnico.
             </p>
 
             <div className="flex flex-col gap-3 items-start max-w-md">
