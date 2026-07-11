@@ -35,7 +35,7 @@ const Logo = ({ dark = false }) => (
         <span style={{ fontWeight: 700, fontSize: "1rem", letterSpacing: "3px", color: AC }}>CHECK</span>
       </div>
       <div style={{ fontSize: "0.52rem", letterSpacing: "3px", textTransform: "uppercase", marginTop: 2, color: dark ? GR : "rgba(244,239,230,0.5)" }}>
-        ANALISI URBANISTICA AUTOMATIZZATA
+        VINCOLI E URBANISTICA · 60 SECONDI
       </div>
     </div>
   </div>
@@ -52,7 +52,7 @@ const features = [
 
 const steps = [
   { n: "01", title: "Inserisci i dati catastali",        desc: "Comune, foglio, particella e finalità dell'analisi (acquisto, asta, investimento, ristrutturazione)." },
-  { n: "02", title: "UrbiCheck analizza in tempo reale", desc: "Interroga WFS regionali, ARPA, Overpass, catasto — le fonti pubbliche ufficiali, lette e messe insieme per te." },
+  { n: "02", title: "UrbiCheck interroga le fonti in tempo reale", desc: "Interroga WFS regionali, ARPA, Overpass, catasto — le fonti pubbliche ufficiali, lette e messe insieme per te." },
   { n: "03", title: "Ricevi il report completo",         desc: "Scheda strutturata con vincoli, rischi, valutazione finanziaria in meno di 60 secondi." },
 ];
 
@@ -244,13 +244,13 @@ export default function LandingPage() {
             </div>
 
             <h1 style={{ color: W, fontFamily: MONO, fontWeight: 700, fontSize: "clamp(2rem, 5.5vw, 3.75rem)", lineHeight: 1.1, letterSpacing: "-0.02em", marginBottom: "1.5rem" }}>
-              La due diligence<br />
-              immobiliare<br />
-              <span style={{ color: AC }}>in 60 secondi.</span>
+              Cosa puoi fare<br />
+              su quell'immobile?<br />
+              <span style={{ color: AC }}>In 60 secondi.</span>
             </h1>
 
             <p style={{ color: "rgba(244,239,230,0.75)", fontFamily: SERIF, fontSize: "1.05rem", lineHeight: 1.75, maxWidth: 600, marginBottom: "2.5rem" }}>
-              Inserisci un indirizzo e ottieni vincoli urbanistici, sismici, idrogeologici, paesaggistici e valutazione finanziaria. In autonomia, prima del tecnico.
+              Inserisci un indirizzo e scopri cosa dicono le fonti ufficiali: destinazione d'uso, vincoli, edificabilità, rischi e valore. In autonomia, prima del tecnico.
             </p>
 
             <div className="flex flex-col gap-3 items-start max-w-md">
