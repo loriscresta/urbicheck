@@ -196,7 +196,7 @@ export default function LandingPage() {
   const [showDemoModal, setShowDemoModal] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
   const navigate = useNavigate();
-  const handleLogin = () => base44.auth.redirectToLogin("/dashboard");
+  const handleLogin = () => navigate("/login?base44_from_url=%2Fdashboard");
   const handleStartSearch = () => navigate("/search");
 
   useEffect(() => {
