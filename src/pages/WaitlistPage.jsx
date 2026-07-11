@@ -36,7 +36,7 @@ const Logo = () => (
         <span style={{ fontWeight: 700, fontSize: "1rem", letterSpacing: "3px", color: AC }}>CHECK</span>
       </div>
       <div style={{ fontSize: "0.5rem", letterSpacing: "3px", textTransform: "uppercase", marginTop: 2, color: "rgba(244,239,230,0.45)" }}>
-        ANALISI URBANISTICA AUTOMATIZZATA
+        VINCOLI E URBANISTICA · 60 SECONDI
       </div>
     </div>
   </div>
