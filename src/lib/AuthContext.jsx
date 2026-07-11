@@ -121,8 +121,10 @@ export const AuthProvider = ({ children }) => {
   };
 
   const navigateToLogin = () => {
-    // Use the SDK's redirectToLogin method
-    base44.auth.redirectToLogin(window.location.href);
+    // Login BRANDIZZATO UrbiCheck (non il login ospitato da Base44): così
+    // email/password funziona anche nella webview di Instagram/Facebook.
+    const current = window.location.pathname + window.location.search;
+    window.location.href = "/login?base44_from_url=" + encodeURIComponent(current);
   };
 
   return (
