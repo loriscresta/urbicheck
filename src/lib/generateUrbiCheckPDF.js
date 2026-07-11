@@ -170,7 +170,7 @@ export async function generatePDF(query, financialSnapshot, staticMapUrl = null,
   doc.text("URBICHECK", margin, 12);
   doc.setFontSize(8);
   doc.setFont("helvetica", "normal");
-  doc.text("Sistema di Analisi Urbanistica e Catastale", margin, 18);
+  doc.text("Report informativo urbanistico — vincoli e PRG/NTA", margin, 18);
   doc.setFontSize(9);
   doc.text("Scheda N. " + schNum, 140, 12);
   doc.text(new Date().toLocaleDateString("it-IT"), 140, 18);
