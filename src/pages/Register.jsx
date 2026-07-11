@@ -11,7 +11,15 @@ import AuthLayout from "@/components/AuthLayout";
 import GoogleIcon from "@/components/GoogleIcon";
 import { toast } from "@/components/ui/use-toast";
 
+function getSafeRedirect() {
+  const params = new URLSearchParams(window.location.search);
+  const from = params.get("base44_from_url") || "";
+  if (!from || from.includes("/register") || from.includes("/login")) return "/";
+  return from;
+}
+
 export default function Register() {
+  const destination = getSafeRedirect();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -47,7 +55,7 @@ export default function Register() {
         base44.auth.setToken(result.access_token);
       }
       trackEvent('CompleteRegistration', { email });
-      window.location.href = "/";
+      window.location.href = destination;
     } catch (err) {
       setError(err.message || "Invalid verification code");
     } finally {
@@ -68,10 +76,10 @@ export default function Register() {
     }
   };
 
-  const handleGoogle = () => base44.auth.loginWithProvider("google", "/");
-  const handleMicrosoft = () => base44.auth.loginWithProvider("microsoft", "/");
-  const handleFacebook = () => base44.auth.loginWithProvider("facebook", "/");
-  const handleApple = () => base44.auth.loginWithProvider("apple", "/");
+  const handleGoogle = () => base44.auth.loginWithProvider("google", destination);
+  const handleMicrosoft = () => base44.auth.loginWithProvider("microsoft", destination);
+  const handleFacebook = () => base44.auth.loginWithProvider("facebook", destination);
+  const handleApple = () => base44.auth.loginWithProvider("apple", destination);
 
   if (showOtp) {
     return (
