@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
+import { useNavigate } from "react-router-dom";
 import { MapPin, Lock, CheckCircle2, ArrowRight, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { base44 } from "@/api/base44Client";
@@ -66,13 +67,16 @@ function ParcelMapPreview({ lat, lng, geomJson, comune, foglio, particella }) {
 export default function PublicSearchPreview({ previewData, formData, onLoginToUnlock }) {
   const { comune, foglio, particella, subalterno, regione, provincia,
     categoria, superficie_mq, centroid_lat, centroid_lng, geometry_geojson } = previewData;
+  const navigate = useNavigate();
 
   const handleLogin = () => {
     // Salva i dati del form in sessionStorage per recuperarli post-login
     try {
       sessionStorage.setItem("urbicheck_pending_search", JSON.stringify(formData));
     } catch (_) {}
-    base44.auth.redirectToLogin("/search?restore=1");
+    // Login BRANDIZZATO UrbiCheck (email/password funziona nella webview IG/FB),
+    // non il login ospitato da Base44. Preserva la ricerca via /search?restore=1.
+    navigate("/register?base44_from_url=" + encodeURIComponent("/search?restore=1"));
   };
 
   return (
