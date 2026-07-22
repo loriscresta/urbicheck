@@ -17,6 +17,7 @@ import CreditTierBanner from "@/components/credits/CreditTierBanner";
 import { logSearch } from "@/functions/logSearch";
 import { chargeReport } from "@/functions/chargeReport";
 import { createAnonymousReport } from "@/functions/createAnonymousReport";
+import GeoWaitlistCapture from "@/components/search/GeoWaitlistCapture";
 
 const BETA_REGIONS = ['piemonte', 'liguria', 'lombardia'];
 
@@ -677,7 +678,7 @@ export default function SearchPage() {
             <p className="text-xs" style={{ color: '#78350f' }}>
               Hai selezionato: <strong>{geoBlockError}</strong>. Sei interessato ad altre regioni?
             </p>
-            <a href="/waitlist" className="text-xs underline font-semibold" style={{ color: '#92400e' }}>Iscriviti alla lista d'attesa →</a>
+            <GeoWaitlistCapture regione={geoBlockError} />
           </div>
         )}
       </motion.div>
