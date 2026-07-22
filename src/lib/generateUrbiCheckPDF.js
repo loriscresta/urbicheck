@@ -229,11 +229,8 @@ export async function generatePDF(query, financialSnapshot, staticMapUrl = null,
       query.rendita_catastale != null
         ? fmtEur(query.rendita_catastale)
         : r.dati_catastali?.rendita_catastale || "Disponibile su visura ufficiale AdE"],
-    ...(hasCoords ? [
-      ["Coordinate WGS84 (lat, lon)", `${coordLat?.toFixed(5)}, ${coordLon?.toFixed(5)}`],
-      ...(catastoData.inspire_id ? [["INSPIRE ID", catastoData.inspire_id]] : []),
-      ["Fonte coordinate", catastoData.fonte || "OnData CC BY 4.0"],
-    ] : []),
+    // Coordinate WGS84 + fonte: mostrate UNA sola volta nella sez.8 (Georeferenziazione) — niente doppioni
+    ...(hasCoords && catastoData.inspire_id ? [["INSPIRE ID", catastoData.inspire_id]] : []),
   ];
 
   doc.setFontSize(9);
@@ -447,18 +444,7 @@ export async function generatePDF(query, financialSnapshot, staticMapUrl = null,
       });
     }
 
-    if (wfsSismica) {
-      y += 2;
-      if (y > 265) { y = newPage(doc); }
-      stripe(doc, margin, y, true);
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(8.5);
-      doc.setTextColor(50, 50, 50);
-      doc.text("Zona sismica", margin + 2, y);
-      doc.setFont("helvetica", "normal");
-      doc.text("Zona " + wfsSismica.zona + " — " + wfsSismica.descrizione, 90, y, { maxWidth: 98 });
-      y += 8;
-    }
+    // Zona sismica: mostrata UNA sola volta nella sez.10 "Classificazione Sismica" (contesto normativo completo) — niente doppioni
   } else {
     const vv = r.vincoli || {};
     doc.setFontSize(7.5);
