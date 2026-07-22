@@ -16,6 +16,7 @@ import PublicSearchPreview from "@/components/search/PublicSearchPreview";
 import CreditTierBanner from "@/components/credits/CreditTierBanner";
 import { logSearch } from "@/functions/logSearch";
 import { chargeReport } from "@/functions/chargeReport";
+import { createAnonymousReport } from "@/functions/createAnonymousReport";
 
 const BETA_REGIONS = ['piemonte', 'liguria', 'lombardia'];
 
@@ -23,6 +24,7 @@ export default function SearchPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [batchProgress, setBatchProgress] = useState(null);
   const [geoBlockError, setGeoBlockError] = useState(null);
+  const [unlockingFree, setUnlockingFree] = useState(false);
   const [paymentError, setPaymentError] = useState(null);
   const [publicPreview, setPublicPreview] = useState(null); // anteprima per utenti non loggati
   const [pendingFormData, setPendingFormData] = useState(null);
@@ -168,6 +170,44 @@ export default function SearchPage() {
         centroid_lng: null,
         geometry_geojson: null,
       });
+    }
+  };
+
+  // Sblocca il report completo per utente ANONIMO (senza registrazione), free-tier per IP.
+  const handleUnlockFree = async () => {
+    if (unlockingFree) return;
+    const fd = pendingFormData || {};
+    setUnlockingFree(true);
+    setPaymentError(null);
+    try {
+      const res = await createAnonymousReport({
+        formData: {
+          ...fd,
+          prefill_lat: publicPreview?.centroid_lat ?? undefined,
+          prefill_lon: publicPreview?.centroid_lng ?? undefined,
+        },
+      });
+      const data = res?.data || res;
+      if (data?.ok && data?.report_url) {
+        window.fbq?.('track', 'Lead');
+        try {
+          const u = new URL(data.report_url);
+          window.location.href = u.pathname + u.search;
+        } catch (_) {
+          window.location.href = data.report_url;
+        }
+        return;
+      }
+      setUnlockingFree(false);
+      if (data?.limit_reached) {
+        setPaymentError(data.message || 'Hai usato le 3 analisi gratuite. Accedi per continuare.');
+      } else {
+        setPaymentError('Generazione non riuscita. Riprova tra poco.');
+      }
+    } catch (err) {
+      console.error('createAnonymousReport failed:', err);
+      setUnlockingFree(false);
+      setPaymentError('Generazione non riuscita. Riprova tra poco.');
     }
   };
 
@@ -648,6 +688,8 @@ export default function SearchPage() {
           <PublicSearchPreview
             previewData={publicPreview}
             formData={pendingFormData}
+            onUnlockFree={handleUnlockFree}
+            unlocking={unlockingFree}
           />
           <button
             onClick={() => { setPublicPreview(null); setPendingFormData(null); }}
@@ -709,7 +751,7 @@ export default function SearchPage() {
 
           {!isAuthenticated && (
             <div className="mt-4 px-4 py-3 text-xs text-center" style={{ background: '#f0fdf4', border: '1px solid #86efac', fontFamily: "'IBM Plex Mono', monospace", color: '#15803d' }}>
-              🔍 Cerca senza registrarti — accedi con Google solo per sbloccare il report completo (3 gratis)
+              🔍 Cerca e ottieni il report completo — gratis, senza registrarti. Prime 3 analisi incluse.
             </div>
           )}
 
@@ -719,7 +761,7 @@ export default function SearchPage() {
               {[
                 { n: "1", icon: Search, title: "Cerca senza login", desc: "Inserisci comune, foglio e particella — gratis, senza registrazione." },
                 { n: "2", icon: Shield, title: "Vedi la mappa + dati base", desc: "Confermi subito che la particella esiste con mappa e dati catastali." },
-                { n: "3", icon: Info, title: "Sblocca con Google — gratis", desc: "Accedi con Google per il report completo. Prime 3 analisi gratuite." },
+                { n: "3", icon: Info, title: "Ottieni il report — gratis", desc: "Un clic e vedi il report completo, senza registrarti. Prime 3 analisi gratuite." },
               ].map(({ n, icon: Icon, title, desc }) => (
                 <div key={n} className="bg-white p-5 flex gap-4" style={{ border: '1px solid #C4BAA8' }}>
                   <div className="w-8 h-8 flex items-center justify-center text-xs font-bold shrink-0 mt-0.5"
