@@ -1,0 +1,57 @@
+{
+  "type": "object",
+  "properties": {
+    "query_id": {
+      "type": "string",
+      "description": "ID della CadastralQuery/report a cui si riferisce il feedback (vuoto se da anteprima)"
+    },
+    "user_email": {
+      "type": "string",
+      "description": "Email di chi lascia il feedback, opzionale (anonimo ammesso)"
+    },
+    "utile": {
+      "type": "boolean",
+      "description": "Il report \u00e8 stato utile? true=\ud83d\udc4d / false=\ud83d\udc4e"
+    },
+    "motivo": {
+      "type": "string",
+      "description": "Testo libero: cosa mancava o cosa migliorerebbe (il campo che vale oro)"
+    },
+    "ruolo": {
+      "type": "string",
+      "description": "Ruolo dichiarato: agente / geometra_architetto / investitore / sviluppatore_energia / aste / notaio / altro"
+    },
+    "regione": {
+      "type": "string",
+      "description": "Area di lavoro dichiarata (utile per misurare domanda fuori copertura)"
+    },
+    "comune": {
+      "type": "string",
+      "description": "Comune del report, per segmentare"
+    },
+    "contesto": {
+      "type": "string",
+      "description": "Dove \u00e8 stato raccolto: 'report' | 'preview_not_found' | 'other'"
+    }
+  },
+  "required": [],
+  "rls": {
+    "create": {},
+    "read": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  },
+  "name": "ReportFeedback"
+}
