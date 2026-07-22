@@ -203,6 +203,7 @@ Deno.serve(async (req) => {
     const base44 = createClientFromRequest(req);
     const body = await req.json();
     const formData = body?.formData || body || {};
+    const geometry = formData.geometry_geojson || null; // poligono particella dall'anteprima (per mappa evidenziata)
 
     // Validazione minima
     if (!formData.comune || !formData.foglio || !formData.particella) {
@@ -251,6 +252,7 @@ Deno.serve(async (req) => {
       cost: 0,
       report_data: { ...reportData, fin_data: {} },
       ...(hasCoord ? { centroid_lat: lat, centroid_lng: lon } : {}),
+      ...(geometry ? { geometry_geojson: geometry } : {}),
     });
 
     // ── Public token + URL (72h), riusa l'infra esistente ───────────────────
@@ -278,6 +280,14 @@ Deno.serve(async (req) => {
         });
       }
     }
+
+    // Log ricerca anonima — UNA sola voce per report, server-side (sempre affidabile, niente doppioni)
+    try {
+      await base44.asServiceRole.entities.SearchLog.create({
+        comune: String(formData.comune), foglio: String(formData.foglio), particella: String(formData.particella),
+        regione: formData.regione || '', esito: 'trovata', user_email: '',
+      });
+    } catch (_) {}
 
     return Response.json({
       ok: true,
