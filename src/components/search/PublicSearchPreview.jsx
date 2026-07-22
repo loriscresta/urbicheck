@@ -64,7 +64,7 @@ function ParcelMapPreview({ lat, lng, geomJson, comune, foglio, particella }) {
   );
 }
 
-export default function PublicSearchPreview({ previewData, formData, onLoginToUnlock }) {
+export default function PublicSearchPreview({ previewData, formData, onUnlockFree, unlocking }) {
   const { comune, foglio, particella, subalterno, regione, provincia,
     categoria, superficie_mq, centroid_lat, centroid_lng, geometry_geojson } = previewData;
   const navigate = useNavigate();
@@ -166,24 +166,27 @@ export default function PublicSearchPreview({ previewData, formData, onLoginToUn
                 Sblocca il report completo
               </h3>
               <p className="text-xs mb-1" style={{ color: "#7A7268", fontFamily: MONO }}>
-                Vincoli, indici urbanistici, analisi finanziaria, scorecard — le tue prime 3 analisi sono <strong>gratuite</strong>.
+                Vincoli, indici urbanistici, pratiche e valutazione — <strong>gratis e senza registrazione</strong>.
               </p>
               <p className="text-xs font-bold mb-4" style={{ color: AC, fontFamily: MONO }}>
                 3 report gratis · poi €2,99/report
               </p>
               <button
-                onClick={handleLogin}
-                className="w-full flex items-center justify-center gap-2 font-bold text-sm py-3 px-6 cursor-pointer border-0"
+                onClick={onUnlockFree}
+                disabled={unlocking}
+                className="w-full flex items-center justify-center gap-2 font-bold text-sm py-3 px-6 cursor-pointer border-0 disabled:opacity-70"
                 style={{ background: AC, color: "#fff", fontFamily: MONO, letterSpacing: "1px" }}
               >
-                <GoogleIcon />
-                Accedi con Google — è gratis
-                <ArrowRight className="w-4 h-4" />
+                {unlocking ? (
+                  <><Loader2 className="w-4 h-4 animate-spin" /> Generazione report…</>
+                ) : (
+                  <>Vedi il report completo — gratis <ArrowRight className="w-4 h-4" /></>
+                )}
               </button>
               <p className="text-[10px] mt-2" style={{ color: "#7A7268", fontFamily: MONO }}>
-                Oppure{" "}
+                Nessuna registrazione.{" "}
                 <button onClick={handleLogin} className="underline cursor-pointer bg-transparent border-0 p-0 text-[10px]" style={{ color: P, fontFamily: MONO }}>
-                  accedi con email
+                  Preferisci un account? Accedi
                 </button>
               </p>
             </div>
