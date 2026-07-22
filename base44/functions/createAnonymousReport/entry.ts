@@ -42,6 +42,29 @@ async function callUrbiCheckEnrichment(formData, lat = null, lon = null) {
   }
 }
 
+// Recupera il poligono catastale server-side (stesso microservizio di fetchParcelFromAgent).
+// Serve a evidenziare e centrare la particella sulla mappa anche quando l'anteprima ha solo il centroide.
+async function fetchParcelPolygon(comune, foglio, particella) {
+  try {
+    const url = `https://catasto.urbicheck.it/parcel/lookup?comune=${encodeURIComponent(comune)}&foglio=${encodeURIComponent(foglio)}&particella=${encodeURIComponent(particella)}`;
+    const res = await fetch(url, {
+      headers: {
+        'User-Agent': 'UrbiCheck/1.0 (info@urbicheck.it)',
+        'Accept': 'application/json',
+        'X-Api-Key': Deno.env.get('CATASTO_API_KEY') || '',
+      },
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (data?.found && data?.parcels?.length > 0 && data.parcels[0].geometry) {
+      const p = data.parcels[0];
+      return { geometry: p.geometry, centroid_lat: p.centroid_lat, centroid_lon: p.centroid_lon, comune_code: p.comune_code };
+    }
+  } catch (_) {}
+  return null;
+}
+
 // Merge vincoli enrichment nel report (stessa logica di mergeEnrichment lato client)
 function mergeEnrichment(reportData, enrichment) {
   if (!enrichment) return reportData;
@@ -236,6 +259,22 @@ Deno.serve(async (req) => {
     const enrichment = await callUrbiCheckEnrichment(formData, hasCoord ? lat : null, hasCoord ? lon : null);
     const reportData = await generateReport(base44, formData, enrichment);
 
+    // ── Poligono particella: usa quello dell'anteprima o recuperalo server-side ──
+    let finalGeometry = geometry;
+    let finalLat = hasCoord ? lat : null;
+    let finalLon = hasCoord ? lon : null;
+    if (!finalGeometry) {
+      const pg = await fetchParcelPolygon(formData.comune, formData.foglio, formData.particella);
+      if (pg?.geometry) {
+        finalGeometry = pg.geometry;
+        if (pg.centroid_lat != null && isFinite(Number(pg.centroid_lat))) {
+          finalLat = Number(pg.centroid_lat);
+          finalLon = Number(pg.centroid_lon);
+        }
+      }
+    }
+    const hasFinalCoord = finalLat != null && finalLon != null && isFinite(Number(finalLat)) && isFinite(Number(finalLon));
+
     // ── Crea la CadastralQuery (service role, già "pagata" a costo 0) ────────
     const query = await base44.asServiceRole.entities.CadastralQuery.create({
       comune: formData.comune,
@@ -251,8 +290,8 @@ Deno.serve(async (req) => {
       paid: true,
       cost: 0,
       report_data: { ...reportData, fin_data: {} },
-      ...(hasCoord ? { centroid_lat: lat, centroid_lng: lon } : {}),
-      ...(geometry ? { geometry_geojson: geometry } : {}),
+      ...(hasFinalCoord ? { centroid_lat: finalLat, centroid_lng: finalLon } : {}),
+      ...(finalGeometry ? { geometry_geojson: finalGeometry } : {}),
     });
 
     // ── Public token + URL (72h), riusa l'infra esistente ───────────────────
