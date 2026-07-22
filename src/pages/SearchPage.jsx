@@ -186,6 +186,7 @@ export default function SearchPage() {
           ...fd,
           prefill_lat: publicPreview?.centroid_lat ?? undefined,
           prefill_lon: publicPreview?.centroid_lng ?? undefined,
+          geometry_geojson: publicPreview?.geometry_geojson ?? undefined,
         },
       });
       const data = res?.data || res;
