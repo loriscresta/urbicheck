@@ -14,6 +14,7 @@ export default function StaticParcellaMap({ query, onImageReady, width = 800, he
   const [imgUrl, setImgUrl] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const [noPolygon, setNoPolygon] = useState(false);
 
   useEffect(() => {
     // Se già salvata sul record, riusa
@@ -47,6 +48,7 @@ export default function StaticParcellaMap({ query, onImageReady, width = 800, he
       }
     }
 
+    setNoPolygon(!polygonCoords);
     const url = buildStaticMapUrl({ lat, lng, polygonCoords, width, height });
     setImgUrl(url);
     setLoading(false);
@@ -81,7 +83,7 @@ export default function StaticParcellaMap({ query, onImageReady, width = 800, he
       <p className="text-[10px] text-gray-400">
         {query.comune} · Foglio {query.foglio} · Part. {query.particella}
         {query.subalterno ? ` · Sub. ${query.subalterno}` : ""} ·{" "}
-        Fonte: Catasto AdE / INSPIRE · © OpenStreetMap contributors
+        {noPolygon ? "Posizione approssimativa · " : ""}Fonte: Catasto AdE / INSPIRE · © OpenStreetMap contributors
       </p>
     </div>
   );
@@ -120,8 +122,22 @@ export function buildStaticMapUrl({ lat, lng, polygonCoords, width = 800, height
     return buildGeoapifyUrl({ centerLat, centerLng, zoom, polygonCoords, width, height });
   }
 
-  // Nessun poligono: mappa OSM centrata sul punto con marker
-  return `https://staticmap.openstreetmap.de/staticmap.php?center=${centerLat},${centerLng}&zoom=${zoom}&size=${width}x${height}&markers=${centerLat},${centerLng},red-pushpin`;
+  // Nessun poligono catastale: centra stretto (zoom 18) e disegna un segnaposto circolare
+  // evidenziato sul centroide — posizione approssimativa, non il perimetro reale della particella.
+  const markerCircle = buildCirclePolygon(centerLat, centerLng, 12);
+  return buildGeoapifyUrl({ centerLat, centerLng, zoom: 18, polygonCoords: markerCircle, width, height });
+}
+
+// Genera un piccolo cerchio (poligono a N vertici) attorno a un punto, come segnaposto evidenziato.
+function buildCirclePolygon(lat, lng, radiusM = 12, points = 18) {
+  const dLat = radiusM / 111320;
+  const dLng = radiusM / (111320 * Math.cos((lat * Math.PI) / 180));
+  const coords = [];
+  for (let i = 0; i <= points; i++) {
+    const a = (i / points) * 2 * Math.PI;
+    coords.push([lng + dLng * Math.cos(a), lat + dLat * Math.sin(a)]);
+  }
+  return coords;
 }
 
 function buildGeoapifyUrl({ centerLat, centerLng, zoom, polygonCoords, width, height }) {
