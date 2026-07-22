@@ -88,7 +88,7 @@ export default function CadastralSearchForm({ onSubmit, isLoading, submitLabel =
   const [parcels, setParcels] = useState([newParcel()]);
   const [snapInfo, setSnapInfo] = useState(null); // { snapped: bool, snap_dist_m: number }
   const [arubaGeometry, setArubaGeometry] = useState(null); // GeoJSON Polygon da server Aruba
-  const [finalita, setFinalita] = useState("");
+  const [finalita, setFinalita] = useState("acquisto_privato"); // pre-selezionato: non blocca il primo report
   const [showFinancial, setShowFinancial] = useState(false);
   const [visuraDati, setVisuraDati] = useState(null);
   const [planimetriaFile, setPlanimetriaFile] = useState(null);
@@ -182,7 +182,7 @@ export default function CadastralSearchForm({ onSubmit, isLoading, submitLabel =
 
   const showFinancialSection = FIN_FINALITA.includes(finalita);
   const isInvestimento = finalita === "investimento";
-  const finDataRequired = isInvestimento;
+  const finDataRequired = false; // dati finanziari resi OPZIONALI: non bloccano il primo report (l'analisi degrada elegantemente)
   const finDataFilled = !finDataRequired || (prezzoAcquisto && superficie);
 
   const totalUnits = parcels.reduce((sum, p) => sum + p.subs.length, 0);
