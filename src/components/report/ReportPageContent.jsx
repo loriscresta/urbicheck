@@ -25,6 +25,7 @@ import IndiciEdiliziSection from "@/components/report/IndiciEdiliziSection";
 import PlanimetriaSection from "@/components/report/PlanimetriaSection";
 import VincoliRischiPiemonte, { FerroviaCard } from "@/components/report/VincoliRischiPiemonte";
 import StaticParcellaMap from "@/components/report/StaticParcellaMap";
+import ReportFeedbackPrompt from "@/components/report/ReportFeedbackPrompt";
 
 // ── Utilities ──────────────────────────────────────────────────────────────
 
@@ -872,6 +873,9 @@ export default function ReportPageContent({ query, refetch = () => {}, isPublicV
       {!isPublicView && (isPiemonte || isLiguria || isLombardia) && (
         <WfsLiguriaPanel query={query} onComplete={() => { queryClient.invalidateQueries({ queryKey: ["query", query.id] }); refetch(); }} />
       )}
+
+      {/* Feedback prompt — capire se i professionisti trovano valore nel report */}
+      <ReportFeedbackPrompt query={query} />
 
       {/* Download PDF */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }} className="mt-8 p-6 rounded-xl border border-border bg-card">
