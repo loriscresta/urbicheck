@@ -442,8 +442,7 @@ async function queryOverpass(lat, lon, includeLakes = false) {
   const q = `[out:json][timeout:15];
 (
   way["railway"~"^(rail|tram|light_rail|narrow_gauge|subway|disused|abandoned|preserved|razed)$"](around:500,${lat},${lon});
-  way["waterway"~"^(river|stream|canal)$"](around:250,${lat},${lon});
-  relation["waterway"="river"](around:250,${lat},${lon});${lakesQuery}
+  way["waterway"~"^(river|stream|canal)$"](around:250,${lat},${lon});${lakesQuery}
 );
 out tags center;`;
 
