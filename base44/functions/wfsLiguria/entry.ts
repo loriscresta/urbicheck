@@ -445,9 +445,7 @@ async function queryOverpass(lat, lon, includeLakes = false) {
   way["waterway"~"^(river|stream|canal)$"](around:250,${lat},${lon});
   relation["waterway"="river"](around:250,${lat},${lon});${lakesQuery}
 );
-out body;
->;
-out skel qt;`;
+out tags center;`;
 
   const OVERPASS_MIRRORS = [
     'https://overpass-api.de/api/interpreter',
