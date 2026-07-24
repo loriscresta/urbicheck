@@ -456,6 +456,10 @@ out skel qt;`;
     'https://overpass.private.coffee/api/interpreter',
   ];
 
+  // Anti-falso-negativo: un mirror puo rispondere 200 pulito ma con 0 elementi (risposta
+  // parziale/sotto carico). Non fermarsi al primo vuoto: memorizza e prova i mirror successivi.
+  // Solo se TUTTI i mirror che rispondono danno vuoto lo accettiamo come reale (vedi return finale).
+  let cleanEmpty = null;
   for (let mirrorIdx = 0; mirrorIdx < OVERPASS_MIRRORS.length; mirrorIdx++) {
     if (mirrorIdx > 0) await sleep(1500);
     const endpoint = OVERPASS_MIRRORS[mirrorIdx];
@@ -501,11 +505,15 @@ out skel qt;`;
           lakes.push({ tipo: el.tags.water, nome: el.tags.name || 'Lago/Bacino senza nome' });
         }
       }
-      return { railways, waterways, lakes, overpass_ok: true };
+      if (railways.length > 0 || waterways.length > 0 || lakes.length > 0) {
+        return { railways, waterways, lakes, overpass_ok: true };
+      }
+      cleanEmpty = { railways, waterways, lakes };
     } catch (_e) {
       // Try next mirror
     }
   }
+  if (cleanEmpty) return { railways: cleanEmpty.railways, waterways: cleanEmpty.waterways, lakes: cleanEmpty.lakes, overpass_ok: true };
   return { railways: [], waterways: [], lakes: [], overpass_ok: false };
 }
 
