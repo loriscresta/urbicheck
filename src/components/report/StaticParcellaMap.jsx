@@ -118,14 +118,11 @@ export function buildStaticMapUrl({ lat, lng, polygonCoords, width = 800, height
 
   // Usa Geoapify Static Maps (supporta GeoJSON overlay, gratuito senza key per tile base)
   // Fallback: openstreetmap static map service
-  if (polygonCoords && polygonCoords.length > 2) {
-    return buildGeoapifyUrl({ centerLat, centerLng, zoom, polygonCoords, width, height });
-  }
-
-  // Nessun poligono catastale: centra stretto (zoom 18) e disegna un segnaposto circolare
-  // evidenziato sul centroide — posizione approssimativa, non il perimetro reale della particella.
-  const markerCircle = buildCirclePolygon(centerLat, centerLng, 12);
-  return buildGeoapifyUrl({ centerLat, centerLng, zoom: 18, polygonCoords: markerCircle, width, height });
+  // staticmap.openstreetmap.de rende mappa base + center/zoom/markers, ma NON gli overlay GeoJSON
+  // (path) — quel formato dà immagine vuota. Quindi: mappa base centrata sulla particella (baricentro
+  // del poligono se disponibile) + segnaposto. Zoom più stretto senza poligono.
+  const z = (polygonCoords && polygonCoords.length > 2) ? zoom : 18;
+  return `https://staticmap.openstreetmap.de/staticmap.php?center=${centerLat},${centerLng}&zoom=${z}&size=${width}x${height}&markers=${centerLat},${centerLng},red-pushpin`;
 }
 
 // Genera un piccolo cerchio (poligono a N vertici) attorno a un punto, come segnaposto evidenziato.
