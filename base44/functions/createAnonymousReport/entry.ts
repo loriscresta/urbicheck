@@ -304,6 +304,22 @@ Deno.serve(async (req) => {
       report_url: reportUrl,
     });
 
+    // ── Enrichment robusto WFS: ferrovia reale (Overpass multi-mirror), PAI, geometria ──
+    // L'automazione triggerWfsOnNewQuery SALTA senza codice_comune_catasto (non impostato nel
+    // flusso anonimo), lasciando il report gratuito con l'enrichment leggero (Overpass "non
+    // disponibile" -> ferrovia falsa, mappa vuota). Qui invochiamo wfsLiguria direttamente sul
+    // query_id: geocoda internamente, interroga Overpass su piu mirror e scrive il blocco
+    // wfs_liguria + geometria/coordinate sull'entita, allineando il gratuito al report a pagamento.
+    // Bounded a 25s per non superare il timeout della function; wfsLiguria completa comunque lato server.
+    try {
+      await Promise.race([
+        base44.asServiceRole.functions.invoke('wfsLiguria', { query_id: query.id }),
+        new Promise((res) => setTimeout(res, 25000)),
+      ]);
+    } catch (e) {
+      console.error('createAnonymousReport: wfsLiguria enrichment failed:', e?.message);
+    }
+
     // ── Incrementa il contatore free per IP ─────────────────────────────────
     if (clientIp && clientIp !== 'unknown') {
       if (ipRecord) {
