@@ -221,6 +221,33 @@ REGOLA LINGUISTICA: Usa ESCLUSIVAMENTE terminologia tecnica italiana.`,
   return mergeEnrichment(result, enrichment);
 }
 
+// Rilevamento ferroviario LEGGERO e affidabile (query Overpass minimale: solo way railway,
+// out tags center, niente relation fiume). Corregge il falso negativo di wfsLiguria quando la sua
+// query combinata pesante va in 504. Ritorna l'oggetto in formato wfs_liguria.risultati.vincolo_ferroviario,
+// oppure null se tutti i mirror falliscono (in tal caso non si tocca nulla).
+async function detectRailwayLight(lat, lon) {
+  const q = `[out:json][timeout:20];way["railway"~"^(rail|tram|light_rail|narrow_gauge|subway)$"](around:250,${lat},${lon});out tags center;`;
+  const MIRRORS = ['https://overpass-api.de/api/interpreter','https://lz4.overpass-api.de/api/interpreter','https://overpass.private.coffee/api/interpreter','https://overpass.osm.ch/api/interpreter'];
+  let cleanEmpty = false;
+  for (const ep of MIRRORS) {
+    try {
+      const res = await fetch(ep, { method: 'POST', body: new URLSearchParams({ data: q }).toString(), headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, signal: AbortSignal.timeout(22000) });
+      if (!res.ok) continue;
+      const data = await res.json();
+      if (data && typeof data.remark === 'string' && /(timed out|timeout|runtime error|rate_limited|too many)/i.test(data.remark)) continue;
+      const rails = (data.elements || []).filter(e => e.type === 'way' && e.tags && e.tags.railway && !['disused','abandoned','razed','construction'].includes(e.tags.railway));
+      if (rails.length > 0) {
+        const r = rails.find(x => x.tags.name) || rails[0];
+        const nome = r.tags.name || r.tags.ref || 'Linea ferroviaria';
+        return { metodologia: 'Rilevamento tramite OpenStreetMap (Overpass API).', dati: [{ trovato: true, nome, tipo: r.tags.railway, nota: `Ferrovia rilevata entro 250m (${nome}). Verificare la fascia di rispetto ferroviaria DPR 753/1980.` }], fonte_ok: true };
+      }
+      cleanEmpty = true;
+    } catch (_) {}
+  }
+  if (cleanEmpty) return { metodologia: 'Rilevamento tramite OpenStreetMap (Overpass API).', dati: [{ trovato: false, nota: 'Nessuna ferrovia rilevata entro 250m dal punto analizzato.' }], fonte_ok: true };
+  return null;
+}
+
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
