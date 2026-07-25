@@ -347,6 +347,23 @@ Deno.serve(async (req) => {
       console.error('createAnonymousReport: wfsLiguria enrichment failed:', e?.message);
     }
 
+    // ── Patch ferroviario affidabile: corregge il falso negativo di wfsLiguria (query pesante -> 504) ──
+    try {
+      const fresh = (await base44.asServiceRole.entities.CadastralQuery.filter({ id: query.id }))[0];
+      const wfsRis = fresh?.report_data?.wfs_liguria?.risultati;
+      const rlat = fresh?.centroid_lat != null ? Number(fresh.centroid_lat) : (finalLat != null ? Number(finalLat) : null);
+      const rlon = fresh?.centroid_lng != null ? Number(fresh.centroid_lng) : (finalLon != null ? Number(finalLon) : null);
+      if (wfsRis && rlat != null && rlon != null && isFinite(rlat) && isFinite(rlon)) {
+        const rail = await detectRailwayLight(rlat, rlon);
+        if (rail) {
+          wfsRis.vincolo_ferroviario = rail;
+          await base44.asServiceRole.entities.CadastralQuery.update(query.id, { report_data: fresh.report_data });
+        }
+      }
+    } catch (e) {
+      console.error('createAnonymousReport: patch ferroviario failed:', e?.message);
+    }
+
     // ── Incrementa il contatore free per IP ─────────────────────────────────
     if (clientIp && clientIp !== 'unknown') {
       if (ipRecord) {
