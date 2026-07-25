@@ -226,9 +226,12 @@ REGOLA LINGUISTICA: Usa ESCLUSIVAMENTE terminologia tecnica italiana.`,
 // query combinata pesante va in 504. Ritorna l'oggetto in formato wfs_liguria.risultati.vincolo_ferroviario,
 // oppure null se tutti i mirror falliscono (in tal caso non si tocca nulla).
 async function detectRailwayLight(lat, lon) {
-  const q = `[out:json][timeout:20];way["railway"~"^(rail|tram|light_rail|narrow_gauge|subway)$"](around:250,${lat},${lon});out tags center;`;
-  const MIRRORS = ['https://overpass-api.de/api/interpreter','https://lz4.overpass-api.de/api/interpreter','https://overpass.private.coffee/api/interpreter','https://overpass.osm.ch/api/interpreter'];
+  const q = `[out:json][timeout:25];way["railway"~"^(rail|tram|light_rail|narrow_gauge|subway)$"](around:250,${lat},${lon});out tags center;`;
+  const MIRRORS = ['https://lz4.overpass-api.de/api/interpreter','https://overpass.private.coffee/api/interpreter','https://overpass-api.de/api/interpreter','https://overpass.osm.ch/api/interpreter'];
   let cleanEmpty = false;
+  // 2 passate per assorbire vuoti transitori: 'trovato' e' definitivo (return subito),
+  // 'vuoto' accettato solo dopo aver interrogato tutti i mirror due volte.
+  for (let pass = 0; pass < 2; pass++)
   for (const ep of MIRRORS) {
     try {
       const res = await fetch(ep, { method: 'POST', body: new URLSearchParams({ data: q }).toString(), headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, signal: AbortSignal.timeout(22000) });
