@@ -1,7 +1,7 @@
 // wfsLiguria.js — URBICHECK Analisi Urbanistica (Liguria + Piemonte + ISPRA nazionale) — v2.3
 const PRG_AGENT_URL = "https://urbicheck-prg-agent-production.up.railway.app";
 const ENRICHMENT_API_URL = "https://web-production-6e951.up.railway.app";
-console.log('WFS_REDEPLOY_MARKER_v4_lightquery');
+console.log('WFS_REDEPLOY_MARKER_v5_deploy');
 
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 
