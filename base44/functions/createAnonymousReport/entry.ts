@@ -251,6 +251,23 @@ async function detectRailwayLight(lat, lon) {
   return null;
 }
 
+// Cache ferroviaria: memorizza il risultato per cella ~100m (lat/lon a 3 decimali) cosi da non
+// ricolpire Overpass ad ogni report ed essere immuni al rate-limit sotto volume. Cache SOLO i
+// positivi definitivi (trovato:true) per non congelare falsi negativi da rate-limit transitorio.
+async function detectRailwayCached(base44, lat, lon) {
+  const key = `${lat.toFixed(3)}_${lon.toFixed(3)}`;
+  try {
+    const hit = await base44.asServiceRole.entities.RailwayCache.filter({ cell_key: key });
+    if (hit && hit[0] && hit[0].vincolo_ferroviario && hit[0].vincolo_ferroviario.dati) return hit[0].vincolo_ferroviario;
+  } catch (_) {}
+  const rail = await detectRailwayLight(lat, lon);
+  const trovato = rail && Array.isArray(rail.dati) && rail.dati[0] && rail.dati[0].trovato === true;
+  if (trovato) {
+    try { await base44.asServiceRole.entities.RailwayCache.create({ cell_key: key, vincolo_ferroviario: rail }); } catch (_) {}
+  }
+  return rail;
+}
+
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
@@ -357,7 +374,7 @@ Deno.serve(async (req) => {
       const rlat = fresh?.centroid_lat != null ? Number(fresh.centroid_lat) : (finalLat != null ? Number(finalLat) : null);
       const rlon = fresh?.centroid_lng != null ? Number(fresh.centroid_lng) : (finalLon != null ? Number(finalLon) : null);
       if (wfsRis && rlat != null && rlon != null && isFinite(rlat) && isFinite(rlon)) {
-        const rail = await detectRailwayLight(rlat, rlon);
+        const rail = await detectRailwayCached(base44, rlat, rlon);
         if (rail) {
           wfsRis.vincolo_ferroviario = rail;
           await base44.asServiceRole.entities.CadastralQuery.update(query.id, { report_data: fresh.report_data });

@@ -1,0 +1,17 @@
+{
+  "type": "object",
+  "properties": {
+    "cell_key": {
+      "type": "string",
+      "description": "Griglia ~100m: lat.toFixed(3)_lon.toFixed(3)"
+    },
+    "vincolo_ferroviario": {
+      "type": "object",
+      "description": "Risultato rilevazione ferroviaria (formato wfs_liguria.risultati.vincolo_ferroviario)"
+    }
+  },
+  "required": [
+    "cell_key"
+  ],
+  "name": "RailwayCache"
+}
