@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { Outlet, Link, useLocation } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
+import { appParams } from "@/lib/app-params";
 import { useQuery } from "@tanstack/react-query";
 import { Search, History, CreditCard, LayoutDashboard, Menu, X, LogOut, ShieldCheck, FileText, ChevronDown, User } from "lucide-react";
 import BetaBanner from "@/components/BetaBanner";
@@ -59,9 +60,14 @@ export default function AppLayout() {
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
 
+  // Solo se esiste un token (utente loggato). Un anonimo — es. dal browser in-app
+  // di Facebook/Instagram — NON deve chiamare auth.me(): darebbe 401 e (senza ret:false)
+  // React Query ritenterebbe più volte, generando la raffica di 401 vista nei recording.
   const { data: currentUser } = useQuery({
     queryKey: ["currentUser"],
     queryFn: () => base44.auth.me(),
+    enabled: !!appParams.token,
+    retry: false,
   });
 
   const { data: credits } = useQuery({
@@ -71,6 +77,8 @@ export default function AppLayout() {
       const list = await base44.entities.UserCredits.filter({ user_email: user.email });
       return list?.[0] || { balance: 0 };
     },
+    enabled: !!appParams.token,
+    retry: false,
   });
 
   const handleLogout = () => base44.auth.logout();
