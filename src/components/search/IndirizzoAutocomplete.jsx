@@ -42,6 +42,9 @@ export default function IndirizzoAutocomplete({ onComuneFound, onParcelFound, on
   const [parcelLoading, setParcelLoading] = useState(false);
   // idle | loading | found | snapped | not_found
   const [parcelStatus, setParcelStatus] = useState("idle");
+  // true quando Nominatim (autocomplete browser) torna vuoto/bloccato: mostriamo
+  // un fallback cliccabile che geocodifica via Google (backend) invece di lasciare l'utente fermo.
+  const [nominatimEmpty, setNominatimEmpty] = useState(false);
   const [snapDistM, setSnapDistM] = useState(null);
   const [mapReady, setMapReady] = useState(false);
   const debounceRef = useRef(null);
@@ -57,6 +60,7 @@ export default function IndirizzoAutocomplete({ onComuneFound, onParcelFound, on
     setSnapDistM(null);
     setMapCoords(null);
     setAddressSuggestions([]);
+    setNominatimEmpty(false);
     onResetParcel?.();
     onResetComune?.();
   };
@@ -253,8 +257,12 @@ export default function IndirizzoAutocomplete({ onComuneFound, onParcelFound, on
         }
 
         setAddressSuggestions(merged);
+        // Se Nominatim non restituisce nulla (spesso rate-limited/bloccato dal browser),
+        // attiviamo il fallback Google così l'utente ha comunque un modo per cercare.
+        setNominatimEmpty(merged.length === 0);
       } catch (_) {
         setAddressSuggestions([]);
+        setNominatimEmpty(true);
       }
     }, 400);
   };
@@ -397,6 +405,44 @@ export default function IndirizzoAutocomplete({ onComuneFound, onParcelFound, on
                 <span style={{ fontSize: "0.85em" }}>{formatSuggestionDisplay(s)}</span>
               </li>
             ))}
+          </ul>
+        )}
+
+        {addressSuggestions.length === 0 && nominatimEmpty && addressQuery.trim().length >= 3 && parcelStatus === "idle" && !parcelLoading && (
+          <ul
+            style={{
+              position: "absolute",
+              zIndex: 1000,
+              background: "#fff",
+              border: "1px solid #C4BAA8",
+              borderRadius: "6px",
+              width: "100%",
+              margin: 0,
+              marginTop: "2px",
+              padding: 0,
+              listStyle: "none",
+              boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
+            }}
+          >
+            <li
+              onClick={() => { setAddressSuggestions([]); setNominatimEmpty(false); geocodeAndResolve(addressQuery.trim()); }}
+              style={{
+                padding: "10px 12px",
+                cursor: "pointer",
+                fontSize: "0.875em",
+                fontFamily: "'IBM Plex Mono', monospace",
+                color: "#1A3A6B",
+                fontWeight: 700,
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = "#f4efe6"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = "#fff"; }}
+            >
+              <Search className="w-3.5 h-3.5" />
+              <span>Cerca «{addressQuery.trim()}»</span>
+            </li>
           </ul>
         )}
       </div>
