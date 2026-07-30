@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
-import { MapPin, Loader2, CheckCircle2, AlertCircle } from "lucide-react";
+import { MapPin, Loader2, CheckCircle2, AlertCircle, Search } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { lookupParcelByCoords } from "@/functions/lookupParcelByCoords";
 import { geocodeAddressCascade } from "@/functions/geocodeAddressCascade";
