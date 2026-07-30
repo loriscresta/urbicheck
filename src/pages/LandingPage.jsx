@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { base44 } from "@/api/base44Client";
+import { appParams } from "@/lib/app-params";
 import { Link, useNavigate } from "react-router-dom";
 import { motion, useInView } from "framer-motion";
 import { CheckCircle2, MapPin, AlertTriangle, Waves, Activity, FileText, TrendingUp, ClipboardList, Search, X } from "lucide-react";
@@ -200,7 +201,10 @@ export default function LandingPage() {
   const handleStartSearch = () => navigate("/search");
 
   useEffect(() => {
-    base44.auth.me().then(u => setCurrentUser(u)).catch(() => {});
+    // Solo se c'e una sessione (token): un visitatore anonimo — es. dal browser
+    // in-app di Facebook/Instagram — NON deve chiamare auth.me() (darebbe 401 e
+    // farebbe ricaricare/rompere la pagina nella webview). Anonimo = nessuna chiamata.
+    if (appParams.token) base44.auth.me().then(u => setCurrentUser(u)).catch(() => {});
   }, []);
 
   return (
