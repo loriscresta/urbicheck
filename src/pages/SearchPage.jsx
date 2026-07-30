@@ -3,6 +3,7 @@ import React, { useState, useEffect } from "react";
 
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
+import { appParams } from "@/lib/app-params";
 import { catasto_resolver } from "@/functions/catasto_resolver";
 import CadastralSearchForm from "@/components/search/CadastralSearchForm.jsx";
 import ErrorBoundary from "@/components/ErrorBoundary";
@@ -62,9 +63,11 @@ export default function SearchPage() {
     } catch (_) {}
   }, []);
 
+  // Anonimo (nessun token) = nessuna chiamata auth.me() (eviterebbe 401 nel webview FB).
   const { data: currentUser } = useQuery({
     queryKey: ["currentUser"],
     queryFn: () => base44.auth.me(),
+    enabled: !!appParams.token,
     retry: false,
   });
 
