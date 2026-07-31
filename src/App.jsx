@@ -27,6 +27,7 @@ import LegalTermini from '@/pages/LegalTermini';
 import LegalCookie from '@/pages/LegalCookie';
 import CookiePolicyPage from '@/pages/CookiePolicyPage';
 import CookieBanner, { loadMetaPixel, getConsentStatus } from '@/components/CookieBanner';
+import InAppBrowserBanner from '@/components/InAppBrowserBanner';
 import { trackEvent } from '@/lib/metaPixel';
 import Login from '@/pages/Login';
 import Register from '@/pages/Register';
@@ -88,6 +89,7 @@ const AuthenticatedApp = () => {
 
   return (
     <>
+      <InAppBrowserBanner />
       <CookieBanner />
       <Routes>
         {/* Public routes */}
