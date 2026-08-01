@@ -57,20 +57,13 @@
     <!-- Theme -->
     <meta name="theme-color" content="#1A3A6B" />
 
-    <!-- Meta Pixel Code -->
-    <script>
-    !function(f,b,e,v,n,t,s)
-    {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
-    n.callMethod.apply(n,arguments):n.queue.push(arguments)};
-    if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
-    n.queue=[];t=b.createElement(e);t.async=!0;
-    t.src=v;s=b.getElementsByTagName(e)[0];
-    s.parentNode.insertBefore(t,s)}(window, document,'script',
-    'https://connect.facebook.net/en_US/fbevents.js');
-    fbq('init', '1962386827973256');
-    fbq('track', 'PageView');
-    </script>
-    <!-- End Meta Pixel Code -->
+    <!-- Meta Pixel: NON caricato qui.
+         Il pixel browser (fbevents.js) mandava in crash il bridge nativo del
+         browser interno di Facebook/Instagram (postMessage / oggetto Java) e
+         bloccava il render della pagina sul mobile in-app (dove arriva il 100%
+         del traffico ads) -> 0 ricerche. Ora il pixel viene caricato SOLO dopo
+         il consenso cookie e SOLO fuori dal webview FB/IG (vedi CookieBanner.jsx);
+         dentro il webview si traccia esclusivamente via CAPI server-side. -->
 
   </head>
   <body>
