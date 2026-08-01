@@ -4,8 +4,17 @@ import { trackEvent } from "@/lib/metaPixel";
 
 const CONSENT_KEY = "cookie_consent";
 
+// Firme note del browser in-app di Facebook / Instagram: là il pixel browser
+// (fbevents.js) crasha il bridge nativo (postMessage/oggetto Java) e blocca il
+// render. Dentro il webview NON carichiamo il pixel: si traccia solo via CAPI.
+function isFacebookInApp() {
+  const ua = (navigator.userAgent || navigator.vendor || "").toString();
+  return /FBAN|FBAV|FB_IAB|FBIOS|Instagram/i.test(ua);
+}
+
 export function loadMetaPixel() {
   if (window.fbq) return; // già caricato
+  if (isFacebookInApp()) return; // webview FB/IG: solo CAPI, niente pixel browser
   const META_PIXEL_ID = "1962386827973256";
   !(function (f, b, e, v, n, t, s) {
     if (f.fbq) return;
