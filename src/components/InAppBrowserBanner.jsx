@@ -37,11 +37,11 @@ export default function InAppBrowserBanner() {
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
-    try {
-      if (!isFacebookInApp()) return;
-      if (sessionStorage.getItem("uc_inapp_banner_dismissed") === "1") return;
-      setShow(true);
-    } catch (_) {}
+    // Banner DISATTIVATO. Dopo la rimozione del pixel browser che crashava il
+    // bridge nativo, l'app funziona dentro il webview FB/IG: cercare è possibile
+    // senza uscire. Spingere l'utente "in Chrome" uccideva la conversione (il
+    // 100% del traffico ads muore lì). Componente tenuto per ripristino rapido.
+    return;
   }, []);
 
   if (!show) return null;
