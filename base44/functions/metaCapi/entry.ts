@@ -45,9 +45,11 @@ Deno.serve(async (req) => {
     return new Response(null, { status: allowedOrigin ? 204 : 403, headers: corsHeaders });
   }
 
-  const user = await getAuthenticatedUser(req);
-  if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401, headers: corsHeaders });
-
+  // CAPI server-side deve funzionare anche per utenti ANONIMI: e' l'unico canale di
+  // tracciamento dentro il browser interno di FB/IG (pixel browser disattivato) e per
+  // tutto il funnel free/anonimo. Il gate di auth qui rendeva invisibile a Meta l'~88%
+  // del traffico (anonimo/webview) -> campagne senza conversioni. Endpoint protetto via
+  // CORS (ALLOWED_ORIGINS); l'autenticazione non e' piu' bloccante.
   const accessToken = Deno.env.get("META_CAPI_TOKEN");
   if (!accessToken) {
     console.error("[metaCapi] missing META_CAPI_TOKEN");
