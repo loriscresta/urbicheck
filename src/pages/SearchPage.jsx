@@ -195,6 +195,10 @@ export default function SearchPage() {
       const data = res?.data || res;
       if (data?.ok && data?.report_url) {
         window.fbq?.('track', 'Lead');
+        // CAPI server-side: nel webview FB/IG fbq e' disattivato, quindi il Lead del
+        // report gratuito anonimo (la conversione chiave del funnel free) arriva a Meta
+        // SOLO da qui. Prima non veniva tracciato affatto per l'~88% del traffico.
+        trackEvent("Lead", { customData: { content_name: fd.comune || '', currency: "EUR" } });
         try {
           const u = new URL(data.report_url);
           window.location.href = u.pathname + u.search;
