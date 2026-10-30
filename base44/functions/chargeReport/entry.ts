@@ -1,13 +1,12 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 
 // ── Funnel di lancio ──────────────────────────────────────────────────────────
-// Report 1–3:  GRATIS (per email normalizzata + per IP, entrambi sotto soglia)
+// Report 1–3:  GRATIS (3 per account: email normalizzata + FreeTierLedger)
 // Report 4–6:  €2,99 (offerta lancio, max 3)
 // Report 7+:   €9,90 (prezzo standard)
 const APP_URL = Deno.env.get('APP_URL') || 'https://urbicheck.it';
 
 const FREE_REPORTS = 3;        // report gratuiti per email normalizzata
-const FREE_REPORTS_IP = 3;     // report gratuiti per indirizzo IP
 const LAUNCH_PAID_REPORTS = 3; // report a prezzo lancio (dopo i gratuiti)
 const LAUNCH_PRICE = 2.99;     // prezzo offerta lancio
 const STANDARD_PRICE = 9.90;   // prezzo standard (report 7+)
@@ -163,12 +162,14 @@ Deno.serve(async (req) => {
     console.log(`chargeReport: ip=${clientIp} ipFreeUsed=${ipFreeUsed}`);
 
     // ── Funnel pricing ────────────────────────────────────────────────────────
-    // Un report è gratuito SOLO SE sia l'email normalizzata (incl. FreeTierLedger) che l'IP sono sotto soglia
+    // Utente registrato: i 3 report gratuiti dipendono SOLO dall'account (email normalizzata
+    // + FreeTierLedger), come già avviene in chargeBatch. Il contatore IP resta la difesa del
+    // flusso anonimo (createAnonymousReport) e continua a essere incrementato qui, ma non può
+    // più togliere i 3 gratuiti a chi si è appena registrato dopo aver usato l'anteprima gratuita.
     const emailUnderLimit = effectiveFreeUsed < FREE_REPORTS;
-    const ipUnderLimit = clientIp === 'unknown' || ipFreeUsed < FREE_REPORTS_IP;
 
-    if (emailUnderLimit && ipUnderLimit) {
-      // TIER 1 — GRATIS (report 1–3, entrambe le condizioni soddisfatte)
+    if (emailUnderLimit) {
+      // TIER 1 — GRATIS (report 1–3 dell'account)
       console.log(`chargeReport: FREE tier — effectiveFree=${effectiveFreeUsed} ipFree=${ipFreeUsed}`);
 
       await base44.asServiceRole.entities.UserCredits.update(credits.id, {
