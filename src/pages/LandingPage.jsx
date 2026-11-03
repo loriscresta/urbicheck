@@ -507,7 +507,7 @@ export default function LandingPage() {
           <div>
             <Logo />
             <p style={{ fontFamily: MONO, fontSize: "0.58rem", color: GR, marginTop: "0.75rem" }}>Fenice Management — P.IVA IT02655840060</p>
-            <p style={{ fontFamily: MONO, fontSize: "0.58rem", color: GR, marginTop: "0.25rem" }}>loris.cresta@gmail.com</p>
+            <p style={{ fontFamily: MONO, fontSize: "0.58rem", color: GR, marginTop: "0.25rem" }}>info@urbicheck.it</p>
           </div>
           <div className="flex flex-wrap gap-6">
             {["Privacy Policy", "Termini di Servizio"].map(l => (
