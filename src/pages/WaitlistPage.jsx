@@ -211,8 +211,8 @@ export default function WaitlistPage() {
         <div className="max-w-6xl mx-auto px-5 py-8 flex flex-col md:flex-row items-center justify-between gap-4">
           <p style={{ fontFamily: MONO, fontSize: "0.58rem", color: GR }}>UrbiCheck © 2026 — Beta</p>
           <div className="flex gap-6">
-            <a href="#" style={{ fontFamily: MONO, fontSize: "0.58rem", textTransform: "uppercase", letterSpacing: "2px", color: GR }}>Privacy Policy</a>
-            <a href="#" style={{ fontFamily: MONO, fontSize: "0.58rem", textTransform: "uppercase", letterSpacing: "2px", color: GR }}>Terms</a>
+            <a href="/privacy" style={{ fontFamily: MONO, fontSize: "0.58rem", textTransform: "uppercase", letterSpacing: "2px", color: GR }}>Privacy Policy</a>
+            <a href="/termini" style={{ fontFamily: MONO, fontSize: "0.58rem", textTransform: "uppercase", letterSpacing: "2px", color: GR }}>Terms</a>
             <a href="mailto:info@urbicheck.it" style={{ fontFamily: MONO, fontSize: "0.58rem", color: AC }}>info@urbicheck.it</a>
           </div>
         </div>
