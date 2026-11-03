@@ -121,7 +121,7 @@ export default function WaitlistPage() {
 
             <div className="inline-flex items-center gap-2 mb-6 px-3 py-1.5" style={{ border: `1px solid ${AC}50`, background: `${AC}12` }}>
               <span style={{ width: 7, height: 7, borderRadius: "50%", background: AC, display: "inline-block" }} />
-              <span style={{ color: AC, fontSize: "0.62rem", fontWeight: 700, letterSpacing: "2px", textTransform: "uppercase" }}>Beta aperta — Piemonte e Liguria</span>
+              <span style={{ color: AC, fontSize: "0.62rem", fontWeight: 700, letterSpacing: "2px", textTransform: "uppercase" }}>Beta aperta — Piemonte, Liguria e Lombardia</span>
             </div>
 
             <h1 style={{ color: P, fontFamily: MONO, fontWeight: 700, fontSize: "clamp(1.75rem, 4vw, 2.75rem)", lineHeight: 1.15, letterSpacing: "-0.02em", marginBottom: "1.25rem" }}>
@@ -213,7 +213,7 @@ export default function WaitlistPage() {
           <div className="flex gap-6">
             <a href="#" style={{ fontFamily: MONO, fontSize: "0.58rem", textTransform: "uppercase", letterSpacing: "2px", color: GR }}>Privacy Policy</a>
             <a href="#" style={{ fontFamily: MONO, fontSize: "0.58rem", textTransform: "uppercase", letterSpacing: "2px", color: GR }}>Terms</a>
-            <a href="mailto:loris.cresta@gmail.com" style={{ fontFamily: MONO, fontSize: "0.58rem", color: AC }}>loris.cresta@gmail.com</a>
+            <a href="mailto:info@urbicheck.it" style={{ fontFamily: MONO, fontSize: "0.58rem", color: AC }}>info@urbicheck.it</a>
           </div>
         </div>
       </footer>
