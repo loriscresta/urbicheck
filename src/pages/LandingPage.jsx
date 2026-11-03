@@ -510,8 +510,8 @@ export default function LandingPage() {
             <p style={{ fontFamily: MONO, fontSize: "0.58rem", color: GR, marginTop: "0.25rem" }}>info@urbicheck.it</p>
           </div>
           <div className="flex flex-wrap gap-6">
-            {["Privacy Policy", "Termini di Servizio"].map(l => (
-              <a key={l} href="#" style={{ fontFamily: MONO, fontSize: "0.58rem", textTransform: "uppercase", letterSpacing: "2px", color: GR }} className="hover:text-white transition-colors">{l}</a>
+            {[{ label: "Privacy Policy", href: "/privacy" }, { label: "Termini di Servizio", href: "/termini" }].map(({ label, href }) => (
+              <a key={label} href={href} style={{ fontFamily: MONO, fontSize: "0.58rem", textTransform: "uppercase", letterSpacing: "2px", color: GR }} className="hover:text-white transition-colors">{label}</a>
             ))}
             <Link to="/waitlist" style={{ fontFamily: MONO, fontSize: "0.58rem", textTransform: "uppercase", letterSpacing: "2px", color: AC }} className="hover:opacity-80 transition-opacity">Lista d'attesa Beta →</Link>
           </div>
