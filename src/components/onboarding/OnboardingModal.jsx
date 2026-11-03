@@ -25,7 +25,7 @@ const STEPS = [
           </div>
         ))}
         <p className="text-xs italic pt-1" style={{ color: '#7A7268', fontFamily: "'IBM Plex Mono', monospace" }}>
-          Copertura attuale: Piemonte e Liguria · Altre regioni in arrivo Q3 2026
+          Copertura attuale: Piemonte, Liguria e Lombardia · Altre regioni in arrivo
         </p>
       </div>
     ),
